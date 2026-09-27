@@ -30,6 +30,12 @@ const DEFAULT_STATE: BgmState = {
 
 const STORAGE_KEY = 'ohome.bgm.v1';
 
+// 재생/일시정지 상태를 다른 컴포넌트(상단바 등)와 공유하기 위한 이벤트 (v2.1 사용자 요청 —
+// 하단 메뉴 바에 BGM 켜고 끄는 버튼 추가). 실제 유튜브 플레이어 인스턴스는 BgmPlayer가
+// 계속 소유하고, 이 이벤트로만 "토글해줘"/"지금 이런 상태야"를 주고받는다.
+export const BGM_TOGGLE_EVENT = 'ohome-bgm-toggle';
+export const BGM_STATE_EVENT = 'ohome-bgm-state';
+
 interface BgmCtx {
   state: BgmState;
   setTracks: (t: BgmTrack[]) => void;

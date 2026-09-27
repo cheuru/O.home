@@ -3,7 +3,7 @@
 // 기본 위치 오른쪽 아래 · 곡 리스트 팝업 (v1.9) · 페이지 이동에도 유지(레이아웃 상주)
 // 브라우저 정책상 소리 재생은 사용자의 첫 클릭부터 시작
 import React, { useEffect, useRef, useState } from 'react';
-import { useBgm } from '@/lib/bgmStore';
+import { useBgm, BGM_TOGGLE_EVENT, BGM_STATE_EVENT } from '@/lib/bgmStore';
 
 /** 흐르는 글씨 — 재생 중이고 글자가 넘칠 때만 무한 스크롤, 평소엔 말줄임.
  *  넘침 판정은 숨김 측정용 스팬으로 — 마운트 직후(레이아웃·폰트 확정 전) 1회 측정만 하면
@@ -244,6 +244,19 @@ export function BgmPlayer() {
     window.addEventListener('pointermove', mv);
     window.addEventListener('pointerup', up);
   };
+
+  // 상단바의 BGM 버튼과 상태 공유 (v2.1) — 재생 상태가 바뀔 때마다 알리고,
+  // 상단바 쪽 클릭은 이벤트로 받아 기존 togglePlay 그대로 재사용
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, { detail: { playing } }));
+  }, [playing]);
+  const togglePlayRef = useRef(togglePlay);
+  togglePlayRef.current = togglePlay;
+  useEffect(() => {
+    const onToggle = () => togglePlayRef.current();
+    window.addEventListener(BGM_TOGGLE_EVENT, onToggle);
+    return () => window.removeEventListener(BGM_TOGGLE_EVENT, onToggle);
+  }, []);
 
   if (!settings.enabled || tracks.length === 0) return null;
 

@@ -160,6 +160,11 @@ a{color:inherit;text-decoration:none}
 .badge-dot:hover{color:var(--top-hv,#fff)}
 .badge-dot svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:block}
 .badge-dot[data-n]:not([data-n="0"])::after{content:attr(data-n);position:absolute;top:-3px;right:-4px;background:var(--accent);color:#fff;font-size:calc(9px*var(--fs,1));font-weight:700;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;line-height:1;font-family:var(--sans);letter-spacing:0}
+/* 상단바 BGM 켜고 끄기 버튼 (v2.1) — 종 아이콘과 같은 크기·톤, 재생 중엔 포인트색 */
+.bgm-toggle{position:relative;color:var(--top-fg);display:grid;place-items:center;width:32px;height:32px;border-radius:9px;transition:.15s}
+.bgm-toggle:hover{color:var(--top-hv,#fff)}
+.bgm-toggle svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:block}
+.bgm-toggle.on{color:var(--accent)}
 .login-link{font-size:calc(12px*var(--fs,1));color:var(--top-fg);padding:7px 15px;border:1px solid var(--line-dark);border-radius:999px;transition:.15s;white-space:nowrap}
 .login-link:hover{color:var(--top-hv,#fff);border-color:var(--top-hv,#fff)}
 

@@ -15,6 +15,7 @@ import { useBlobUrl } from '@/lib/blobStore';
 import { refreshPage } from '@/lib/pageRefresh';
 import { useToast } from '@/components/ui/Toast';
 import { KToggle } from '@/components/ui/Kit';
+import { useBgm, BGM_TOGGLE_EVENT, BGM_STATE_EVENT } from '@/lib/bgmStore';
 import {
   Notif, NotifType, NOTIF_EVENT, NOTIF_TYPE_LABEL,
   readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs, selfTestNotif,
@@ -25,6 +26,16 @@ const BellIcon = () => (
   <svg viewBox="0 0 24 24">
     <path d="M6 9.5a6 6 0 0 1 12 0c0 4.2 1.6 5.6 2.2 6.3H3.8C4.4 15.1 6 13.7 6 9.5Z" />
     <path d="M10 18.8a2.1 2.1 0 0 0 4 0" />
+  </svg>
+);
+
+// BGM 켜고 끄기 아이콘 — 꺼져 있을 때만 사선을 그어 무음임을 표시 (v2.1 사용자 요청)
+const BgmIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24">
+    <path d="M9 18V6l10-2v12" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="16" cy="16" r="3" />
+    {off && <path d="M3 3l18 18" />}
   </svg>
 );
 
@@ -48,6 +59,17 @@ export function TopBar() {
   const [site, , siteLoaded] = useSiteSettings();    // 로고 텍스트/서브/정렬 (5.2)
   const avatarSrc = useBlobUrl(user?.avatarUrl);     // 프로필 이미지 (마이페이지, v1.9)
   const userRef = useRef<HTMLDivElement>(null);
+
+  // BGM 켜고 끄기 (v2.1 사용자 요청) — 실제 재생은 BgmPlayer가 계속 담당하고,
+  // 여기선 이벤트로 상태만 받아 표시하고 토글 요청만 보낸다
+  const { state: bgmState } = useBgm();
+  const bgmAvailable = bgmState.settings.enabled && bgmState.tracks.length > 0;
+  const [bgmPlaying, setBgmPlaying] = useState(false);
+  useEffect(() => {
+    const onBgmState = (e: Event) => setBgmPlaying((e as CustomEvent<{ playing: boolean }>).detail.playing);
+    window.addEventListener(BGM_STATE_EVENT, onBgmState);
+    return () => window.removeEventListener(BGM_STATE_EVENT, onBgmState);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen && !notifOpen) return;
@@ -227,6 +249,15 @@ export function TopBar() {
       <span className={`edit-flag ${editOn ? 'show' : ''}`} onClick={() => requestExit()}>
         ✎ 편집중
       </span>
+
+      {/* BGM 켜고 끄기 — 알림 종 왼쪽 (v2.1 사용자 요청) */}
+      {bgmAvailable && (
+        <button className={`bgm-toggle ${bgmPlaying ? 'on' : ''}`}
+          data-tip={bgmPlaying ? 'BGM 끄기' : 'BGM 켜기'}
+          onClick={() => window.dispatchEvent(new Event(BGM_TOGGLE_EVENT))}>
+          <BgmIcon off={!bgmPlaying} />
+        </button>
+      )}
 
       {/* 사용자 영역 — 비로그인: 로그인 버튼 / 로그인: 프로필 드롭다운 (3장 주석, 4.0) */}
       {user ? (
