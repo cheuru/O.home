@@ -159,6 +159,13 @@ export function TopBar() {
   const visMenu = menu.slice(0, visCount);
   const moreMenu = menu.slice(visCount);
 
+  // 이 페이지가 메인 화면의 창(윈도우) 안 iframe으로 열린 경우 — 상단바를 또 그리지 않는다 (v2.2)
+  const [inWindow, setInWindow] = useState(false);
+  useEffect(() => {
+    setInWindow(new URLSearchParams(window.location.search).get('__win') === '1');
+  }, [pathname]);
+  if (inWindow) return null;
+
   return (
     <header className="topbar">
       {/* 로고 — 텍스트·서브타이틀·정렬은 환경설정 > 디자인 (5.2) */}

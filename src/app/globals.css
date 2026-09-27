@@ -71,12 +71,12 @@ input,textarea,select{font-family:inherit}
 img{display:block}
 a{color:inherit;text-decoration:none}
 
-/* ---------- 상단 바 ---------- */
+/* ---------- 상단 바 (v2.2 — 하단으로 이동, 클래스명은 유지) ---------- */
 .topbar{
-  position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:22px;
+  order:2;position:sticky;bottom:0;top:auto;z-index:2000;display:flex;align-items:center;gap:22px;
   padding:0 26px;height:58px;color:#e8eaee;
   background:var(--top-bg);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line-dark);
+  border-top:1px solid var(--line-dark);border-bottom:none;
 }
 .brand{font-family:var(--serif);font-size:calc(21px*var(--fs,1));letter-spacing:.32em;font-weight:600;color:var(--top-brand);cursor:var(--cur-pointer,pointer);white-space:nowrap}
 .brand small{display:block;font-family:var(--font-logosub,var(--sans));font-weight:var(--fw-logosub,400);font-size:calc(8.5px*var(--fs,1)*var(--fs-logosub,1));letter-spacing:.42em;color:#8d939d;margin-top:-2px}
@@ -94,12 +94,12 @@ a{color:inherit;text-decoration:none}
 .grp{position:relative}
 .grp > button::after{content:" ▾";font-size:calc(8px*var(--fs,1));color:#7a808a}
 .grp .sub{
-  position:absolute;left:0;top:calc(100% + 4px);min-width:132px;display:none;z-index:75;
+  position:absolute;left:0;bottom:calc(100% + 4px);top:auto;min-width:132px;display:none;z-index:75;
   background:var(--dd-bg);border:1px solid var(--line-dark);border-radius:11px;padding:5px;
   box-shadow:var(--sh-dd); /* 드롭다운 별도 그림자 (환경설정 > 디자인) */
 }
 .grp:hover .sub,.grp.open .sub{display:block;animation:fade .15s}
-.grp .sub::before{content:"";position:absolute;top:-8px;left:0;right:0;height:8px}
+.grp .sub::before{content:"";position:absolute;bottom:-8px;top:auto;left:0;right:0;height:8px}
 .grp .sub{--fs:var(--fs-dropdown,1)}
 .grp .sub button,.grp .sub a{display:block;width:100%;text-align:left;padding:8px 12px;font-size:calc(12px*var(--fs,1));border-radius:7px;color:var(--dd-fg);transition:.13s;font-family:var(--font-dropdown,var(--sans));font-weight:var(--fw-dropdown,400)}
 .grp .sub button:hover,.grp .sub a:hover{background:var(--dd-hv)}
@@ -107,7 +107,7 @@ a{color:inherit;text-decoration:none}
 .grp.more>button::after{content:""}
 .grp .sub{max-height:72vh;overflow:auto}
 /* 호버 다리 — .sub에 overflow가 생기며 .sub::before(-8px 다리)가 잘리므로 .grp 쪽에 상시 다리 (v1.9) */
-.grp::after{content:"";position:absolute;left:0;top:100%;width:100%;height:9px}
+.grp::after{content:"";position:absolute;left:0;bottom:100%;top:auto;width:100%;height:9px}
 .grp .sub .sub-cap{padding:8px 12px 3px;font-size:calc(9.5px*var(--fs,1));color:color-mix(in srgb,var(--dd-fg) 55%,transparent);letter-spacing:.14em;font-weight:700}
 .grp .sub .sub-grp+.sub-grp,.grp .sub button+.sub-grp,.grp .sub .sub-grp+button{border-top:1px solid var(--line-dark);margin-top:4px;padding-top:2px;display:block}
 .gnb-measure{position:absolute;visibility:hidden;pointer-events:none;height:0;overflow:hidden;left:0;top:0}
@@ -117,7 +117,7 @@ a{color:inherit;text-decoration:none}
 .user-chip:hover{background:rgba(255,255,255,.08)}
 .user-chip .avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6b7280,#3c434d);border:1px solid rgba(255,255,255,.25);display:grid;place-items:center;color:#fff;font-size:calc(12px*var(--fs,1));font-weight:700;overflow:hidden}
 .user-menu{
-  position:absolute;right:0;top:calc(100% + 8px);min-width:132px;display:none;z-index:80;
+  position:absolute;right:0;bottom:calc(100% + 8px);top:auto;min-width:132px;display:none;z-index:80;
   background:var(--dd-bg);border:1px solid var(--line-dark);border-radius:11px;padding:5px;
   box-shadow:var(--sh-dd);
 }

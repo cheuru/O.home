@@ -29,18 +29,26 @@ let seq = 0;
 const nextId = () => `win-${Date.now()}-${seq++}`;
 const CASCADE = 28; // 새 창마다 살짝 어긋나게 배치 — 전부 같은 자리에 겹치지 않도록
 
+/** 창 안에서 열리는 페이지에는 자기 상단바를 또 그리지 않도록 표시를 남긴다 (v2.2) */
+function withWinFlag(href: string): string {
+  if (/^https?:\/\//.test(href)) return href; // 외부 주소는 그대로
+  const sep = href.includes('?') ? '&' : '?';
+  return href.includes('__win=1') ? href : `${href}${sep}__win=1`;
+}
+
 export function WindowStoreProvider({ children }: { children: React.ReactNode }) {
   const [windows, setWindows] = useState<WinState[]>([]);
 
   const openWindow = useCallback((href: string, title: string) => {
+    const target = withWinFlag(href);
     setWindows(ws => {
       // 이미 열려 있는 같은 주소 창은 새로 만들지 않고 맨 앞으로만 올린다
-      const exist = ws.find(w => w.href === href);
+      const exist = ws.find(w => w.href === target);
       const z = (ws.length ? Math.max(...ws.map(w => w.z)) : 0) + 1;
       if (exist) return ws.map(w => (w.id === exist.id ? { ...w, z, minimized: false } : w));
       const n = ws.length;
       return [...ws, {
-        id: nextId(), href, title,
+        id: nextId(), href: target, title,
         x: 70 + (n % 6) * CASCADE, y: 50 + (n % 6) * CASCADE,
         w: 720, h: 520, z, minimized: false,
       }];
