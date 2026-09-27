@@ -250,89 +250,92 @@ export function TopBar() {
         ✎ 편집중
       </span>
 
-      {/* BGM 켜고 끄기 — 알림 종 왼쪽 (v2.1 사용자 요청) */}
-      {bgmAvailable && (
-        <button className={`bgm-toggle ${bgmPlaying ? 'on' : ''}`}
-          data-tip={bgmPlaying ? 'BGM 끄기' : 'BGM 켜기'}
-          onClick={() => window.dispatchEvent(new Event(BGM_TOGGLE_EVENT))}>
-          <BgmIcon off={!bgmPlaying} />
-        </button>
-      )}
+      {/* BGM 토글 + 사용자 영역을 한 묶음으로 — 서로는 가깝게, topbar 전체 간격(gap:22px)의 영향은 안 받게 (v2.1 사용자 요청) */}
+      <div className="bgm-user-group">
+        {/* BGM 켜고 끄기 — 알림 종 왼쪽 */}
+        {bgmAvailable && (
+          <button className={`bgm-toggle ${bgmPlaying ? 'on' : ''}`}
+            data-tip={bgmPlaying ? 'BGM 끄기' : 'BGM 켜기'}
+            onClick={() => window.dispatchEvent(new Event(BGM_TOGGLE_EVENT))}>
+            <BgmIcon off={!bgmPlaying} />
+          </button>
+        )}
 
-      {/* 사용자 영역 — 비로그인: 로그인 버튼 / 로그인: 프로필 드롭다운 (3장 주석, 4.0) */}
-      {user ? (
-        <div className="user-wrap" ref={userRef}>
-          <div className="user-chip" onClick={() => setMenuOpen(o => !o)}>
-            {/* 알림 종 (4.13) — 클릭 시 알림 드롭다운 (프로필 메뉴와 별개) */}
-            <span className="badge-dot" data-n={String(Math.min(9, unread.length))}
-              onClick={e => { e.stopPropagation(); setMenuOpen(false); setNotifOpen(o => !o); }}>
-              <BellIcon />
-            </span>
-            {/* 기본 아바타는 이니셜 없이 단색/그라데이션 (v1.9) */}
-            <div className="avatar" style={!avatarSrc && user.avatarColor ? { background: user.avatarColor } : undefined}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {avatarSrc && <img src={avatarSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            {user.nickname} <span style={{ fontSize: 9, color: '#8d939d' }}>▾</span>
-          </div>
-          {/* 알림 드롭다운 — 목록 + 모두 읽음 + 항목별 on/off (4.13) */}
-          <div className={`user-menu notif-menu ${notifOpen ? 'open' : ''}`}>
-            <div className="nh">
-              <b>알림</b>
-              {unread.length > 0 && (
-                <button className="all" onClick={() => markAllRead(user.id)}>모두 읽음</button>
-              )}
-              {/* 읽은 알림은 하루 뒤 저절로 사라지지만, 바로 치우고 싶을 때 (v2.0 사용자 요청) */}
-              {myNotifs.some(n => n.read) && (
-                <button className="all" onClick={() => clearReadNotifs(user.id)}>읽은 알림 정리</button>
-              )}
-            </div>
-            {myNotifs.length === 0 && <p className="empty">알림이 없습니다</p>}
-            {myNotifs.slice(0, 12).map(n => (
-              <button key={n.id} className={`nt ${n.read ? 'rd' : ''}`}
-                onClick={() => { markRead(n.id); setNotifOpen(false); nav(n.href); }}>
-                <b>{n.title}</b>
-                {n.body && <span>{n.body}</span>}
-                <small>{fmtNd(n.date)}</small>
-              </button>
-            ))}
-            {mySet && (
-              <div className="nset">
-                {(Object.keys(NOTIF_TYPE_LABEL) as NotifType[])
-                  .filter(k => k !== 'guest' || isAdmin) // 방명록 알림은 관리자 항목
-                  .map(k => (
-                    <label key={k} className="row">
-                      <span>{NOTIF_TYPE_LABEL[k]}</span>
-                      <KToggle checked={mySet[k]} onChange={v => setNotifSetting(user.id, k, v)} />
-                    </label>
-                  ))}
-                {/* 전달 자가진단 (v2.0) — 서버 저장→읽기를 실제로 해 보고 결과를 알려 준다 */}
-                <button className="all" style={{ marginTop: 2 }}
-                  onClick={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}>
-                  알림 전달 확인
-                </button>
+        {/* 사용자 영역 — 비로그인: 로그인 버튼 / 로그인: 프로필 드롭다운 (3장 주석, 4.0) */}
+        {user ? (
+          <div className="user-wrap" ref={userRef}>
+            <div className="user-chip" onClick={() => setMenuOpen(o => !o)}>
+              {/* 알림 종 (4.13) — 클릭 시 알림 드롭다운 (프로필 메뉴와 별개) */}
+              <span className="badge-dot" data-n={String(Math.min(9, unread.length))}
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); setNotifOpen(o => !o); }}>
+                <BellIcon />
+              </span>
+              {/* 기본 아바타는 이니셜 없이 단색/그라데이션 (v1.9) */}
+              <div className="avatar" style={!avatarSrc && user.avatarColor ? { background: user.avatarColor } : undefined}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {avatarSrc && <img src={avatarSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               </div>
-            )}
-          </div>
-          <div className={`user-menu ${menuOpen ? 'open' : ''}`}>
-            <button onClick={() => { setMenuOpen(false); nav('/mypage'); }}>정보수정</button>
-            {isAdmin && (
-              <>
-                {/* 편집모드 항목은 지원 페이지에서만 노출 (편집 중이면 끄기 위해 항상 표시) */}
-                {(editAvailable || editOn) && (
-                  <button onClick={() => { setMenuOpen(false); toggleEdit(); }}>
-                    편집모드 {editOn ? '끄기' : '켜기'}
-                  </button>
+              {user.nickname} <span style={{ fontSize: 9, color: '#8d939d' }}>▾</span>
+            </div>
+            {/* 알림 드롭다운 — 목록 + 모두 읽음 + 항목별 on/off (4.13) */}
+            <div className={`user-menu notif-menu ${notifOpen ? 'open' : ''}`}>
+              <div className="nh">
+                <b>알림</b>
+                {unread.length > 0 && (
+                  <button className="all" onClick={() => markAllRead(user.id)}>모두 읽음</button>
                 )}
-                <button onClick={() => { setMenuOpen(false); nav('/settings'); }}>환경설정</button>
-              </>
-            )}
-            <button onClick={() => { setMenuOpen(false); logout(); }}>로그아웃</button>
+                {/* 읽은 알림은 하루 뒤 저절로 사라지지만, 바로 치우고 싶을 때 (v2.0 사용자 요청) */}
+                {myNotifs.some(n => n.read) && (
+                  <button className="all" onClick={() => clearReadNotifs(user.id)}>읽은 알림 정리</button>
+                )}
+              </div>
+              {myNotifs.length === 0 && <p className="empty">알림이 없습니다</p>}
+              {myNotifs.slice(0, 12).map(n => (
+                <button key={n.id} className={`nt ${n.read ? 'rd' : ''}`}
+                  onClick={() => { markRead(n.id); setNotifOpen(false); nav(n.href); }}>
+                  <b>{n.title}</b>
+                  {n.body && <span>{n.body}</span>}
+                  <small>{fmtNd(n.date)}</small>
+                </button>
+              ))}
+              {mySet && (
+                <div className="nset">
+                  {(Object.keys(NOTIF_TYPE_LABEL) as NotifType[])
+                    .filter(k => k !== 'guest' || isAdmin) // 방명록 알림은 관리자 항목
+                    .map(k => (
+                      <label key={k} className="row">
+                        <span>{NOTIF_TYPE_LABEL[k]}</span>
+                        <KToggle checked={mySet[k]} onChange={v => setNotifSetting(user.id, k, v)} />
+                      </label>
+                    ))}
+                  {/* 전달 자가진단 (v2.0) — 서버 저장→읽기를 실제로 해 보고 결과를 알려 준다 */}
+                  <button className="all" style={{ marginTop: 2 }}
+                    onClick={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}>
+                    알림 전달 확인
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className={`user-menu ${menuOpen ? 'open' : ''}`}>
+              <button onClick={() => { setMenuOpen(false); nav('/mypage'); }}>정보수정</button>
+              {isAdmin && (
+                <>
+                  {/* 편집모드 항목은 지원 페이지에서만 노출 (편집 중이면 끄기 위해 항상 표시) */}
+                  {(editAvailable || editOn) && (
+                    <button onClick={() => { setMenuOpen(false); toggleEdit(); }}>
+                      편집모드 {editOn ? '끄기' : '켜기'}
+                    </button>
+                  )}
+                  <button onClick={() => { setMenuOpen(false); nav('/settings'); }}>환경설정</button>
+                </>
+              )}
+              <button onClick={() => { setMenuOpen(false); logout(); }}>로그아웃</button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <button className="login-link" onClick={() => nav('/login')}>로그인</button>
-      )}
+        ) : (
+          <button className="login-link" onClick={() => nav('/login')}>로그인</button>
+        )}
+      </div>
     </header>
   );
 }
