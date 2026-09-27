@@ -4,6 +4,8 @@ import { ThemeProvider } from '@/lib/ThemeProvider';
 import { AuthProvider } from '@/lib/auth';
 import { MainStoreProvider } from '@/lib/mainStore';
 import { BgmStoreProvider } from '@/lib/bgmStore';
+import { WindowStoreProvider } from '@/lib/windowStore';
+import { WindowManager } from '@/components/shell/WindowManager';
 import { FontProvider } from '@/lib/fontStore';
 import { ToastProvider } from '@/components/ui/Toast';
 import { TopBar } from '@/components/shell/TopBar';
@@ -82,6 +84,7 @@ if(navigator.userAgent.indexOf('Whale/')>-1){document.documentElement.style.colo
               <FontProvider>
               <MainStoreProvider>
                 <BgmStoreProvider>
+                <WindowStoreProvider>
                   {/* 설치 초기 화면 — 첫 실행이면 관리자·게스트 설정/백업 복원만 표시 (v1.9) */}
                   <SetupGate>
                   <TopBar />
@@ -89,6 +92,8 @@ if(navigator.userAgent.indexOf('Whale/')>-1){document.documentElement.style.colo
                   {/* PageFrame: 같은 메뉴를 다시 누르면 이 안쪽만 remount (BGM·상단바는 유지, v1.9) */}
                   {/* MenuGuard: 비공개로 둔 메뉴는 주소로 들어와도 열리지 않게 (v2.0 사용자 요청) */}
                   <main id="appMain"><PageFrame><MenuGuard>{children}</MenuGuard></PageFrame></main>
+                  {/* 메인 화면 창(윈도우) 매니저 — 메뉴 클릭시 드래그 가능한 창으로 열림 (v2.1) */}
+                  <WindowManager />
                   {/* BGM 미니 플레이어 — 전역 상주, 페이지 이동에도 유지 (4.1) */}
                   <BgmPlayer />
                   {/* 전역 커스텀 툴팁 — data-tip 요소 공통 (7장) */}
@@ -109,6 +114,7 @@ if(navigator.userAgent.indexOf('Whale/')>-1){document.documentElement.style.colo
                   {/* 맞춤법 검사 밑줄 숨김 — 디자인 탭 (v2.0) */}
                   <SpellCheck />
                   </SetupGate>
+                </WindowStoreProvider>
                 </BgmStoreProvider>
               </MainStoreProvider>
               </FontProvider>
