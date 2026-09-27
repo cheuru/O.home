@@ -20,7 +20,6 @@ import {
   readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs, selfTestNotif,
 } from '@/lib/notifStore';
 import { subscribeTable } from '@/lib/db';
-import { useWindows } from '@/lib/windowStore';
 
 const BellIcon = () => (
   <svg viewBox="0 0 24 24">
@@ -91,25 +90,12 @@ export function TopBar() {
   const mySet = user ? notifSettings(user.id) : null;
   void notifVer;
 
-  const { openWindow } = useWindows();
-
-  // 메뉴 트리에서 href에 해당하는 라벨을 찾는다 — 창 제목으로 사용 (v2.1)
-  const titleFor = (href: string): string => {
-    for (const m of menu) {
-      if (m.href === href) return m.label;
-      for (const c of m.children ?? []) if (c.href === href) return c.label;
-    }
-    return href;
-  };
-
   // 편집모드 중에는 이동 전에 종료 확인 (v1.8)
   // 지금 보고 있는 메뉴를 다시 누르면 그 페이지를 새로 불러옴 — 다시 접속하는 느낌 (v1.9 사용자 요청)
   const nav = (href: string) => {
     // 커스텀 링크에 다른 사이트 풀주소를 걸 수 있다 (v2.0) — 외부는 새 창으로
     if (/^https?:\/\//.test(href)) { window.open(href, '_blank'); return; }
     if (guardNav(href)) return;
-    // 메인 화면에서는 페이지 이동 대신 드래그 가능한 창으로 띄운다 (v2.1 데스크톱 창모드 — 사용자 확정)
-    if (pathname === '/') { openWindow(href, titleFor(href)); return; }
     // 같은 메뉴 재클릭 — 브라우저 새로고침 대신 페이지만 처음 상태로 다시 그림 (BGM이 끊기지 않게, v1.9).
     // **쿼리까지 비교해야 한다** (v2.0 사용자 문의로 발견) — 경로만 보면 /board?b=2 에서 /board 를
     // 눌렀을 때 '같은 메뉴'로 착각해 이동이 통째로 막힌다. 여러 개로 만든 게시판·갤러리·다이어리가
@@ -158,13 +144,6 @@ export function TopBar() {
   }, [menuKey]);
   const visMenu = menu.slice(0, visCount);
   const moreMenu = menu.slice(visCount);
-
-  // 이 페이지가 메인 화면의 창(윈도우) 안 iframe으로 열린 경우 — 상단바를 또 그리지 않는다 (v2.2)
-  const [inWindow, setInWindow] = useState(false);
-  useEffect(() => {
-    setInWindow(new URLSearchParams(window.location.search).get('__win') === '1');
-  }, [pathname]);
-  if (inWindow) return null;
 
   return (
     <header className="topbar">
