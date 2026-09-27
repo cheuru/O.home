@@ -21,6 +21,7 @@ import { useSched, eventColor } from '@/lib/schedStore';
 import { StickyMemo, MEMO_SEED, MEMO_SIZE_W, useMemoSettings } from '@/lib/memoStore';
 import { BlobImg, useBlobUrl } from '@/lib/blobStore';
 import { normalizeInternalLink } from '@/lib/link';
+import { useWindows } from '@/lib/windowStore';
 import {
   Applicant, APPLY_SEED, useCommSettings, badgeStyle, maskName, inTrash,
 } from '@/lib/commStore';
@@ -103,12 +104,17 @@ export function BannerWidget({ conf }: { conf: WidgetConf }) {
 /* ---------- 메뉴리스트 (모바일 전용, 8장) ---------- */
 export function MenuListWidget() {
   const router = useRouter();
+  const { openWindow } = useWindows();
   const [open, setOpen] = useState<string | null>(null);
   const [menuSet, , menuLoaded] = useMenuSettings(); // 메뉴 관리 (5.2) 반영
   const { boards, loaded: boardsLoaded } = useBoards(); // 다중 게시판 (5.2)
   const { user: wUser, isAdmin: wIsAdmin } = useAuth(); // 공개범위 필터 (v1.9)
   const { map: wSecMap } = useSections();      // 여러 개로 만든 섹션 (v2.0 — 빠져 있었다)
   const { links: wLinks } = useCustomLinks();  // 커스텀 링크 (v2.0)
+  // 이 위젯은 메인 화면에만 있으므로 내부 링크는 항상 창모드로 연다 (v2.1 — TopBar와 동일 규칙)
+  void router;
+  const go = (href: string, label: string) =>
+    /^https?:\/\//.test(href) ? window.open(href, '_blank') : openWindow(href, label);
   return (
     <div className="panel menu-list wgt-menu">
       {(menuLoaded && boardsLoaded
@@ -120,12 +126,12 @@ export function MenuListWidget() {
             <div className="msub">
               {/* 커스텀 링크의 외부 주소는 새 창 (v2.0) — 상단 메뉴와 같은 규칙 */}
               {m.children.map(c => (
-                <a key={c.href} onClick={() => (/^https?:\/\//.test(c.href) ? window.open(c.href, '_blank') : router.push(c.href))}>{c.label}</a>
+                <a key={c.href} onClick={() => go(c.href, c.label)}>{c.label}</a>
               ))}
             </div>
           </div>
         ) : (
-          <a key={m.label} onClick={() => (/^https?:\/\//.test(m.href!) ? window.open(m.href!, '_blank') : router.push(m.href!))}>{m.label}</a>
+          <a key={m.label} onClick={() => go(m.href!, m.label)}>{m.label}</a>
         )
       )}
     </div>
