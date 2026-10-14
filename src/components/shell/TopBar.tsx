@@ -15,6 +15,7 @@ import { useBlobUrl } from '@/lib/blobStore';
 import { refreshPage } from '@/lib/pageRefresh';
 import { useToast } from '@/components/ui/Toast';
 import { KToggle } from '@/components/ui/Kit';
+import { useBgm, BGM_LIST_TOGGLE_EVENT, BGM_LIST_STATE_EVENT } from '@/lib/bgmStore';
 import {
   Notif, NotifType, NOTIF_EVENT, NOTIF_TYPE_LABEL,
   readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs, selfTestNotif,
@@ -25,6 +26,15 @@ const BellIcon = () => (
   <svg viewBox="0 0 24 24">
     <path d="M6 9.5a6 6 0 0 1 12 0c0 4.2 1.6 5.6 2.2 6.3H3.8C4.4 15.1 6 13.7 6 9.5Z" />
     <path d="M10 18.8a2.1 2.1 0 0 0 4 0" />
+  </svg>
+);
+
+// BGM 재생목록 아이콘 (음표) — 종 아이콘과 같은 라인 스타일 (v2.1 사용자 요청)
+const BgmIcon = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M9 18V6l10-2v12" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="16" cy="16" r="3" />
   </svg>
 );
 
@@ -48,6 +58,26 @@ export function TopBar() {
   const [site, , siteLoaded] = useSiteSettings();    // 로고 텍스트/서브/정렬 (5.2)
   const avatarSrc = useBlobUrl(user?.avatarUrl);     // 프로필 이미지 (마이페이지, v1.9)
   const userRef = useRef<HTMLDivElement>(null);
+
+  // BGM 재생목록 열기/닫기 (v2.1 사용자 요청) — 재생은 기본 자동재생 설정을 그대로 따르고,
+  // 여기선 목록 열림 상태만 이벤트로 받아 표시하고 토글 요청만 보낸다
+  const { state: bgmState } = useBgm();
+  const bgmAvailable = bgmState.settings.enabled && bgmState.tracks.length > 0;
+  const [bgmListOpen, setBgmListOpen] = useState(false);
+  const [bgmPlaying, setBgmPlaying] = useState(false);
+  // 버튼이 실제로 하는 일과 안내 문구를 일치시킴 — 목록이 닫혀 있고 이미 재생 중이면 '목록 열기'만 한다
+  const bgmTip = bgmListOpen
+    ? (bgmPlaying ? 'BGM 끄기' : 'BGM 켜기')
+    : (bgmPlaying ? '재생목록 열기' : '재생목록 열고 재생');
+  useEffect(() => {
+    const onBgmList = (e: Event) => {
+      const d = (e as CustomEvent<{ open: boolean; playing?: boolean }>).detail;
+      setBgmListOpen(d.open);
+      setBgmPlaying(!!d.playing);
+    };
+    window.addEventListener(BGM_LIST_STATE_EVENT, onBgmList);
+    return () => window.removeEventListener(BGM_LIST_STATE_EVENT, onBgmList);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen && !notifOpen) return;
@@ -228,80 +258,92 @@ export function TopBar() {
         ✎ 편집중
       </span>
 
-      {/* 사용자 영역 — 비로그인: 로그인 버튼 / 로그인: 프로필 드롭다운 (3장 주석, 4.0) */}
-      {user ? (
-        <div className="user-wrap" ref={userRef}>
-          <div className="user-chip" onClick={() => setMenuOpen(o => !o)}>
-            {/* 알림 종 (4.13) — 클릭 시 알림 드롭다운 (프로필 메뉴와 별개) */}
-            <span className="badge-dot" data-n={String(Math.min(9, unread.length))}
-              onClick={e => { e.stopPropagation(); setMenuOpen(false); setNotifOpen(o => !o); }}>
-              <BellIcon />
-            </span>
-            {/* 기본 아바타는 이니셜 없이 단색/그라데이션 (v1.9) */}
-            <div className="avatar" style={!avatarSrc && user.avatarColor ? { background: user.avatarColor } : undefined}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {avatarSrc && <img src={avatarSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            {user.nickname} <span style={{ fontSize: 9, color: '#8d939d' }}>▾</span>
-          </div>
-          {/* 알림 드롭다운 — 목록 + 모두 읽음 + 항목별 on/off (4.13) */}
-          <div className={`user-menu notif-menu ${notifOpen ? 'open' : ''}`}>
-            <div className="nh">
-              <b>알림</b>
-              {unread.length > 0 && (
-                <button className="all" onClick={() => markAllRead(user.id)}>모두 읽음</button>
-              )}
-              {/* 읽은 알림은 하루 뒤 저절로 사라지지만, 바로 치우고 싶을 때 (v2.0 사용자 요청) */}
-              {myNotifs.some(n => n.read) && (
-                <button className="all" onClick={() => clearReadNotifs(user.id)}>읽은 알림 정리</button>
-              )}
-            </div>
-            {myNotifs.length === 0 && <p className="empty">알림이 없습니다</p>}
-            {myNotifs.slice(0, 12).map(n => (
-              <button key={n.id} className={`nt ${n.read ? 'rd' : ''}`}
-                onClick={() => { markRead(n.id); setNotifOpen(false); nav(n.href); }}>
-                <b>{n.title}</b>
-                {n.body && <span>{n.body}</span>}
-                <small>{fmtNd(n.date)}</small>
-              </button>
-            ))}
-            {mySet && (
-              <div className="nset">
-                {(Object.keys(NOTIF_TYPE_LABEL) as NotifType[])
-                  .filter(k => k !== 'guest' || isAdmin) // 방명록 알림은 관리자 항목
-                  .map(k => (
-                    <label key={k} className="row">
-                      <span>{NOTIF_TYPE_LABEL[k]}</span>
-                      <KToggle checked={mySet[k]} onChange={v => setNotifSetting(user.id, k, v)} />
-                    </label>
-                  ))}
-                {/* 전달 자가진단 (v2.0) — 서버 저장→읽기를 실제로 해 보고 결과를 알려 준다 */}
-                <button className="all" style={{ marginTop: 2 }}
-                  onClick={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}>
-                  알림 전달 확인
-                </button>
+      {/* BGM 토글 + 사용자 영역을 한 묶음으로 — 서로는 가깝게, topbar 전체 간격(gap:22px)의 영향은 안 받게 (v2.1 사용자 요청) */}
+      <div className="bgm-user-group">
+        {/* BGM 켜고 끄기 — 알림 종 왼쪽 */}
+        {bgmAvailable && (
+          <button className={`bgm-toggle ${bgmPlaying ? 'on' : ''}`}
+            data-tip={bgmTip} aria-label={bgmTip} aria-pressed={bgmPlaying}
+            onClick={() => window.dispatchEvent(new Event(BGM_LIST_TOGGLE_EVENT))}>
+            <BgmIcon />
+          </button>
+        )}
+
+        {/* 사용자 영역 — 비로그인: 로그인 버튼 / 로그인: 프로필 드롭다운 (3장 주석, 4.0) */}
+        {user ? (
+          <div className="user-wrap" ref={userRef}>
+            <div className="user-chip" onClick={() => setMenuOpen(o => !o)}>
+              {/* 알림 종 (4.13) — 클릭 시 알림 드롭다운 (프로필 메뉴와 별개) */}
+              <span className="badge-dot" data-n={String(Math.min(9, unread.length))}
+                onClick={e => { e.stopPropagation(); setMenuOpen(false); setNotifOpen(o => !o); }}>
+                <BellIcon />
+              </span>
+              {/* 기본 아바타는 이니셜 없이 단색/그라데이션 (v1.9) */}
+              <div className="avatar" style={!avatarSrc && user.avatarColor ? { background: user.avatarColor } : undefined}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {avatarSrc && <img src={avatarSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               </div>
-            )}
-          </div>
-          <div className={`user-menu ${menuOpen ? 'open' : ''}`}>
-            <button onClick={() => { setMenuOpen(false); nav('/mypage'); }}>정보수정</button>
-            {isAdmin && (
-              <>
-                {/* 편집모드 항목은 지원 페이지에서만 노출 (편집 중이면 끄기 위해 항상 표시) */}
-                {(editAvailable || editOn) && (
-                  <button onClick={() => { setMenuOpen(false); toggleEdit(); }}>
-                    편집모드 {editOn ? '끄기' : '켜기'}
-                  </button>
+              {user.nickname} <span style={{ fontSize: 9, color: '#8d939d' }}>▾</span>
+            </div>
+            {/* 알림 드롭다운 — 목록 + 모두 읽음 + 항목별 on/off (4.13) */}
+            <div className={`user-menu notif-menu ${notifOpen ? 'open' : ''}`}>
+              <div className="nh">
+                <b>알림</b>
+                {unread.length > 0 && (
+                  <button className="all" onClick={() => markAllRead(user.id)}>모두 읽음</button>
                 )}
-                <button onClick={() => { setMenuOpen(false); nav('/settings'); }}>환경설정</button>
-              </>
-            )}
-            <button onClick={() => { setMenuOpen(false); logout(); }}>로그아웃</button>
+                {/* 읽은 알림은 하루 뒤 저절로 사라지지만, 바로 치우고 싶을 때 (v2.0 사용자 요청) */}
+                {myNotifs.some(n => n.read) && (
+                  <button className="all" onClick={() => clearReadNotifs(user.id)}>읽은 알림 정리</button>
+                )}
+              </div>
+              {myNotifs.length === 0 && <p className="empty">알림이 없습니다</p>}
+              {myNotifs.slice(0, 12).map(n => (
+                <button key={n.id} className={`nt ${n.read ? 'rd' : ''}`}
+                  onClick={() => { markRead(n.id); setNotifOpen(false); nav(n.href); }}>
+                  <b>{n.title}</b>
+                  {n.body && <span>{n.body}</span>}
+                  <small>{fmtNd(n.date)}</small>
+                </button>
+              ))}
+              {mySet && (
+                <div className="nset">
+                  {(Object.keys(NOTIF_TYPE_LABEL) as NotifType[])
+                    .filter(k => k !== 'guest' || isAdmin) // 방명록 알림은 관리자 항목
+                    .map(k => (
+                      <label key={k} className="row">
+                        <span>{NOTIF_TYPE_LABEL[k]}</span>
+                        <KToggle checked={mySet[k]} onChange={v => setNotifSetting(user.id, k, v)} />
+                      </label>
+                    ))}
+                  {/* 전달 자가진단 (v2.0) — 서버 저장→읽기를 실제로 해 보고 결과를 알려 준다 */}
+                  <button className="all" style={{ marginTop: 2 }}
+                    onClick={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}>
+                    알림 전달 확인
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className={`user-menu ${menuOpen ? 'open' : ''}`}>
+              <button onClick={() => { setMenuOpen(false); nav('/mypage'); }}>정보수정</button>
+              {isAdmin && (
+                <>
+                  {/* 편집모드 항목은 지원 페이지에서만 노출 (편집 중이면 끄기 위해 항상 표시) */}
+                  {(editAvailable || editOn) && (
+                    <button onClick={() => { setMenuOpen(false); toggleEdit(); }}>
+                      편집모드 {editOn ? '끄기' : '켜기'}
+                    </button>
+                  )}
+                  <button onClick={() => { setMenuOpen(false); nav('/settings'); }}>환경설정</button>
+                </>
+              )}
+              <button onClick={() => { setMenuOpen(false); logout(); }}>로그아웃</button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <button className="login-link" onClick={() => nav('/login')}>로그인</button>
-      )}
+        ) : (
+          <button className="login-link" onClick={() => nav('/login')}>로그인</button>
+        )}
+      </div>
     </header>
   );
 }
