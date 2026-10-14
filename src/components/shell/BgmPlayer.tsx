@@ -3,7 +3,7 @@
 // 기본 위치 오른쪽 아래 · 곡 리스트 팝업 (v1.9) · 페이지 이동에도 유지(레이아웃 상주)
 // 브라우저 정책상 소리 재생은 사용자의 첫 클릭부터 시작
 import React, { useEffect, useRef, useState } from 'react';
-import { useBgm } from '@/lib/bgmStore';
+import { useBgm, BGM_LIST_TOGGLE_EVENT, BGM_LIST_STATE_EVENT } from '@/lib/bgmStore';
 
 /** 흐르는 글씨 — 재생 중이고 글자가 넘칠 때만 무한 스크롤, 평소엔 말줄임.
  *  넘침 판정은 숨김 측정용 스팬으로 — 마운트 직후(레이아웃·폰트 확정 전) 1회 측정만 하면
@@ -244,6 +244,27 @@ export function BgmPlayer() {
     window.addEventListener('pointermove', mv);
     window.addEventListener('pointerup', up);
   };
+
+  // 상단바의 BGM 버튼과 재생목록 열림 상태 공유 (v2.1) — 열림/닫힘이 바뀔 때마다 알리고,
+  // 상단바 쪽 클릭은 이벤트로 받아 기존 목록 토글(listOpen) 그대로 재사용
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(BGM_LIST_STATE_EVENT, { detail: { open: listOpen } }));
+  }, [listOpen]);
+  // 접힌 상태에선 목록이 CSS로 숨겨지므로, 상단바에서 열 땐 펼친 뒤 연다
+  const listOpenRef = useRef(listOpen);
+  listOpenRef.current = listOpen;
+  const foldedRef = useRef(folded);
+  foldedRef.current = folded;
+  useEffect(() => {
+    const onToggle = () => {
+      if (listOpenRef.current) { setListOpen(false); return; }
+      if (foldedRef.current) setFold(false);
+      setListOpen(true);
+    };
+    window.addEventListener(BGM_LIST_TOGGLE_EVENT, onToggle);
+    return () => window.removeEventListener(BGM_LIST_TOGGLE_EVENT, onToggle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!settings.enabled || tracks.length === 0) return null;
 
