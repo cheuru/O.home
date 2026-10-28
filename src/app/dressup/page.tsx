@@ -14,7 +14,7 @@ import './dressup.css';
 function Cover({ fileRef }: { fileRef?: string }) {
   const url = useBlobUrl(fileRef);
   // eslint-disable-next-line @next/next/no-img-element
-  return url ? <img src={url} alt="" draggable={false} /> : <span className="noimg">NO IMAGE</span>;
+  return url ? <img src={url} alt="" draggable={false} /> : <span className="noimg">방 미리보기</span>;
 }
 
 export default function DressupLobbyPage() {
