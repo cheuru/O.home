@@ -1,148 +1,67 @@
 'use client';
-// 옷입히기 — 몸통 선택 → 카테고리별 파츠 레이어 → 위치 조정 → PNG 저장
-import React, { useEffect, useMemo, useState } from 'react';
+// 옷입히기 방 — 「페어의 옷장」: 두 명을 나란히 세우고 옷을 끌어다 놓거나 더블클릭해서 입힌다
+// 원본: 우초맨 (https://uchoman.ivyro.net/) · 효과음: 셀바이뮤직
+import React, { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
 import { useBlobUrl } from '@/lib/blobStore';
 import {
-  BODY_KEY, PART_KEY, BODY_SEED, PART_SEED, PAIR_OX, PAIR_SC, emptySlot, newDressState, bodyInRoom,
-  useDressSettings, type DressBody, type DressPart, type DressState, type LayerPick,
+  PART_KEY, PART_SEED, DEFAULT_LINES, isDefaultWear, useDressSettings,
+  type DressCat, type DressPart, type DressRoom as RoomT,
 } from '@/lib/dressupStore';
-import { DressStage, exportPng, type DragTarget } from './DressStage';
-import { EditableDesc, PageTitle } from '@/components/ui/PageText';
+import { PairChar, type CharEls, type Sfx, type WornItem } from '@/lib/dressupChar';
+import { loadImage, resolveRefUrl } from './DressStage';
+import { PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import '../../app/dressup/dressup.css';
 
-function Thumb({ fileRef }: { fileRef: string }) {
-  const url = useBlobUrl(fileRef);
-  // eslint-disable-next-line @next/next/no-img-element
-  return url ? <img src={url} alt="" draggable={false} /> : null;
+/* ---------- 작은 조각들 ---------- */
+function useFaces(refs: string[]): string[] {
+  const a = useBlobUrl(refs[0] || undefined);
+  const b = useBlobUrl(refs[1] || undefined);
+  const c = useBlobUrl(refs[2] || undefined);
+  const d = useBlobUrl(refs[3] || undefined);
+  const e = useBlobUrl(refs[4] || undefined);
+  return [a, b, c, d, e].map(x => x || '');
 }
 
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-const round1 = (v: number) => Math.round(v * 10) / 10;
+const FX_CLASS: Record<string, string> = {
+  'fly-down': 'anim-fly-down', 'fly-up': 'anim-fly-up', 'in-up': 'anim-fly-in-up', 'in-down': 'anim-fly-in-down',
+};
 
+function WornLayer({ item, part }: { item: WornItem; part: DressPart }) {
+  const url = useBlobUrl(part.img);
+  if (!url) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className={`dp-worn ${item.fx ? FX_CLASS[item.fx] : ''}`} src={url} alt="" draggable={false} style={{ zIndex: item.z }} />;
+}
+
+function Thumb({ fileRef, className, title }: { fileRef: string; className?: string; title?: string }) {
+  const url = useBlobUrl(fileRef);
+  // eslint-disable-next-line @next/next/no-img-element
+  return url ? <img className={className} src={url} alt="" title={title} draggable={false} /> : <span className={className} />;
+}
+
+let SFX_CACHE: Partial<Record<Sfx, HTMLAudioElement>> = {};
+function playSfx(n: Sfx) {
+  try {
+    const a = SFX_CACHE[n] ?? (SFX_CACHE[n] = new Audio(`/dressup/sfx/${n}.mp3`));
+    a.currentTime = 0;
+    void a.play().catch(() => { /* 자동재생 차단 — 무시 */ });
+  } catch { /* 소리가 없어도 동작 */ }
+}
+
+const dblKey = { auto: 'auto', a: 1, b: 2 } as const;
+
+/* ---------- 방 ---------- */
 export default function DressRoom({ roomId }: { roomId: string }) {
   const { user, isAdmin } = useAuth();
-  const toast = useToast();
   const [set, , setLoaded] = useDressSettings();
-  const [bodiesAll, , bLoaded] = useLocalList<DressBody>(BODY_KEY, BODY_SEED);
   const [partsAll, , pLoaded] = useLocalList<DressPart>(PART_KEY, PART_SEED);
-
   const room = set.rooms.find(r => r.id === roomId);
-  const bodies = useMemo(
-    () => bodiesAll.filter(b => bodyInRoom(b, roomId, set.rooms)).slice(0, set.maxBodies),
-    [bodiesAll, roomId, set.rooms, set.maxBodies],
-  );
-  // 승인된 파츠 + 내가 올려서 대기 중인 파츠(본인에게만 보인다 — 서버가 남의 것은 안 내줌)
-  const parts = useMemo(
-    () => partsAll.filter(p => p.status === 'approved' || (!!user && p.authorId === user.id)),
-    [partsAll, user],
-  );
 
-  const [state, setState] = useState<DressState>(() => newDressState());
-  const [slot, setSlot] = useState(0);
-  const [catId, setCatId] = useState('');
-  const [target, setTarget] = useState<DragTarget>('part');
-
-  // 몸통이 로드되면 첫 몸통을 기본으로
-  useEffect(() => {
-    if (!bodies.length) return;
-    setState(s => (s.slots[0].bodyId && bodies.some(b => b.id === s.slots[0].bodyId)) ? s : {
-      ...s, slots: [{ ...s.slots[0], bodyId: bodies[0].id }, { ...s.slots[1], bodyId: bodies[1]?.id ?? bodies[0].id }],
-    });
-  }, [bodies]);
-  useEffect(() => { if (!catId && set.cats[0]) setCatId(set.cats[0].id); }, [set.cats, catId]);
-
-  const cur = state.slots[slot];
-  const slotCount = state.mode === 'pair' ? 2 : 1;
-  const layer: LayerPick | undefined = cur.layers[catId];
-  const catParts = parts.filter(p => p.bodyId === cur.bodyId && p.catId === catId);
-
-  const patchSlot = (i: number, f: (s: DressState['slots'][0]) => DressState['slots'][0]) =>
-    setState(s => {
-      const slots = [...s.slots] as DressState['slots'];
-      slots[i] = f(slots[i]);
-      return { ...s, slots };
-    });
-
-  const setMode = (mode: DressState['mode']) => {
-    setState(s => {
-      const a = s.slots[0], b = s.slots[1];
-      if (mode === 'pair') {
-        return { mode, slots: [{ ...a, ox: -PAIR_OX, sc: PAIR_SC }, { ...b, bodyId: b.bodyId || a.bodyId, ox: PAIR_OX, sc: PAIR_SC }] };
-      }
-      return { mode, slots: [{ ...a, ox: 0, oy: 0, sc: 1 }, b] };
-    });
-    setSlot(0);
-  };
-
-  const chooseBody = (id: string) => patchSlot(slot, s => ({ ...s, bodyId: id, layers: {} }));   // 파츠는 몸통별이라 몸통이 바뀌면 비운다
-
-  const choosePart = (p: DressPart | null) => patchSlot(slot, s => {
-    const layers = { ...s.layers };
-    if (!p) delete layers[catId];
-    else {
-      const old = layers[catId];
-      layers[catId] = { partId: p.id, dx: old?.dx ?? 0, dy: old?.dy ?? 0, s: old?.s ?? 1 };
-    }
-    return { ...s, layers };
-  });
-
-  const onMove = (i: number, t: DragTarget, dx: number, dy: number) => {
-    if (t === 'slot') {
-      patchSlot(i, s => ({ ...s, ox: clamp(round1(s.ox + dx), -100, 100), oy: clamp(round1(s.oy + dy), -100, 100) }));
-    } else {
-      patchSlot(i, s => {
-        const l = s.layers[catId];
-        if (!l) return s;
-        return { ...s, layers: { ...s.layers, [catId]: { ...l, dx: clamp(round1(l.dx + dx), -100, 100), dy: clamp(round1(l.dy + dy), -100, 100) } } };
-      });
-    }
-  };
-
-  const setLayerField = (k: 'dx' | 'dy' | 's', v: number) => patchSlot(slot, s => {
-    const l = s.layers[catId];
-    return l ? { ...s, layers: { ...s.layers, [catId]: { ...l, [k]: v } } } : s;
-  });
-
-  const resetLayer = () => patchSlot(slot, s => {
-    const l = s.layers[catId];
-    return l ? { ...s, layers: { ...s.layers, [catId]: { ...l, dx: 0, dy: 0, s: 1 } } } : s;
-  });
-
-  const randomize = () => {
-    for (let i = 0; i < slotCount; i++) {
-      patchSlot(i, s => {
-        const layers: DressState['slots'][0]['layers'] = {};
-        set.cats.forEach(c => {
-          const pool = parts.filter(p => p.bodyId === s.bodyId && p.catId === c.id && p.status === 'approved');
-          if (pool.length) layers[c.id] = { partId: pool[Math.floor(Math.random() * pool.length)].id, dx: 0, dy: 0, s: 1 };
-        });
-        return { ...s, layers };
-      });
-    }
-  };
-
-  const clearAll = () => patchSlot(slot, s => ({ ...emptySlot(s.bodyId, s.ox, s.sc), oy: s.oy, flip: s.flip }));
-
-  const save = async () => {
-    try {
-      const blob = await exportPng(state, bodies, parts, set.cats, set.stageW, set.stageH);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `dressup-${Date.now()}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'PNG 저장에 실패했어요');
-    }
-  };
-
-  const canManage = isAdmin || (!!user && set.allowMemberParts);
-
-  if (!bLoaded || !pLoaded || !setLoaded) return <section className="page" />;
+  if (!setLoaded || !pLoaded) return <section className="page" />;
   if (!room) {
     return (
       <section className="page">
@@ -151,97 +70,308 @@ export default function DressRoom({ roomId }: { roomId: string }) {
       </section>
     );
   }
+  const parts = partsAll.filter(p => p.roomId === room.id && (p.status === 'approved' || (!!user && p.authorId === user.id)));
+  return <Inner key={room.id} room={room} cats={set.cats} parts={parts} canManage={isAdmin || (!!user && set.allowMemberParts)} isAdmin={isAdmin} />;
+}
+
+function Inner({ room, cats, parts, canManage, isAdmin }: { room: RoomT; cats: DressCat[]; parts: DressPart[]; canManage: boolean; isAdmin: boolean }) {
+  const toast = useToast();
+  const [, bump] = useReducer((x: number) => x + 1, 0);
+
+  // 최신 값을 컨트롤러가 읽게 ref 로 들고 있는다
+  const roomRef = useRef(room); roomRef.current = room;
+  const catsRef = useRef(cats); catsRef.current = cats;
+  const partsRef = useRef(parts); partsRef.current = parts;
+  const dragging = useRef(false);
+
+  const facesA = useFaces(room.chars[0].faces);
+  const facesB = useFaces(room.chars[1].faces);
+  const facesRef = useRef<string[][]>([facesA, facesB]); facesRef.current = [facesA, facesB];
+
+  const ctls = useRef<[PairChar, PairChar] | null>(null);
+  if (!ctls.current) {
+    const mk = (cid: 1 | 2) => new PairChar(cid, {
+      faceUrl: n => facesRef.current[cid - 1][n - 1] ?? '',
+      line: k => roomRef.current.chars[cid - 1].lines[k] ?? DEFAULT_LINES[k] ?? '',
+      list: k => (roomRef.current.chars[cid - 1].lines[k] ?? DEFAULT_LINES[k] ?? '').split('\n').map(s => s.trim()).filter(Boolean),
+      cat: id => catsRef.current.find(c => c.id === id),
+      partZ: id => partsRef.current.find(p => p.id === id)?.z,
+      defaults: () => partsRef.current
+        .filter(p => p.status === 'approved' && isDefaultWear(p, (cid - 1) as 0 | 1))
+        .map(p => ({ partId: p.id, catId: p.catId, z: p.z ?? catsRef.current.find(c => c.id === p.catId)?.z ?? 20 }))
+        .filter(d => !catsRef.current.find(c => c.id === d.catId)?.bg),
+      other: () => ctls.current?.[cid === 1 ? 1 : 0],
+      sfx: playSfx,
+      dragging: () => dragging.current,
+      sync: bump,
+    });
+    ctls.current = [mk(1), mk(2)];
+  }
+  const [c1, c2] = ctls.current;
+  const ctlOf = (n: 1 | 2) => (n === 1 ? c1 : c2);
+
+  // DOM 연결 (컨트롤러가 직접 클래스를 바꾸는 요소들)
+  const mkEls = () => ({ cv: useRef<HTMLDivElement>(null), bubble: useRef<HTMLDivElement>(null), blush: useRef<HTMLDivElement>(null),
+    sweat: useRef<HTMLDivElement>(null), cloud: useRef<HTMLDivElement>(null), body: useRef<HTMLImageElement>(null), zone: useRef<HTMLDivElement>(null) });
+  const refsA = mkEls();
+  const refsB = mkEls();
+  useLayoutEffect(() => {
+    ([[c1, refsA], [c2, refsB]] as const).forEach(([c, r]) => {
+      const els: CharEls = { cv: r.cv.current, bubble: r.bubble.current, blush: r.blush.current, sweat: r.sweat.current, cloud: r.cloud.current, body: r.body.current };
+      c.els = els;
+    });
+  });
+
+  // 처음 들어왔을 때 인사 + 기본 코디
+  useEffect(() => {
+    c1.init(); c2.init();
+    return () => { c1.destroy(); c2.destroy(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // 표정 그림이 뒤늦게 준비되면 반영
+  const faceKey = [...facesA, ...facesB].join('|');
+  useEffect(() => { c1.refreshFace(); c2.refreshFace(); }, [faceKey, c1, c2]);
+
+  // 배경 (캐릭터별)
+  const [bg, setBg] = useState<[string, string]>(['', '']);
+  const bgUrlA = useBlobUrl(bg[0] || undefined);
+  const bgUrlB = useBlobUrl(bg[1] || undefined);
+  const bgUrls = useRef<string[]>(['', '']); bgUrls.current = [bgUrlA || '', bgUrlB || ''];
+  const [bgAsk, setBgAsk] = useState<DressPart | null>(null);
+
+  // 옷장 상태
+  const [tab, setTab] = useState(cats[0]?.id ?? '');
+  const [q, setQ] = useState('');
+  const [dbl, setDbl] = useState<'auto' | 'a' | 'b'>('auto');
+  const curTab = cats.some(c => c.id === tab) ? tab : cats[0]?.id ?? '';
+  const curCat = cats.find(c => c.id === curTab);
+
+  const wornIds = new Set([...c1.worn, ...c2.worn].map(w => w.partId));
+  const list = useMemo(
+    () => parts.filter(p => p.catId === curTab && (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()))),
+    [parts, curTab, q],
+  );
+
+  /* ---------- 입히기 ---------- */
+  const wearOn = (n: 1 | 2, part: DressPart) => {
+    const cat = cats.find(c => c.id === part.catId); if (!cat) return;
+    if (cat.bg) { setBgAsk(part); return; }
+    ctlOf(n).wear(part.id, part.catId);
+  };
+
+  const dblWear = (part: DressPart) => {
+    const cat = cats.find(c => c.id === part.catId);
+    if (cat?.bg) { setBgAsk(part); return; }
+    const n: 1 | 2 = dbl !== 'auto' ? dblKey[dbl] : part.who === 'b' ? 2 : 1;
+    const c = ctlOf(n);
+    const on = c.worn.find(w => w.partId === part.id);
+    if (on) c.takeOff(on.uid); else c.wear(part.id, part.catId);
+  };
+
+  const applyBg = (who: 'a' | 'b' | 'both', part: DressPart) => {
+    playSfx('blop');
+    setBg(b => [who === 'b' ? b[0] : part.img, who === 'a' ? b[1] : part.img]);
+    setBgAsk(null);
+  };
+
+  /* ---------- 끌어다 놓기 (마우스·터치 공용) ---------- */
+  const [ghost, setGhost] = useState<{ x: number; y: number; part: DressPart } | null>(null);
+  const press = useRef<{ part: DressPart; x: number; y: number; on: boolean } | null>(null);
+  const lastTap = useRef<{ id: string; t: number }>({ id: '', t: 0 });
+
+  const onDown = (e: React.PointerEvent, part: DressPart) => {
+    if (e.button > 0) return;
+    press.current = { part, x: e.clientX, y: e.clientY, on: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const p = press.current; if (!p) return;
+    if (!p.on && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6) { p.on = true; dragging.current = true; }
+    if (p.on) setGhost({ x: e.clientX, y: e.clientY, part: p.part });
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const p = press.current; press.current = null;
+    if (!p) return;
+    if (p.on) {
+      dragging.current = false; setGhost(null);
+      const hit = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest('[data-dp-zone]');
+      const n = hit ? Number(hit.getAttribute('data-dp-zone')) : 0;
+      if (n === 1 || n === 2) wearOn(n, p.part);
+      return;
+    }
+    // 두 번 탭/클릭 = 더블클릭
+    const now = Date.now();
+    if (lastTap.current.id === p.part.id && now - lastTap.current.t < 450) { lastTap.current = { id: '', t: 0 }; dblWear(p.part); }
+    else lastTap.current = { id: p.part.id, t: now };
+  };
+
+  /* ---------- 찰칵! 저장 ---------- */
+  const drawChar = async (i: 0 | 1, skipped: string[]) => {
+    const r = roomRef.current;
+    const cv = document.createElement('canvas'); cv.width = r.stageW; cv.height = r.stageH;
+    const ctx = cv.getContext('2d'); if (!ctx) return cv;
+    const c = ctlOf((i + 1) as 1 | 2);
+    const layers: { src: string; z: number; bg?: boolean; desc: string }[] = [];
+    if (bgUrls.current[i]) layers.push({ src: bgUrls.current[i], z: -999, bg: true, desc: '배경' });
+    const face = facesRef.current[i][c.face - 1] || facesRef.current[i][0];
+    if (face) layers.push({ src: face, z: 10, desc: '캐릭터' });
+    c.worn.forEach(w => { const p = partsRef.current.find(x => x.id === w.partId); if (p) layers.push({ src: p.img, z: w.z, desc: p.name }); });
+    layers.sort((a, b) => a.z - b.z);
+    const imgs = await Promise.all(layers.map(async l => {
+      try { return await loadImage(await resolveRefUrl(l.src)); } catch { skipped.push(l.desc); return null; }
+    }));
+    layers.forEach((l, k) => {
+      const im = imgs[k]; if (!im) return;
+      if (l.bg) {
+        const sc = Math.max(r.stageW / im.naturalWidth, r.stageH / im.naturalHeight);
+        const w = im.naturalWidth * sc, h = im.naturalHeight * sc;
+        ctx.drawImage(im, (r.stageW - w) / 2, (r.stageH - h) / 2, w, h);
+      } else ctx.drawImage(im, 0, 0, r.stageW, r.stageH);
+    });
+    return cv;
+  };
+
+  const save = async () => {
+    const dn = room.saveName || room.name;
+    const fn = window.prompt('저장 파일명을 입력해주세요!', dn);
+    if (fn === null) return;
+    playSfx('pic');
+    const skipped: string[] = [];
+    try {
+      const [a, b] = await Promise.all([drawChar(0, skipped), drawChar(1, skipped)]);
+      const gap = 20;
+      const comb = document.createElement('canvas');
+      comb.width = a.width + gap + b.width; comb.height = Math.max(a.height, b.height);
+      const ctx = comb.getContext('2d'); if (!ctx) return;
+      ctx.drawImage(a, 0, 0); ctx.drawImage(b, a.width + gap, 0);
+      const blob: Blob | null = await new Promise(res => { try { comb.toBlob(res, 'image/png'); } catch { res(null); } });
+      if (!blob) { toast('저장하지 못했어요 — 이미지 서버가 저장을 허용하지 않는 것 같아요(CORS)'); return; }
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob); link.download = `${fn.trim() || dn}.png`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      if (skipped.length) toast(`저장은 됐지만 일부가 빠졌어요: ${Array.from(new Set(skipped)).join(', ')}`);
+      window.setTimeout(() => c1.bubble(c1.host.line('save_photo') || '...', 3), 800);
+      window.setTimeout(() => c2.bubble(c2.host.line('save_photo') || '...', 3), 1100);
+    } catch { toast('저장에 실패했어요'); }
+  };
+
+  /* ---------- 화면 ---------- */
+  const col = (n: 1 | 2, refs: ReturnType<typeof mkEls>, bgUrl: string | undefined) => {
+    const ctl = ctlOf(n);
+    const ch = room.chars[n - 1];
+    const bl = ch.blush;
+    return (
+      <div className="dp-col" style={{ width: room.stageW, maxWidth: '100%' }}>
+        <div className="dp-name">{ch.name}</div>
+        <div className="dp-btnrow">
+          <button className="dr-chip" onClick={() => ctl.restore()}>다시 입히기</button>
+          <button className="dr-chip dp-danger" onClick={() => ctl.reset()}>전부 벗기!</button>
+        </div>
+        <div ref={refs.zone} data-dp-zone={n} className="dp-zone" onClick={() => { if (!dragging.current) ctl.click(); }}
+          style={{ aspectRatio: `${room.stageW} / ${room.stageH}`, ...(bgUrl ? { backgroundImage: `url("${bgUrl}")` } : {}) }}>
+          <div ref={refs.bubble} className="dp-bubble" />
+          <div ref={refs.sweat} className="dp-fx" />
+          <div ref={refs.cloud} className="dp-fx" />
+          <div ref={refs.blush} className="dp-blush"
+            style={{ left: `${(bl.x / room.stageW) * 100}%`, top: `${(bl.y / room.stageH) * 100}%`, width: `${(bl.w / room.stageW) * 100}%`, height: `${(bl.h / room.stageH) * 100}%` }} />
+          <div ref={refs.cv} className="dp-cv">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img ref={refs.body} className="dp-base" alt="" draggable={false} />
+            {ctl.worn.map(w => { const p = parts.find(x => x.id === w.partId); return p ? <WornLayer key={w.uid} item={w} part={p} /> : null; })}
+          </div>
+        </div>
+        <div className="dp-wornwrap">
+          <div className="dp-worntitle">👕 착용 중 — ✕ 벗기 / ▲▼ 앞뒤 조절</div>
+          <div className="dp-worn-panel">
+            {ctl.worn.length === 0 && <span className="dp-empty">없음</span>}
+            {ctl.worn.map(w => {
+              const p = parts.find(x => x.id === w.partId); if (!p) return null;
+              return (
+                <div className="dp-chip" key={w.uid}>
+                  <Thumb fileRef={p.img} title={p.name} />
+                  <span className="lb">{p.name}</span>
+                  <div className="zr">
+                    <button onClick={e => { e.stopPropagation(); ctl.setZ(w.uid, 1); }} title="앞으로">▲</button>
+                    <span>{w.z}</span>
+                    <button onClick={e => { e.stopPropagation(); ctl.setZ(w.uid, -1); }} title="뒤로">▼</button>
+                  </div>
+                  <button className="x" onClick={e => { e.stopPropagation(); ctl.takeOff(w.uid); }} title="벗기기">✕</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <section className="page">
+    <section className="page dp-root">
       <div className="page-head">
-        <PageTitle>{room.name}</PageTitle>
-        <EditableDesc k="dressup-desc" def="몸통을 고르고 옷을 입혀 보세요 — 끌어서 위치를 맞출 수 있어요" />
+        <PageTitle>{room.title || room.name}</PageTitle>
+        <p>끌어다 놓거나 더블클릭(두 번 탭)해서 옷을 입혀 보세요. 캐릭터를 눌러 말을 걸 수도 있어요.</p>
         <div className="head-actions">
           <Link className="btn btn-dark" href="/dressup">← 방 목록</Link>
-          {canManage && <Link className="btn btn-dark" href="/dressup/manage">{isAdmin ? 'MANAGE' : '파츠 등록'}</Link>}
+          {canManage && <Link className="btn btn-dark" href="/dressup/manage">{isAdmin ? 'MANAGE' : '옷 등록'}</Link>}
+          <button className="btn btn-dark" onClick={save}>📸 찰칵!</button>
         </div>
       </div>
 
-      {bodies.length === 0 ? (
-        <div className="panel" style={{ textAlign: 'center', padding: 44, fontSize: 13, color: 'var(--faint)' }}>
-          {isAdmin ? '이 방에 아직 몸통이 없어요 — MANAGE에서 몸통을 먼저 등록해 주세요' : '이 방에는 아직 몸통이 없습니다'}
+      <div className="dp-main">
+        <div className="dp-stages">
+          {col(1, refsA, bgUrlA)}
+          {col(2, refsB, bgUrlB)}
         </div>
-      ) : (
-        <div className="dr-wrap">
-          {/* 캔버스 */}
-          <div className="panel dr-stagebox">
-            <DressStage state={state} bodies={bodies} parts={parts} cats={set.cats}
-              stageW={set.stageW} stageH={set.stageH} activeSlot={slot} activeCat={catId} target={target} onMove={onMove} />
-            <div className="dr-row">
-              <span className="lb">모드</span>
-              <button className={`dr-chip ${state.mode === 'single' ? 'on' : ''}`} onClick={() => setMode('single')}>싱글</button>
-              <button className={`dr-chip ${state.mode === 'pair' ? 'on' : ''}`} onClick={() => setMode('pair')}>페어</button>
-              {state.mode === 'pair' && (<>
-                <span className="lb" style={{ marginLeft: 8 }}>편집 중</span>
-                <button className={`dr-chip ${slot === 0 ? 'on' : ''}`} onClick={() => setSlot(0)}>A</button>
-                <button className={`dr-chip ${slot === 1 ? 'on' : ''}`} onClick={() => setSlot(1)}>B</button>
-              </>)}
-            </div>
-            <div className="dr-row">
-              <span className="lb">몸통{state.mode === 'pair' ? ` ${slot === 0 ? 'A' : 'B'}` : ''}</span>
-              <div className="dr-bodies">
-                {bodies.map(b => (
-                  <button key={b.id} className={`dr-bthumb ${cur.bodyId === b.id ? 'on' : ''}`} title={b.name} onClick={() => chooseBody(b.id)}>
-                    <Thumb fileRef={b.img} />
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="dr-row">
-              <button className="dr-chip" onClick={() => patchSlot(slot, s => ({ ...s, flip: !s.flip }))}>좌우반전</button>
-              <button className="dr-chip" onClick={randomize}>랜덤</button>
-              <button className="dr-chip" onClick={clearAll}>옷 벗기기</button>
-              <button className="dr-chip on" onClick={save}>PNG 저장</button>
-            </div>
+
+        <aside className="panel dp-wardrobe">
+          <input className="dp-search" type="text" placeholder="아이템 검색..." value={q} onChange={e => setQ(e.target.value)} />
+          <div className="dr-row" style={{ marginTop: 0 }}>
+            <span className="lb">👆 더블클릭 → 입히기</span>
+            <button className={`dr-chip ${dbl === 'auto' ? 'on' : ''}`} onClick={() => setDbl('auto')} title="옷에 정해 둔 캐릭터(A/B)에게 알아서 입혀요">자동</button>
+            <button className={`dr-chip ${dbl === 'a' ? 'on' : ''}`} onClick={() => setDbl('a')}>{room.chars[0].name}</button>
+            <button className={`dr-chip ${dbl === 'b' ? 'on' : ''}`} onClick={() => setDbl('b')}>{room.chars[1].name}</button>
           </div>
-
-          {/* 옷 고르기 / 위치 조정 */}
-          <div className="panel dr-side">
-            <div className="dr-row" style={{ marginTop: 0 }}>
-              {set.cats.map(c => (
-                <button key={c.id} className={`dr-chip ${catId === c.id ? 'on' : ''}`} onClick={() => { setCatId(c.id); setTarget('part'); }}>{c.name}</button>
-              ))}
-            </div>
-
-            <div className="dr-grid">
-              <button className={`dr-part none ${!layer ? 'on' : ''}`} onClick={() => choosePart(null)}>없음</button>
-              {catParts.map(p => (
-                <button key={p.id} className={`dr-part ${layer?.partId === p.id ? 'on' : ''}`} title={p.name} onClick={() => choosePart(p)}>
-                  <Thumb fileRef={p.img} />
-                  {p.status !== 'approved' && <span className="tag">{p.status === 'pending' ? '대기' : '반려'}</span>}
-                </button>
-              ))}
-            </div>
-            {catParts.length === 0 && <div className="dr-sub">이 몸통에 맞는 {set.cats.find(c => c.id === catId)?.name ?? ''} 파츠가 아직 없어요</div>}
-
-            <div className="dr-row" style={{ marginTop: 0 }}>
-              <span className="lb">드래그로 움직일 대상</span>
-              <button className={`dr-chip ${target === 'part' ? 'on' : ''}`} onClick={() => setTarget('part')}>선택한 파츠</button>
-              <button className={`dr-chip ${target === 'slot' ? 'on' : ''}`} onClick={() => setTarget('slot')}>캐릭터 전체</button>
-            </div>
-
-            {target === 'part' ? (
-              <div className="dr-adjust">
-                {layer ? (<>
-                  <label>가로<input type="range" min={-50} max={50} step={0.5} value={layer.dx} onChange={e => setLayerField('dx', +e.target.value)} /><span className="val">{layer.dx}</span></label>
-                  <label>세로<input type="range" min={-50} max={50} step={0.5} value={layer.dy} onChange={e => setLayerField('dy', +e.target.value)} /><span className="val">{layer.dy}</span></label>
-                  <label>크기<input type="range" min={0.3} max={2.5} step={0.01} value={layer.s} onChange={e => setLayerField('s', +e.target.value)} /><span className="val">{layer.s.toFixed(2)}</span></label>
-                  <button className="dr-chip" style={{ justifySelf: 'start' }} onClick={resetLayer}>파츠 위치 초기화</button>
-                </>) : <div className="dr-sub">파츠를 고르면 여기서 위치와 크기를 맞출 수 있어요</div>}
-              </div>
-            ) : (
-              <div className="dr-adjust">
-                <label>가로<input type="range" min={-60} max={60} step={0.5} value={cur.ox} onChange={e => patchSlot(slot, s => ({ ...s, ox: +e.target.value }))} /><span className="val">{cur.ox}</span></label>
-                <label>세로<input type="range" min={-60} max={60} step={0.5} value={cur.oy} onChange={e => patchSlot(slot, s => ({ ...s, oy: +e.target.value }))} /><span className="val">{cur.oy}</span></label>
-                <label>크기<input type="range" min={0.3} max={1.8} step={0.01} value={cur.sc} onChange={e => patchSlot(slot, s => ({ ...s, sc: +e.target.value }))} /><span className="val">{cur.sc.toFixed(2)}</span></label>
-              </div>
+          <div className="dp-tabs">
+            {cats.map(c => <button key={c.id} className={`dr-chip ${curTab === c.id ? 'on' : ''}`} onClick={() => setTab(c.id)}>{c.name}</button>)}
+          </div>
+          <div className="dp-items">
+            {curCat?.bg && (
+              <>
+                <button className="dp-bgx" onClick={() => setBg(b => ['', b[1]])}>🚫<span>{room.chars[0].name}<br />배경제거</span></button>
+                <button className="dp-bgx" onClick={() => setBg(b => [b[0], ''])}>🚫<span>{room.chars[1].name}<br />배경제거</span></button>
+              </>
             )}
+            {list.map(p => (
+              <div key={p.id} className={`dp-it ${!curCat?.stack && !curCat?.bg && wornIds.has(p.id) ? 'worn' : ''}`}
+                onPointerDown={e => onDown(e, p)} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+                onClick={() => { if (curCat?.bg) setBgAsk(p); }} title={p.name}>
+                <Thumb fileRef={p.img} />
+                {p.status !== 'approved' && <span className="tag">{p.status === 'pending' ? '대기' : '반려'}</span>}
+              </div>
+            ))}
+            {list.length === 0 && <div className="dr-sub" style={{ gridColumn: '1 / -1' }}>아이템이 없습니다.</div>}
+          </div>
+          <div className="dp-credit">
+            원본 <a href="https://uchoman.ivyro.net/" target="_blank" rel="noreferrer">우초맨</a> · SFX <a href="https://sellbuymusic.com/md/spjqcbb-efbfbct" target="_blank" rel="noreferrer">셀바이뮤직</a>
+          </div>
+        </aside>
+      </div>
+
+      {ghost && (
+        <div className="dp-ghost" style={{ left: ghost.x, top: ghost.y, width: Math.min(room.stageW / 2, 160) }}>
+          <Thumb fileRef={ghost.part.img} />
+        </div>
+      )}
+
+      {bgAsk && (
+        <div className="dp-modal" onClick={() => setBgAsk(null)}>
+          <div className="box" onClick={e => e.stopPropagation()}>
+            <p>어느 캐릭터의 배경으로 할까요?</p>
+            <button className="btn btn-dark" onClick={() => applyBg('a', bgAsk)}>🧍 {room.chars[0].name} 만</button>
+            <button className="btn btn-dark" onClick={() => applyBg('b', bgAsk)}>🧍 {room.chars[1].name} 만</button>
+            <button className="btn btn-dark" onClick={() => applyBg('both', bgAsk)}>👫 둘 다</button>
+            <button className="dr-chip" onClick={() => setBgAsk(null)}>취소</button>
           </div>
         </div>
       )}

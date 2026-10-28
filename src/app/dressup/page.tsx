@@ -5,9 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
 import { useBlobUrl } from '@/lib/blobStore';
-import {
-  BODY_KEY, BODY_SEED, bodyInRoom, useDressSettings, type DressBody, type DressRoom,
-} from '@/lib/dressupStore';
+import { PART_KEY, PART_SEED, useDressSettings, type DressPart } from '@/lib/dressupStore';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import './dressup.css';
 
@@ -20,18 +18,18 @@ function Cover({ fileRef }: { fileRef?: string }) {
 export default function DressupLobbyPage() {
   const { user, isAdmin } = useAuth();
   const [set, , setLoaded] = useDressSettings();
-  const [bodies, , bLoaded] = useLocalList<DressBody>(BODY_KEY, BODY_SEED);
+  const [parts, , bLoaded] = useLocalList<DressPart>(PART_KEY, PART_SEED);
 
   if (!bLoaded || !setLoaded) return <section className="page" />;
 
-  const inRoom = (r: DressRoom) => bodies.filter(b => bodyInRoom(b, r.id, set.rooms));
+  const countOf = (roomId: string) => parts.filter(p => p.roomId === roomId && p.status === 'approved').length;
   const canManage = isAdmin || (!!user && set.allowMemberParts);
 
   return (
     <section className="page">
       <div className="page-head">
         <PageTitle>DRESS UP</PageTitle>
-        <EditableDesc k="dressup-lobby-desc" def="방을 골라 들어가면, 그 방의 캐릭터를 꾸밀 수 있어요" />
+        <EditableDesc k="dressup-lobby-desc" def="방을 골라 들어가면, 그 방의 페어에게 옷을 입혀 볼 수 있어요" />
         <div className="head-actions">
           {canManage && <Link className="btn btn-dark" href="/dressup/manage">{isAdmin ? 'MANAGE' : '파츠 등록'}</Link>}
         </div>
@@ -44,12 +42,11 @@ export default function DressupLobbyPage() {
       ) : (
         <div className="dr-rooms">
           {set.rooms.map(r => {
-            const list = inRoom(r);
             return (
               <Link key={r.id} href={`/dressup/${r.id}`} className="dr-room">
-                <div className="cv"><Cover fileRef={r.cover || list[0]?.img} /></div>
+                <div className="cv"><Cover fileRef={r.cover || r.chars[0].faces[0]} /></div>
                 <div className="nm">{r.name}</div>
-                <div className="mt">몸통 {list.length}개</div>
+                <div className="mt">{r.chars[0].name} · {r.chars[1].name} · 옷 {countOf(r.id)}벌</div>
               </Link>
             );
           })}
