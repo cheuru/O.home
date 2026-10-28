@@ -6,8 +6,8 @@ import { useAuth } from '@/lib/auth';
 import { useLocalList, newId } from '@/lib/postStore';
 import { putBlob, useBlobUrl } from '@/lib/blobStore';
 import {
-  BODY_KEY, PART_KEY, BODY_SEED, PART_SEED, useDressSettings,
-  type DressBody, type DressPart, type DressCat,
+  BODY_KEY, PART_KEY, BODY_SEED, PART_SEED, useDressSettings, bodyInRoom,
+  type DressBody, type DressPart, type DressCat, type DressRoom,
 } from '@/lib/dressupStore';
 import { FileDrop } from '@/components/ui/FileDrop';
 import { useConfirmDelete } from '@/components/ui/Modal';
@@ -15,7 +15,7 @@ import { PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import '../dressup.css';
 
-type Tab = 'bodies' | 'parts' | 'queue' | 'settings';
+type Tab = 'rooms' | 'bodies' | 'parts' | 'queue' | 'settings';
 const MEMBER_MAX_BYTES = 3 * 1024 * 1024;
 
 function Thumb({ fileRef }: { fileRef: string }) {
@@ -44,10 +44,12 @@ export default function DressupManagePage() {
   const [set, patchSet, setLoaded] = useDressSettings();
   const [bodies, setBodies, bLoaded] = useLocalList<DressBody>(BODY_KEY, BODY_SEED);
   const [parts, setParts, pLoaded] = useLocalList<DressPart>(PART_KEY, PART_SEED);
-  const [tab, setTab] = useState<Tab>(isAdmin ? 'bodies' : 'parts');
+  const [tab, setTab] = useState<Tab>(isAdmin ? 'rooms' : 'parts');
 
   // 등록 폼 상태
   const [bodyName, setBodyName] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [roomSel, setRoomSel] = useState('');
   const [fBody, setFBody] = useState('');
   const [fCat, setFCat] = useState('');
   const [fName, setFName] = useState('');
@@ -62,7 +64,12 @@ export default function DressupManagePage() {
   if (!user) return head('로그인한 회원만 쓸 수 있어요');
   if (!isAdmin && !set.allowMemberParts) return head('지금은 회원 파츠 등록을 받지 않아요');
 
-  const bodyName_ = (id: string) => bodies.find(b => b.id === id)?.name ?? '(삭제된 몸통)';
+  const rooms = set.rooms;
+  const curRoom = roomSel && rooms.some(r => r.id === roomSel) ? roomSel : rooms[0]?.id ?? '';
+  const roomBodies = bodies.filter(b => bodyInRoom(b, curRoom, rooms));
+  const roomOf = (b: DressBody) => rooms.find(r => r.id === (b.roomId || rooms[0]?.id));
+  const bodyLabel = (b: DressBody) => `${roomOf(b)?.name ?? '방 없음'} · ${b.name}`;
+  const bodyName_ = (id: string) => { const b = bodies.find(x => x.id === id); return b ? bodyLabel(b) : '(삭제된 몸통)'; };
   const catName = (id: string) => set.cats.find(c => c.id === id)?.name ?? '(삭제된 카테고리)';
   const selBody = fBody || bodies[0]?.id || '';
   const selCat = fCat || set.cats[0]?.id || '';
@@ -72,25 +79,73 @@ export default function DressupManagePage() {
     const f = files[0];
     if (!f) return;
     if (!isImg(f)) return toast('PNG 또는 WEBP(투명 배경) 이미지만 올릴 수 있어요');
-    if (bodies.length >= set.maxBodies) return toast(`몸통은 최대 ${set.maxBodies}개까지예요`);
+    if (!curRoom) return toast('먼저 방을 만들어 주세요');
+    if (roomBodies.length >= set.maxBodies) return toast(`한 방에 몸통은 최대 ${set.maxBodies}개까지예요`);
     setBusy(true);
     try {
       const ref = await putBlob(f);
       const sz = await imgSize(f);
       if (sz.w && Math.abs(sz.w / sz.h - set.stageW / set.stageH) > 0.03) toast('캔버스 비율과 달라요 — 설정의 캔버스 크기와 맞춰 두면 파츠가 어긋나지 않아요');
-      setBodies([...bodies, { id: newId(), name: bodyName.trim() || baseName(f), img: ref, authorId: user.id, visibility: 'public' }]);
+      setBodies([...bodies, { id: newId(), roomId: curRoom, name: bodyName.trim() || baseName(f), img: ref, authorId: user.id, visibility: 'public' }]);
       setBodyName('');
     } catch { toast('업로드에 실패했어요'); }
     setBusy(false);
   };
 
-  const moveBody = (i: number, d: -1 | 1) => {
-    const j = i + d;
-    if (j < 0 || j >= bodies.length) return;
+  const moveBody = (b: DressBody, d: -1 | 1) => {
+    const i = roomBodies.findIndex(x => x.id === b.id);
+    const o = roomBodies[i + d];
+    if (!o) return;
+    const a = bodies.findIndex(x => x.id === b.id);
+    const c = bodies.findIndex(x => x.id === o.id);
     const n = [...bodies];
-    [n[i], n[j]] = [n[j], n[i]];
+    [n[a], n[c]] = [n[c], n[a]];
     setBodies(n);
   };
+
+  /* ---------- 방 (관리자) ---------- */
+  const addRoom = async (files: File[]) => {
+    const name = roomName.trim();
+    if (!name) return toast('방 이름을 먼저 적어 주세요');
+    const f = files[0];
+    if (f && !isImg(f)) return toast('PNG 또는 WEBP 이미지만 올릴 수 있어요');
+    setBusy(true);
+    try {
+      const cover = f ? await putBlob(f) : undefined;
+      const r: DressRoom = { id: newId(), name, ...(cover ? { cover } : {}) };
+      patchSet({ rooms: [...rooms, r] });
+      setRoomName('');
+      setRoomSel(r.id);
+    } catch { toast('업로드에 실패했어요'); }
+    setBusy(false);
+  };
+
+  const patchRoom = (id: string, p: Partial<DressRoom>) => patchSet({ rooms: rooms.map(r => r.id === id ? { ...r, ...p } : r) });
+
+  const changeCover = async (r: DressRoom, f?: File) => {
+    if (!f) return;
+    if (!isImg(f)) return toast('PNG 또는 WEBP 이미지만 올릴 수 있어요');
+    try { patchRoom(r.id, { cover: await putBlob(f) }); } catch { toast('업로드에 실패했어요'); }
+  };
+
+  const moveRoom = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= rooms.length) return;
+    const n = [...rooms];
+    [n[i], n[j]] = [n[j], n[i]];
+    patchSet({ rooms: n });
+  };
+
+  const removeRoom = (r: DressRoom) => del.ask(
+    `「${r.name}」 방을 삭제하시겠습니까?`,
+    () => {
+      const gone = bodies.filter(b => bodyInRoom(b, r.id, rooms)).map(b => b.id);
+      setBodies(bodies.filter(b => !gone.includes(b.id)));
+      setParts(parts.filter(p => !gone.includes(p.bodyId)));
+      patchSet({ rooms: rooms.filter(x => x.id !== r.id) });
+    },
+    '방 안의 몸통과 파츠도 모두 함께 삭제됩니다.',
+  );
 
   const removeBody = (b: DressBody) => del.ask(
     `「${b.name}」를 삭제하시겠습니까?`,
@@ -151,7 +206,7 @@ export default function DressupManagePage() {
     <div className="panel dr-form">
       <div className="dr-sub">{isAdmin ? '파츠는 몸통별로 등록해요. 투명 PNG/WEBP, 몸통과 같은 캔버스 크기로 만들면 그대로 겹쳐져요.' : '올린 파츠는 관리자가 승인하면 공개돼요. (PNG/WEBP, 3MB 이하)'}</div>
       <select value={selBody} onChange={e => setFBody(e.target.value)}>
-        {bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        {bodies.map(b => <option key={b.id} value={b.id}>{bodyLabel(b)}</option>)}
       </select>
       <select value={selCat} onChange={e => setFCat(e.target.value)}>
         {set.cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -181,42 +236,75 @@ export default function DressupManagePage() {
       </div>
 
       <div className="dr-tabs">
-        {isAdmin && <button className={`dr-chip ${tab === 'bodies' ? 'on' : ''}`} onClick={() => setTab('bodies')}>몸통 {bodies.length}/{set.maxBodies}</button>}
+        {isAdmin && <button className={`dr-chip ${tab === 'rooms' ? 'on' : ''}`} onClick={() => setTab('rooms')}>방 {rooms.length}</button>}
+        {isAdmin && <button className={`dr-chip ${tab === 'bodies' ? 'on' : ''}`} onClick={() => setTab('bodies')}>몸통</button>}
         <button className={`dr-chip ${tab === 'parts' ? 'on' : ''}`} onClick={() => setTab('parts')}>{isAdmin ? '파츠' : '내 파츠'}</button>
         {isAdmin && <button className={`dr-chip ${tab === 'queue' ? 'on' : ''}`} onClick={() => setTab('queue')}>승인 대기 {pending.length}</button>}
         {isAdmin && <button className={`dr-chip ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>설정</button>}
       </div>
 
-      {isAdmin && tab === 'bodies' && (<>
+      {isAdmin && tab === 'rooms' && (<>
         <div className="panel dr-form" style={{ marginBottom: 14 }}>
-          <div className="dr-sub">몸통은 최대 {set.maxBodies}개까지 올릴 수 있어요. 파츠는 각 몸통에 맞춰 따로 등록합니다.</div>
-          <input type="text" placeholder="몸통 이름 (비우면 파일명)" value={bodyName} onChange={e => setBodyName(e.target.value)} />
-          <FileDrop accept="image/png,image/webp" label={busy ? '올리는 중…' : bodies.length >= set.maxBodies ? '더 올릴 수 없어요' : '몸통 이미지를 끌어다 놓기'} onFiles={addBody} />
+          <div className="dr-sub">방을 만들고 표지를 올리면 로비에 썸네일로 나와요. 표지를 안 올리면 방의 첫 몸통이 대신 보여요.</div>
+          <input type="text" placeholder="방 이름" value={roomName} onChange={e => setRoomName(e.target.value)} />
+          <FileDrop accept="image/png,image/webp" label={busy ? '만드는 중…' : '표지 이미지를 끌어다 놓으면 방이 만들어져요 (선택)'} onFiles={addRoom} />
+          <button className="dr-chip" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => addRoom([])}>표지 없이 방 만들기</button>
         </div>
         <div className="dr-list">
-          {bodies.map((b, i) => (
+          {rooms.map((r, i) => (
+            <div className="dr-item" key={r.id}>
+              <div className="th"><Thumb fileRef={r.cover || bodies.find(b => bodyInRoom(b, r.id, rooms))?.img || ''} /></div>
+              <div>
+                <input type="text" style={{ width: '100%', padding: '6px 8px', border: '1.5px solid var(--line)', borderRadius: 'var(--radius-s)', fontSize: 13 }}
+                  value={r.name} onChange={e => patchRoom(r.id, { name: e.target.value })} />
+                <div className="mt">몸통 {bodies.filter(b => bodyInRoom(b, r.id, rooms)).length}/{set.maxBodies}</div>
+              </div>
+              <div className="ac">
+                <label className="dr-chip">표지 변경<input type="file" accept="image/png,image/webp" hidden onChange={e => { changeCover(r, e.target.files?.[0]); e.target.value = ''; }} /></label>
+                <button className="dr-chip" disabled={i === 0} onClick={() => moveRoom(i, -1)}>↑</button>
+                <button className="dr-chip" disabled={i === rooms.length - 1} onClick={() => moveRoom(i, 1)}>↓</button>
+                <button className="dr-chip" onClick={() => removeRoom(r)}>삭제</button>
+              </div>
+            </div>
+          ))}
+          {rooms.length === 0 && <div className="dr-sub">아직 방이 없어요</div>}
+        </div>
+      </>)}
+
+      {isAdmin && tab === 'bodies' && (rooms.length === 0 ? <div className="dr-sub">먼저 「방」 탭에서 방을 만들어 주세요</div> : (<>
+        <div className="dr-row" style={{ marginTop: 0, marginBottom: 12 }}>
+          <span className="lb">방</span>
+          {rooms.map(r => <button key={r.id} className={`dr-chip ${curRoom === r.id ? 'on' : ''}`} onClick={() => setRoomSel(r.id)}>{r.name}</button>)}
+        </div>
+        <div className="panel dr-form" style={{ marginBottom: 14 }}>
+          <div className="dr-sub">이 방에는 몸통을 최대 {set.maxBodies}개까지 올릴 수 있어요 ({roomBodies.length}/{set.maxBodies}). 파츠는 각 몸통에 맞춰 따로 등록합니다.</div>
+          <input type="text" placeholder="몸통 이름 (비우면 파일명)" value={bodyName} onChange={e => setBodyName(e.target.value)} />
+          <FileDrop accept="image/png,image/webp" label={busy ? '올리는 중…' : roomBodies.length >= set.maxBodies ? '더 올릴 수 없어요' : '몸통 이미지를 끌어다 놓기'} onFiles={addBody} />
+        </div>
+        <div className="dr-list">
+          {roomBodies.map((b, i) => (
             <div className="dr-item" key={b.id}>
               <div className="th"><Thumb fileRef={b.img} /></div>
               <div><div className="nm">{b.name}</div><div className="mt">파츠 {parts.filter(p => p.bodyId === b.id).length}개</div></div>
               <div className="ac">
-                <button className="dr-chip" disabled={i === 0} onClick={() => moveBody(i, -1)}>↑</button>
-                <button className="dr-chip" disabled={i === bodies.length - 1} onClick={() => moveBody(i, 1)}>↓</button>
+                <button className="dr-chip" disabled={i === 0} onClick={() => moveBody(b, -1)}>↑</button>
+                <button className="dr-chip" disabled={i === roomBodies.length - 1} onClick={() => moveBody(b, 1)}>↓</button>
                 <button className="dr-chip" onClick={() => removeBody(b)}>삭제</button>
               </div>
             </div>
           ))}
-          {bodies.length === 0 && <div className="dr-sub">아직 몸통이 없어요</div>}
+          {roomBodies.length === 0 && <div className="dr-sub">이 방에는 아직 몸통이 없어요</div>}
         </div>
-      </>)}
+      </>))}
 
       {tab === 'parts' && (<>
-        {bodies.length === 0 ? <div className="dr-sub">먼저 관리자가 몸통을 등록해야 해요</div> : (<>
+        {bodies.length === 0 ? <div className="dr-sub">먼저 관리자가 방과 몸통을 등록해야 해요</div> : (<>
           {form}
           {isAdmin && (
             <div className="dr-row">
               <span className="lb">보기</span>
               <button className={`dr-chip ${!filterBody ? 'on' : ''}`} onClick={() => setFilterBody('')}>전체</button>
-              {bodies.map(b => <button key={b.id} className={`dr-chip ${filterBody === b.id ? 'on' : ''}`} onClick={() => setFilterBody(b.id)}>{b.name}</button>)}
+              {bodies.map(b => <button key={b.id} className={`dr-chip ${filterBody === b.id ? 'on' : ''}`} onClick={() => setFilterBody(b.id)}>{bodyLabel(b)}</button>)}
             </div>
           )}
           <div className="dr-list" style={{ marginTop: 14 }}>
@@ -239,7 +327,7 @@ export default function DressupManagePage() {
 
       {isAdmin && tab === 'settings' && (
         <div className="panel dr-form">
-          <label className="dr-sub">몸통 최대 개수
+          <label className="dr-sub">방당 몸통 최대 개수
             <input type="number" min={1} max={10} value={set.maxBodies} onChange={e => patchSet({ maxBodies: Math.min(10, Math.max(1, +e.target.value || 1)) })} /></label>
           <label className="dr-sub"><input type="checkbox" checked={set.allowMemberParts} onChange={e => patchSet({ allowMemberParts: e.target.checked })} /> 회원의 파츠 등록 허용 (승인 후 공개)</label>
           <label className="dr-sub">캔버스 가로(px)

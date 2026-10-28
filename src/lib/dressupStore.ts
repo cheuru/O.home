@@ -17,9 +17,18 @@ export interface DressCat {
   behind?: boolean;
 }
 
+/** 방 — 로비에서 썸네일로 보이고, 들어가면 그 방의 몸통들을 꾸민다. 설정(관리자만 쓰기)에 저장 */
+export interface DressRoom {
+  id: string;
+  name: string;
+  /** 표지 이미지 파일 참조 — 없으면 첫 몸통을 보여준다 */
+  cover?: string;
+}
+
 export interface DressSettings {
-  /** 한 페이지(옷입히기 화면)에 올릴 수 있는 몸통 수 */
+  /** 방 하나에 올릴 수 있는 몸통 수 */
   maxBodies: number;
+  rooms: DressRoom[];
   /** 회원의 파츠 등록 허용 (승인 후 공개) */
   allowMemberParts: boolean;
   /** 캔버스 크기 — 모든 이미지는 이 비율로 겹쳐진다 */
@@ -30,6 +39,7 @@ export interface DressSettings {
 
 export const DEFAULT_DRESS_SETTINGS: DressSettings = {
   maxBodies: 5,
+  rooms: [],
   allowMemberParts: true,
   stageW: 600,
   stageH: 800,
@@ -51,7 +61,7 @@ export function useDressSettings(): [DressSettings, (patch: Partial<DressSetting
       const raw = getRawSetting(DRESS_SET_KEY);
       if (raw) {
         const p = JSON.parse(raw) as Partial<DressSettings>;
-        setSt({ ...DEFAULT_DRESS_SETTINGS, ...p, cats: p.cats?.length ? p.cats : DEFAULT_DRESS_SETTINGS.cats });
+        setSt({ ...DEFAULT_DRESS_SETTINGS, ...p, rooms: p.rooms ?? [], cats: p.cats?.length ? p.cats : DEFAULT_DRESS_SETTINGS.cats });
       }
     } catch { /* 기본값 */ }
     setLoaded(true);
@@ -69,6 +79,8 @@ export function useDressSettings(): [DressSettings, (patch: Partial<DressSetting
 /* ---------- 몸통 · 파츠 ---------- */
 export interface DressBody {
   id: string;
+  /** 소속 방 — 비어 있으면(방 기능 이전에 올린 몸통) 첫 번째 방 소속으로 본다 */
+  roomId?: string;
   name: string;
   img: string;               // 파일 참조 (blobStore)
   authorId: string;
@@ -150,3 +162,7 @@ export function buildDrawList(
   const bodyItem: DrawItem = { key: 'body', ref: body.img, kind: 'body', dx: 0, dy: 0, s: 1 };
   return [...back, bodyItem, ...front].filter((x): x is DrawItem => !!x);
 }
+
+/** 이 몸통이 해당 방 소속인가 */
+export const bodyInRoom = (b: DressBody, roomId: string, rooms: DressRoom[]) =>
+  b.roomId ? b.roomId === roomId : rooms[0]?.id === roomId;
