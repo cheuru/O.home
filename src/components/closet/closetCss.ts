@@ -1,0 +1,144 @@
+// 옷장 화면 스타일 — 원본(우초맨 제작) CSS를 .cl-root 아래로 옮긴 것. 사이드바는 고정 배치 대신 페이지 안에 놓는다.
+export const CLOSET_CSS = String.raw`
+.cl-root *{box-sizing:border-box;}
+.cl-root .dressup-container{position:relative;width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;user-select:none;font-family:var(--mf);margin-top:5px;}
+.cl-root .ribbon-wrapper{position:relative;display:inline-block;margin-bottom:4px;padding:0 40px;z-index:1;filter:drop-shadow(0 5px 5px rgba(0,0,0,.15));}
+.cl-root .ribbon-wrapper::before,.cl-root .ribbon-wrapper::after{content:'';position:absolute;top:12px;width:60px;height:60px;background:var(--rm);z-index:-2;}
+.cl-root .ribbon-wrapper::before{right:100%;margin-right:-12px;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,20% 50%);}
+.cl-root .ribbon-wrapper::after{left:100%;margin-left:-12px;clip-path:polygon(0 0,100% 0,80% 50%,100% 100%,0 100%);}
+.cl-root .ribbon-bg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:60px;background:linear-gradient(to bottom,var(--pc) 0%,var(--rm) 50%,var(--rm) 100%);border-radius:4px;z-index:2;}
+.cl-root .ribbon-bg::before,.cl-root .ribbon-bg::after{content:'';position:absolute;bottom:-12px;width:0;height:0;z-index:-1;filter:brightness(.7);}
+.cl-root .ribbon-bg::before{left:0;border-top:12px solid var(--rm);border-left:12px solid transparent;}
+.cl-root .ribbon-bg::after{right:0;border-top:12px solid var(--rm);border-right:12px solid transparent;}
+.cl-root #cl-title{position:relative;z-index:3;font-size:42px;color:var(--tc);height:60px;display:flex;align-items:center;justify-content:center;letter-spacing:2px;font-family:var(--tf);white-space:nowrap;padding:0 10px;text-shadow:0 1px 1px rgba(255,255,255,.4);}
+.cl-root #cl-title span{display:inline-block;font-family:var(--tf);}
+@keyframes titleWagle{0%{transform:rotate(0) translateY(0)}25%{transform:rotate(-5deg) translateY(-2px)}50%{transform:rotate(5deg) translateY(2px)}75%{transform:rotate(-3deg) translateY(-1px)}100%{transform:rotate(0) translateY(0)}}
+.cl-root .title-save-btn{display:flex;justify-content:center;gap:10px;margin-top:2px;}
+.cl-root .dual-stage{display:flex;gap:20px;align-items:flex-start;justify-content:center;flex-wrap:wrap;}
+.cl-root .wardrobe-sidebar{position:relative;width:410px;max-width:100%;display:flex;flex-direction:column;}
+.cl-root .char-name-label{font-size:32px;color:var(--pc);font-family:var(--mf);font-weight:bold;letter-spacing:1px;text-align:center;margin-bottom:10px;}
+.cl-root .char-btn-row{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;}
+.cl-root .character-stage{position:relative;z-index:5;cursor:pointer;}
+.cl-root .char-visuals{width:100%;height:100%;position:relative;}
+.cl-root .base-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;}
+.cl-root .dropped-item{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+.cl-root .speech-bubble{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;border:2px solid #333;border-radius:15px;padding:8px 15px;font-size:16px;font-family:var(--mf);color:#333;z-index:100;opacity:0;pointer-events:none;box-shadow:2px 2px 5px rgba(0,0,0,.1);white-space:nowrap;text-align:center;transition:opacity 0.4s ease;}
+.cl-root .speech-bubble.bvis{opacity:1;pointer-events:auto;}
+.cl-root .speech-bubble::after{content:'';position:absolute;bottom:-10px;left:50%;margin-left:-6px;border-width:10px 6px 0;border-style:solid;border-color:#333 transparent;display:block;width:0;}
+.cl-root .speech-bubble::before{content:'';position:absolute;bottom:-7px;left:50%;margin-left:-4px;border-width:8px 4px 0;border-style:solid;border-color:#fff transparent;display:block;width:0;z-index:1;}
+.cl-root .blush-overlay{position:absolute;background:radial-gradient(ellipse at center,rgba(255,0,0,.3) 0%,transparent 70%);z-index:15;opacity:0;transition:opacity 1s ease-in;pointer-events:none;}
+.cl-root .active-blush{opacity:1!important;}
+.cl-root .sweat-drop{position:absolute;width:12px;height:12px;background:#8ED6FF;border-radius:0 50% 50% 50%;transform:rotate(45deg);opacity:0;z-index:100;pointer-events:none;}
+@keyframes sweatAnim{0%{opacity:0;top:8.3%}20%{opacity:1;top:8.3%}80%{opacity:1;top:15%}100%{opacity:0;top:16.7%}}
+.cl-root .dark-cloud{position:absolute;background:#999;border-radius:50px;z-index:90;opacity:0;pointer-events:none;filter:drop-shadow(2px 2px 0 #666);animation:floatCloud 4s infinite ease-in-out;}
+.cl-root .dark-cloud::after,.cl-root .dark-cloud::before{content:'';position:absolute;background:inherit;border-radius:50%;}
+.cl-root .dark-cloud::after{width:50%;height:120%;top:-50%;left:15%;}
+.cl-root .dark-cloud::before{width:50%;height:110%;top:-40%;right:15%;}
+@keyframes floatCloud{0%{transform:translateY(0);opacity:0}20%{opacity:.9}50%{transform:translateY(-8px);opacity:.9}100%{transform:translateY(0);opacity:.9}}
+@keyframes flyUpOff{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-60px);opacity:0}}
+@keyframes flyDownOff{0%{transform:translateY(0);opacity:1}100%{transform:translateY(60px);opacity:0}}
+@keyframes flyInDown{0%{transform:translateY(-30px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes flyInUp{0%{transform:translateY(30px);opacity:0}100%{transform:translateY(0);opacity:1}}
+.cl-root .anim-fly-up{animation:flyUpOff .5s ease-in forwards;}
+.cl-root .anim-fly-down{animation:flyDownOff .5s ease-in forwards;}
+.cl-root .anim-fly-in-down{animation:flyInDown .5s ease-out forwards;}
+.cl-root .anim-fly-in-up{animation:flyInUp .5s ease-out forwards;}
+@keyframes bounceEffect{0%{transform:scale(1) translateY(0)}40%{transform:scale(1.1,.9) translateY(5px)}60%{transform:scale(.95,1.05) translateY(-10px)}80%{transform:scale(1.02,.98) translateY(2px)}100%{transform:scale(1) translateY(0)}}
+.cl-root .anim-bounce{animation:bounceEffect .5s ease-in-out;transform-origin:bottom center;}
+@keyframes jumpEffect{0%{transform:translateY(0)}30%{transform:translateY(-20px)}50%{transform:translateY(0)}70%{transform:translateY(-10px)}100%{transform:translateY(0)}}
+.cl-root .anim-jump{animation:jumpEffect .8s ease-out;}
+@keyframes shakeEffect{0%{transform:translate(1px,1px) rotate(0)}10%{transform:translate(-1px,-2px) rotate(-1deg)}20%{transform:translate(-3px,0) rotate(1deg)}30%{transform:translate(3px,2px)}40%{transform:translate(1px,-1px) rotate(1deg)}50%{transform:translate(-1px,2px) rotate(-1deg)}60%{transform:translate(-3px,1px)}70%{transform:translate(3px,1px) rotate(-1deg)}80%{transform:translate(-1px,-1px) rotate(1deg)}90%{transform:translate(1px,2px)}100%{transform:translate(1px,-2px) rotate(-1deg)}}
+.cl-root .anim-shake{animation:shakeEffect .5s;}
+@keyframes weakShake{0%{transform:translate(0,0)}25%{transform:translate(1px,1px)}50%{transform:translate(-1px,-1px)}75%{transform:translate(-1px,1px)}100%{transform:translate(0,0)}}
+.cl-root .anim-weak-shake{animation:weakShake .2s infinite;}
+@keyframes gloomAnim{0%{transform:scale(1);filter:grayscale(0%)}50%{transform:scale(1.02,.96) translateY(3px);filter:grayscale(60%) brightness(.95)}100%{transform:scale(1);filter:grayscale(0%)}}
+.cl-root .anim-gloom{animation:gloomAnim 3s infinite ease-in-out;transform-origin:bottom center;}
+@keyframes heavyEffect{0%{transform:scale(1)}50%{transform:scale(1.05,.92) translateY(5px)}100%{transform:scale(1)}}
+.cl-root .anim-heavy{animation:heavyEffect .6s ease-in-out;transform-origin:bottom center;}
+.cl-root .anim-heavy-slow{animation:heavyEffect 2.5s ease-in-out;transform-origin:bottom center;}
+@keyframes peepEffect{0%{transform:scale(1)}50%{transform:scale(.95,1.08) translateY(-3px)}100%{transform:scale(1)}}
+.cl-root .anim-peep{animation:peepEffect 2s ease-in-out;transform-origin:bottom center;}
+@keyframes attentionBounce{0%{transform:translateY(0)}30%{transform:translateY(-5px)}50%{transform:translateY(0)}80%{transform:translateY(-5px)}100%{transform:translateY(0)}}
+.cl-root .anim-attention{animation:attentionBounce .6s ease-out;}
+@keyframes bubblePop{0%{transform:translateX(-50%) scale(0);opacity:0}60%{transform:translateX(-50%) scale(1.15);opacity:1}80%{transform:translateX(-50%) scale(.95);opacity:1}100%{transform:translateX(-50%) scale(1);opacity:1}}
+.cl-root .anim-pop{display:block;transform-origin:bottom center;animation:bubblePop .4s cubic-bezier(.175,.885,.32,1.275) forwards;}
+.cl-root .btn_custom{background:#555;color:#fff;border:none;height:30px;padding:0 12px;border-radius:15px;cursor:pointer;font-size:13px;font-family:var(--mf);transition:all .3s;display:flex;align-items:center;justify-content:center;}
+.cl-root .btn_custom:hover{background:var(--pc);transform:translateY(-1px);}
+.cl-root .btn_reset:hover{background:#d9534f!important;animation:btnStartle .4s;transform:none!important;}
+@keyframes btnStartle{0%{transform:scale(1) rotate(0)}40%{transform:scale(1.15) rotate(-5deg)}60%{transform:scale(1.15) rotate(5deg)}80%{transform:scale(1.05) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
+.cl-root .worn-panel-wrap{margin-top:5px;}
+.cl-root .worn-panel-title{font-size:11px;color:#bbb;font-family:var(--mf);margin-bottom:4px;}
+.cl-root .worn-panel{display:flex;flex-wrap:wrap;gap:5px;min-height:52px;padding:5px;background:rgba(255,255,255,.65);border:1px dashed #ddd;border-radius:10px;align-content:flex-start;}
+.cl-root .worn-chip{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.cl-root .worn-chip img{width:46px;height:46px;object-fit:contain;border:2px solid var(--pc);border-radius:8px;background:#fff;}
+.cl-root .worn-chip .chip-lbl{font-size:8px;color:#aaa;font-family:var(--mf);max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+.cl-root .worn-x{position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#d9534f;color:#fff;border:none;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.cl-root .worn-x:hover{background:#a02020;}
+.cl-root .zi-row{display:flex;gap:2px;align-items:center;margin-top:1px;}
+.cl-root .zi-btn{width:14px;height:14px;border:1px solid #ddd;background:#f5f5f5;border-radius:3px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;color:#666;padding:0;}
+.cl-root .zi-btn:hover{background:var(--pc);color:#fff;border-color:var(--pc);}
+.cl-root .zi-val{font-size:8px;color:#888;min-width:16px;text-align:center;}
+.cl-root .worn-empty{font-size:11px;color:#ccc;font-family:var(--mf);padding:4px;align-self:center;}
+.cl-root .wardrobe-top-bar{display:flex;gap:6px;align-items:center;margin-bottom:4px;padding:0 2px;}
+.cl-root .search-box{flex:1;min-width:110px;max-width:200px;height:30px;padding:0 10px;border:2px solid #ddd;border-radius:15px;font-family:var(--mf);font-size:13px;outline:none;transition:border-color .2s;}
+.cl-root .search-box:focus{border-color:var(--pc);}
+.cl-root .tab-nav{display:flex;gap:0;margin-bottom:-2px;padding:0;position:relative;z-index:5;}
+.cl-root .tab-btn{background:#e8e8e8;border:2px solid #ccc;border-bottom:none;border-radius:9px 9px 0 0;padding:5px 3px;white-space:nowrap;font-family:var(--mf);font-size:13px;color:#999;cursor:pointer;transition:background .15s,color .15s;flex:1;text-align:center;min-width:0;overflow:hidden;}
+.cl-root .tab-btn:hover{background:#f0f0f0;color:#666;}
+.cl-root .tab-btn.active{background:rgba(255,255,255,.92);border-color:#ccc;color:var(--pc);font-weight:bold;}
+.cl-root .wardrobe-wrapper{position:relative;}
+.cl-root .wardrobe{background:rgba(255,255,255,.88);border:2px dashed #bbb;border-radius:0 0 12px 12px;box-shadow:0 5px 15px rgba(0,0,0,.05);padding:8px;overflow:hidden;height:400px;position:relative;}
+.cl-root .tab-panel{position:absolute;top:0;left:0;width:100%;height:100%;overflow-y:auto;flex-wrap:wrap;align-content:flex-start;gap:6px;padding:8px;visibility:hidden;opacity:0;pointer-events:none;display:flex;}
+.cl-root .tab-panel.active{visibility:visible;opacity:1;pointer-events:auto;}
+.cl-root .tab-panel::-webkit-scrollbar-thumb{background:rgba(0,0,0,.2);border-radius:10px;}
+.cl-root .clothes-item{width:60px;height:60px;cursor:grab;transition:transform .2s,border-color .2s;background:#fff;border:2px solid #eee;border-radius:10px;object-fit:contain;flex-shrink:0;}
+.cl-root .clothes-item:hover{transform:translateY(-3px);border-color:#bbb;box-shadow:0 4px 8px rgba(0,0,0,.1);}
+.cl-root .clothes-item.item-worn{visibility:hidden;pointer-events:none;}
+.cl-root .clothes-item{touch-action:manipulation;}
+.cl-root .dbl-bar{display:flex;align-items:center;gap:4px;margin-top:6px;flex-wrap:wrap;}
+.cl-root .dbl-hint{font-size:11px;color:#999;margin-right:2px;}
+.cl-root .dbl-btn{background:#eee;border:1px solid #ddd;border-radius:11px;padding:2px 9px;font-family:var(--mf);font-size:11px;color:#999;cursor:pointer;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cl-root .dbl-btn.active{background:var(--pc);border-color:var(--pc);color:#fff;font-weight:bold;}
+.cl-root .clothes-item.dbl-flash{outline:3px solid var(--pc);outline-offset:-2px;}
+.cl-root .clothes-item.item-hidden{display:none;}
+.cl-root .clothes-item[data-type="bg"]{cursor:pointer;border-style:dashed;}
+.cl-root .clothes-item[data-type="bg"]:hover{border-style:solid;border-color:var(--pc);}
+.cl-root .bg-remove-btn{width:60px;height:60px;background:#f8f8f8;border:2px dashed #ccc;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;color:#aaa;cursor:pointer;transition:all .2s;font-family:var(--mf);text-align:center;gap:2px;}
+.cl-root .bg-remove-btn:hover{border-color:#d9534f;color:#d9534f;background:#fff0f0;}
+.cl-root .tab-empty{width:100%;text-align:center;color:#ccc;font-size:13px;margin-top:18px;font-family:var(--mf);}
+.cl-root .item-tooltip{position:absolute;background:rgba(255,255,255,.95);border:2px solid #888;border-radius:8px;padding:4px 10px;font-family:var(--mf);font-size:14px;color:#444;pointer-events:none;z-index:10000;display:none;box-shadow:2px 2px 5px rgba(0,0,0,.1);white-space:nowrap;}
+.cl-root .footer-credit{margin-top:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#aaa;font-family:var(--mf);}
+.cl-root .footer-credit a{color:#aaa;text-decoration:none;transition:color .2s;}
+.cl-root .footer-credit a:hover{color:#555;}
+.cl-root .guide-box{position:fixed;top:130px;left:10px;width:275px;background:rgba(255,255,255,.98);border:2px dashed var(--pc);border-radius:15px;padding:14px 17px;z-index:999;box-shadow:0 5px 15px rgba(0,0,0,.05);font-family:var(--mf)!important;color:#666;font-size:13px;line-height:1.5;transition:opacity .5s,transform .5s;}
+.cl-root .guide-box *{font-family:var(--mf)!important;}
+.cl-root .guide-header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px dashed #eee;padding-bottom:7px;margin-bottom:9px;font-size:16px;color:var(--pc);cursor:move;touch-action:none;user-select:none;-webkit-user-select:none;}
+.cl-root .guide-header .guide-grip{color:#ccc;font-size:12px;letter-spacing:2px;cursor:move;}
+.cl-root .guide-box.is-dragging{transition:none!important;opacity:.9;box-shadow:0 10px 26px rgba(0,0,0,.16);}
+.cl-root .guide-header span{font-family:var(--mf)!important;}
+.cl-root .btn-close-guide{background:none;border:none;font-size:17px;cursor:pointer;color:#ccc;}
+.cl-root .guide-list{list-style:none;padding:0;margin:0;}
+.cl-root .guide-list li{margin-bottom:4px;position:relative;padding-left:14px;font-size:12px;}
+.cl-root .guide-list li::before{content:'✔';position:absolute;left:0;top:1px;color:var(--pc);font-size:10px;}
+.cl-root .guide-list li b{color:var(--pc);}
+.cl-root .guide-details{display:none;padding-top:8px;border-top:1px dashed #eee;}
+.cl-root .btn-toggle-detail{width:100%;margin-top:6px;padding:2px 0;background:transparent;border:none;color:#aaa;cursor:pointer;font-family:var(--mf)!important;font-size:12px;transition:color .3s;}
+.cl-root .btn-toggle-detail:hover{color:var(--pc);text-decoration:underline;}
+@media(max-width:1000px){.cl-root .dual-stage{flex-direction:column;align-items:center;gap:24px;transform:none;}
+.cl-root .guide-box{display:none;}
+.cl-root .wardrobe-sidebar{position:static;width:95vw;max-width:640px;margin:0 auto;max-height:none;}
+.cl-root .wardrobe{height:300px!important;}}
+@media(max-width:750px){.cl-root .tab-btn{font-size:10px;padding:3px 5px;}
+.cl-root #cl-title{font-size:30px;}}
+
+.cl-root .cl-main{display:flex;gap:28px;justify-content:center;align-items:flex-start;flex-wrap:wrap;width:100%;}
+.cl-root .cl-ghost{position:fixed;pointer-events:none;z-index:9999;object-fit:contain;background:transparent;border:none;}
+.cl-root .item-tooltip{position:fixed;display:block;}
+.cl-root .cl-adminlink{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 24px;background:var(--pc);color:#fff;border-radius:20px;text-decoration:none;font-size:14px;box-shadow:0 3px 10px rgba(0,0,0,.15);}
+.cl-root .guide-box{position:fixed;}
+.cl-root .guide-details.open{display:block;}
+.cl-root .bg-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.cl-root .bg-modal-box{background:#fff;border-radius:16px;padding:28px 32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25);font-family:var(--mf);min-width:260px;}
+.cl-root .char-col{display:flex;flex-direction:column;align-items:center;}
+.cl-root .clothes-item{touch-action:pan-y;-webkit-user-drag:none;}
+`;
