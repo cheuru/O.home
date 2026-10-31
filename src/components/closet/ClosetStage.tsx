@@ -96,7 +96,7 @@ function Guide({ names, labels, onClose }: { names: [string, string]; labels: [s
   return (
     <div ref={ref} className="guide-box" style={{ top: 130, left: 10 }}>
       <div className="guide-header" onPointerDown={down} onDoubleClick={home} title="이 줄을 끌어서 옮기세요 (두 번 누르면 제자리로)">
-        <span>📖 사용법</span><span className="guide-grip">⠿</span>
+        <span>사용법</span><span className="guide-grip">⠿</span>
         <button onClick={onClose} className="btn-close-guide">×</button>
       </div>
       <div className={`guide-details${open ? ' open' : ''}`}>
@@ -107,7 +107,7 @@ function Guide({ names, labels, onClose }: { names: [string, string]; labels: [s
           <li>착용 중 패널 <b>✕</b>로 개별 벗기기</li>
           <li><b>▲▼</b>로 의상 앞뒤 조절</li>
           <li><b>배경 탭</b> 클릭 → 배경 적용</li>
-          <li>📸 <b>찰칵!</b>으로 두 캐릭터 PNG 저장</li>
+          <li><b>찰칵!</b>으로 두 캐릭터 PNG 저장</li>
           <li><b>다시 입히기</b>: 기본 코디로 복귀</li>
           <li><b>전부 벗기!</b>: 해당 캐릭터 모두 벗기기</li>
           <li><b>방치 모드</b>: 가만히 두면 혼잣말을 합니다.</li>
@@ -284,7 +284,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
 
   /* ── 그리기 ── */
   const cssVars = {
-    '--pc': d.pointColor, '--rm': d.ribbonColor, '--tc': d.titleColor,
+    '--pc': d.pointColor || 'var(--accent)', '--rm': d.ribbonColor || 'var(--ink)', '--tc': d.titleColor || 'var(--page-title)',
     '--mf': d.mainFont ? `'${d.mainFont}', var(--sans)` : 'var(--sans)',
     '--tf': d.titleFont ? `'${d.titleFont}', var(--sans)` : 'var(--sans)',
   } as React.CSSProperties;
@@ -323,7 +323,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
           </div>
         </div>
         <div className="worn-panel-wrap" style={{ width: w }}>
-          <div className="worn-panel-title">👕 착용 중 — ✕ 벗기 / ▲▼ 앞뒤 조절</div>
+          <div className="worn-panel-title">착용 중 · ✕ 벗기 / ▲▼ 앞뒤 조절</div>
           <div className="worn-panel">
             {!v.worn.length && <span className="worn-empty">없음</span>}
             {v.worn.map(x => (
@@ -351,8 +351,8 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
       <div className="dressup-container">
         <div className="ribbon-wrapper"><div className="ribbon-bg" /><TypedTitle text={d.gameTitle} /></div>
         <div className="title-save-btn">
-          <button type="button" className="btn_custom" style={{ height: 34, padding: '0 20px', fontSize: 14, background: 'var(--pc)' }}
-            onClick={() => { setSaveName(d.saveName || ''); setSaveAsk(true); }}>📸 찰칵!</button>
+          <button type="button" className="btn_custom" style={{ padding: '0 22px' }}
+            onClick={() => { setSaveName(d.saveName || ''); setSaveAsk(true); }}>찰칵! 이미지로 저장</button>
         </div>
 
         <div className="cl-main">
@@ -362,7 +362,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
             <div className="wardrobe-top-bar">
               <input type="text" className="search-box" placeholder="아이템 검색..." value={kw} onChange={e => setKw(e.target.value)} />
               <div className="dbl-bar">
-                <span className="dbl-hint">👆 더블클릭 → 입히기</span>
+                <span className="dbl-hint">더블클릭하면 입혀요</span>
                 <button type="button" className={`dbl-btn${dblTarget === 'auto' ? ' active' : ''}`} onClick={() => setDblTarget('auto')}
                   title={`아이템 이름 끝의 ${sizeLabel[0]}/${sizeLabel[1]} 를 보고 알아서 정합니다`}>자동</button>
                 <button type="button" className={`dbl-btn${dblTarget === 1 ? ' active' : ''}`} onClick={() => setDblTarget(1)}>{names[0]}</button>
@@ -389,7 +389,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
                   ))}
                   {t === 'bg' && ([1, 2] as Cid[]).map(cid => (
                     <div key={cid} className="bg-remove-btn" onClick={() => removeBg(cid)}>
-                      <span style={{ fontSize: 15 }}>🚫</span><span>{names[cid - 1]}<br />배경제거</span>
+                      <span>{names[cid - 1]}<br />배경제거</span>
                     </div>
                   ))}
                   {t === curTab && visibleCount === 0 && <div className="tab-empty">아이템이 없습니다.</div>}
@@ -405,7 +405,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
 
         {isAdmin && (
           <div style={{ textAlign: 'center', margin: '30px auto 10px' }}>
-            <Link href="/closet/admin" className="cl-adminlink">👑 관리자 페이지로 이동</Link>
+            <Link href="/closet/admin" className="cl-adminlink">관리자 페이지</Link>
           </div>
         )}
       </div>
@@ -415,12 +415,12 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
       {bgPending && (
         <div className="bg-modal" onClick={e => { if (e.target === e.currentTarget) setBgPending(null); }}>
           <div className="bg-modal-box">
-            <div style={{ fontSize: 17, fontWeight: 'bold', marginBottom: 18, color: '#444' }}>어디에 배경을 적용할까요?</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="btn_custom" style={{ background: 'var(--pc)', fontSize: 14, height: 38 }} onClick={() => applyBg(1)}>🧍 {names[0]} 만</button>
-              <button className="btn_custom" style={{ background: 'var(--pc)', fontSize: 14, height: 38 }} onClick={() => applyBg(2)}>🧍 {names[1]} 만</button>
-              <button className="btn_custom" style={{ background: 'var(--rm)', fontSize: 14, height: 38 }} onClick={() => applyBg('both')}>👫 둘 다</button>
-              <button className="btn_custom" style={{ background: '#aaa', fontSize: 13, height: 34, marginTop: 4 }} onClick={() => setBgPending(null)}>취소</button>
+            <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 18, color: 'var(--ink)', letterSpacing: '.02em' }}>어디에 배경을 적용할까요?</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button className="btn_custom" onClick={() => applyBg(1)}>{names[0]} 만</button>
+              <button className="btn_custom" onClick={() => applyBg(2)}>{names[1]} 만</button>
+              <button className="btn_custom" onClick={() => applyBg('both')}>둘 다</button>
+              <button className="btn_custom ghost" onClick={() => setBgPending(null)}>취소</button>
             </div>
           </div>
         </div>

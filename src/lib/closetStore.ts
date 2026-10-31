@@ -90,7 +90,9 @@ export const BASE_ITEMS: ClosetItem[] = [
 ];
 
 export const DEFAULT_TAB_LIST =
-  'bottom|👖 하의\ntop|👕 상의\nshoes|👟 신발\ndress|👗 원피스\nouter|🧥 외투\nacc|✨ 악세\nbg|🏞 배경';
+  'bottom|하의\ntop|상의\nshoes|신발\ndress|원피스\nouter|외투\nacc|악세\nbg|배경';
+
+const OLD_TAB_LIST = 'bottom|👖 하의\ntop|👕 상의\nshoes|👟 신발\ndress|👗 원피스\nouter|🧥 외투\nacc|✨ 악세\nbg|🏞 배경';
 
 export function defaultCloset(): ClosetData {
   return {
@@ -98,7 +100,7 @@ export function defaultCloset(): ClosetData {
     dialogue1: placeholderDialogue('A'),
     dialogue2: placeholderDialogue('B'),
     design: {
-      ribbonColor: '#7a9ba8', pointColor: '#97c3d1', titleColor: '#555555',
+      ribbonColor: '', pointColor: '', titleColor: '',   // 비우면 사이트 색을 따른다
       gameTitle: '페어명의 옷장', saveName: '페어명의 옷장',
       titleFont: '', mainFont: '',
       char1Name: '캐릭터A', char2Name: '캐릭터B', char1Label: 'A', char2Label: 'B',
@@ -128,6 +130,11 @@ export function normalizeCloset(raw: unknown): ClosetData {
       }))
     : d.items;
   const design = { ...d.design, ...(r.design ?? {}) };
+  // 예전 기본값(파란 리본·이모지 탭)은 「사이트 톤 따르기」로 옮긴다 — 직접 고른 값은 건드리지 않는다
+  if (design.ribbonColor === '#7a9ba8') design.ribbonColor = '';
+  if (design.pointColor === '#97c3d1') design.pointColor = '';
+  if (design.titleColor === '#555555') design.titleColor = '';
+  if (design.tabList === OLD_TAB_LIST) design.tabList = DEFAULT_TAB_LIST;
   // 표정 5장 — 비었거나 모자라면 기본 그림으로
   design.char1Bodies = [0, 1, 2, 3, 4].map(n => design.char1Bodies?.[n] || d.design.char1Bodies[n]);
   design.char2Bodies = [0, 1, 2, 3, 4].map(n => design.char2Bodies?.[n] || d.design.char2Bodies[n]);
