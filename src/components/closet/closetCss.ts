@@ -232,4 +232,20 @@ export const CLOSET_CSS = String.raw`
 .cl-root .cl-credit a{color:var(--faint);text-decoration:none;border-bottom:1px solid transparent;}
 .cl-root .cl-credit a:hover{color:var(--ink);border-bottom-color:var(--line);}
 @media(max-width:1000px){.cl-root .cl-float{max-height:none;overflow:visible;}}
+.cl-root .item-lines{font-size:11.5px;color:var(--sub);font-family:var(--sans);}
+.cl-root .item-lines summary{cursor:pointer;padding:2px 0;color:var(--sub);}
+.cl-root .item-lines-row{display:flex;flex-direction:column;gap:2px;margin-top:6px;}
+.cl-root .item-lines-row span{font-size:11px;color:var(--faint);}
+.cl-root .item-lines textarea{min-height:0;height:auto;padding:5px 8px;font-size:12px;resize:vertical;}
+.cl-root .cl-lookbook{width:100%;max-width:760px;margin:30px auto 0;padding:18px 20px;background:var(--panel);border-radius:var(--radius);box-shadow:var(--sh-sm);box-sizing:border-box;}
+.cl-root .cl-lookbook-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13px;letter-spacing:.1em;color:var(--ink);font-family:var(--sans);}
+.cl-root .cl-lookbook-empty{margin:0;font-size:12.5px;color:var(--faint);font-family:var(--sans);}
+.cl-root .cl-lookbook-list{display:flex;flex-wrap:wrap;gap:12px;}
+.cl-root .cl-look{position:relative;}
+.cl-root .cl-look-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 10px 8px;background:#fff;border:1px solid var(--line);border-radius:var(--radius-s);cursor:pointer;font-family:var(--sans);transition:border-color .2s,box-shadow .2s,transform .2s;}
+.cl-root .cl-look-card:hover{border-color:var(--steel-3);box-shadow:var(--sh-sm);transform:translateY(-2px);}
+.cl-root .cl-look-pair{display:flex;gap:4px;}
+.cl-root .cl-look-name{font-size:12px;color:var(--ink);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cl-root .cl-look-del{position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(30,33,38,.7);color:#fff;font-size:11px;cursor:pointer;opacity:0;transition:opacity .2s;}
+.cl-root .cl-look:hover .cl-look-del{opacity:1;}
 `;

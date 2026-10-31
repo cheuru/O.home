@@ -6,6 +6,7 @@ import { ClosetData, ClosetItem, DG_FIELDS, defaultCloset, normalizeCloset, tabI
 import { putBlob, useUploading, useBlobUrl } from '@/lib/blobStore';
 import { newId } from '@/lib/postStore';
 import { KInput, KSelect, KStep, KTextarea, KLabel, LiveInput } from '@/components/ui/Kit';
+import { ItemLines } from './ItemLines';
 import { ColorField } from '@/components/ui/ColorField';
 import { FileDrop } from '@/components/ui/FileDrop';
 import { useConfirmDelete } from '@/components/ui/Modal';
@@ -188,6 +189,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                   <LiveInput value={it.desc} onValue={v => setItem(it.id, { desc: v })} className="k-input" placeholder="이름" />
                   <KSelect options={typeOptions} value={it.type} onChange={v => setItem(it.id, { type: v })} minWidth={120} />
+                  <ItemLines item={it} names={[d.char1Name, d.char2Name]} onPatch={p => setItem(it.id, p)} />
                   <span title={ZI_HINT}><KStep value={it.zi} min={-99} max={99} onChange={v => setItem(it.id, { zi: v })} /></span>
                   <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', padding: '4px 10px', fontSize: 12 }}
                     onClick={() => del.ask('이 아이템을 삭제할까요?', () => edit(x => ({

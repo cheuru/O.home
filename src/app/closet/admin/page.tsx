@@ -20,7 +20,7 @@ function Inner() {
   if (!room) {
     return <section className="page"><div className="page-head"><PageTitle href="/closet">CLOSET ADMIN</PageTitle><p>옷장을 찾지 못했어요 — <Link href="/closet">옷장 목록으로</Link></p></div></section>;
   }
-  const onSave = (d: ClosetData) => save({ rooms: book.rooms.map(r => r.id === room.id ? { ...r, ...d } : r) });
+  const onSave = (d: ClosetData) => save({ rooms: book.rooms.map(r => r.id === room.id ? { ...r, ...d, looks: r.looks } : r) });   // 룩북은 옷장 화면에서 관리 — 여기서 덮어쓰지 않는다
   return (
     <section className="page">
       <div className="page-head">

@@ -15,6 +15,19 @@ export interface ClosetItem {
   type: string;     // top / bottom / dress / shoes / outer / acc / bg … (탭 키)
   desc: string;     // 이름 — 끝에 A/B 를 붙이면 더블클릭 때 해당 캐릭터에게 입는다
   zi: number;       // 앞뒤 순서(z-index)
+  // 페어 반응 대사 (줄바꿈 = 랜덤, 비우면 기본 대사)
+  s1?: string;      // 캐릭터1이 입었을 때 캐릭터1이 하는 말
+  r1?: string;      // 캐릭터1이 입었을 때 캐릭터2가 하는 말
+  s2?: string;      // 캐릭터2가 입었을 때 캐릭터2가 하는 말
+  r2?: string;      // 캐릭터2가 입었을 때 캐릭터1이 하는 말
+}
+
+/** 저장한 코디 — 아이템은 id로 들고 있어서 아이템을 지워도 나머지는 그대로 불러온다 */
+export interface LookEntry { i: string; z: number }
+export interface ClosetLook {
+  id: string; name: string; created: number;
+  c1: LookEntry[]; c2: LookEntry[];
+  b1?: string; b2?: string;        // 배경 아이템 id
 }
 
 export type DialogueSet = Record<string, string>;
@@ -41,6 +54,7 @@ export interface ClosetData {
   dialogue1: DialogueSet;
   dialogue2: DialogueSet;
   design: ClosetDesign;
+  looks: ClosetLook[];
 }
 
 /** 대사 칸 — [키, 이름, 설명, 여러 줄(줄마다 랜덤)인가] */
@@ -66,13 +80,20 @@ export const DG_FIELDS: [string, string, string, boolean][] = [
   ['click_list', '클릭', '캐릭터 클릭 반응 (줄바꿈 = 랜덤)', true],
   ['dress_list', '착용', '옷 입혔을 때 반응 (줄바꿈 = 랜덤)', true],
   ['take_off_list', '탈의', '옷 벗길 때 반응 (줄바꿈 = 랜덤)', true],
+  ['partner_dress', '상대입음', '상대가 옷을 입었을 때 내가 하는 말 (줄바꿈 = 랜덤, 비우면 없음)', true],
+  ['partner_strip', '상대벗음', '상대가 옷을 벗었을 때 내가 하는 말 (줄바꿈 = 랜덤, 비우면 없음)', true],
+  ['look_load', '코디불러옴', '저장한 코디를 불러왔을 때 (비우면 착용 대사)', false],
+  ['look_save', '코디저장', '코디를 저장했을 때 (비우면 없음)', false],
 ];
+/** 기본값을 비워 두는 칸 — 안 쓰면 아무 말도 나오지 않는다 */
+const EMPTY_DEFAULT = ['partner_dress', 'partner_strip', 'look_load', 'look_save'];
 
 /** 안내용 기본 대사 — 어떤 상황의 칸인지 바로 보이게 채운다 */
 function placeholderDialogue(tag: string): DialogueSet {
   const lists: Record<string, number> = { idle_list: 3, click_list: 3, dress_list: 3, take_off_list: 2 };
   const out: DialogueSet = {};
   DG_FIELDS.forEach(([k, name, , multi]) => {
+    if (EMPTY_DEFAULT.includes(k)) { out[k] = ''; return; }
     out[k] = multi
       ? Array.from({ length: lists[k] ?? 2 }, (_, i) => `${name} ${tag} 대사 ${i + 1}`).join('\n')
       : `${name} ${tag} 대사`;
@@ -101,6 +122,7 @@ export function defaultCloset(): ClosetData {
     items: BASE_ITEMS.map(i => ({ ...i })),
     dialogue1: placeholderDialogue('A'),
     dialogue2: placeholderDialogue('B'),
+    looks: [],
     design: {
       ribbonColor: '', pointColor: '', titleColor: '',   // 비우면 사이트 색을 따른다
       gameTitle: '페어명의 옷장', saveName: '페어명의 옷장',
@@ -130,6 +152,9 @@ export function normalizeCloset(raw: unknown): ClosetData {
         type: i.type ? String(i.type) : 'top',
         desc: i.desc != null ? String(i.desc) : String(i.type ?? ''),
         zi: Number.isFinite(Number(i.zi)) ? Number(i.zi) : 0,
+        ...(['s1', 'r1', 's2', 'r2'] as const).reduce<Partial<ClosetItem>>((o, k) => {
+          const v = (i as ClosetItem)[k]; if (typeof v === 'string' && v.trim()) o[k] = v; return o;
+        }, {}),
       }))
     : d.items;
   const design = { ...d.design, ...(r.design ?? {}) };
@@ -141,11 +166,22 @@ export function normalizeCloset(raw: unknown): ClosetData {
   // 표정 5장 — 비었거나 모자라면 기본 그림으로
   design.char1Bodies = [0, 1, 2, 3, 4].map(n => design.char1Bodies?.[n] || d.design.char1Bodies[n]);
   design.char2Bodies = [0, 1, 2, 3, 4].map(n => design.char2Bodies?.[n] || d.design.char2Bodies[n]);
+  const ent = (v: unknown): LookEntry[] => (Array.isArray(v) ? v : [])
+    .filter((e): e is LookEntry => !!e && typeof (e as LookEntry).i === 'string')
+    .map(e => ({ i: e.i, z: Number.isFinite(Number(e.z)) ? Number(e.z) : 0 }));
+  const looks: ClosetLook[] = Array.isArray(r.looks)
+    ? r.looks.filter(l => !!l && typeof l === 'object' && typeof l.id === 'string').map(l => ({
+      id: l.id, name: String(l.name ?? '코디'), created: Number(l.created) || 0,
+      c1: ent(l.c1), c2: ent(l.c2),
+      ...(typeof l.b1 === 'string' && l.b1 ? { b1: l.b1 } : {}), ...(typeof l.b2 === 'string' && l.b2 ? { b2: l.b2 } : {}),
+    }))
+    : [];
   return {
     items,
     dialogue1: { ...d.dialogue1, ...(r.dialogue1 ?? {}) },
     dialogue2: { ...d.dialogue2, ...(r.dialogue2 ?? {}) },
     design,
+    looks,
   };
 }
 

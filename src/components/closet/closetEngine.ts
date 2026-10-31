@@ -223,9 +223,16 @@ export function makeEngine(A: { current: EngineApi }) {
   }
 
   /* ── 입히고 벗기기 ── */
+  const lineList = (v?: string) => (v || '').split('\n').map(x => x.trim()).filter(Boolean);
+  /** 상대가 한마디 — 상대가 방치·부끄럼·패닉 중이면 끼어들지 않는다 */
+  function partnerSay(c: C, lines: string[]) {
+    const o = other(c);
+    if (!lines.length || o.isIdle || o.isBlush || o.isPanic) return;
+    window.setTimeout(() => { if (!o.isIdle && !o.isBlush && !o.isPanic) bubble(o, pick(lines), 3); }, 900);
+  }
   const wornAnywhere = (src: string) => ([1, 2] as Cid[]).some(i => chars[i].worn.some(w => w.src === src));
 
-  function drop(cid: Cid, it: Pick<ClosetItem, 'src' | 'type' | 'desc' | 'zi'>) {
+  function drop(cid: Cid, it: Pick<ClosetItem, 'src' | 'type' | 'desc' | 'zi'> & Partial<ClosetItem>) {
     const c = chars[cid];
     A.current.sfx('blop');
     if (it.type === 'bg') { A.current.askBg(it.src); return; }
@@ -238,6 +245,12 @@ export function makeEngine(A: { current: EngineApi }) {
     if ((it.type === 'acc' || it.type === 'acc2' || it.type === 'hair') && acc >= 5) {
       anim(c, 'anim-heavy'); bubble(c, dg(c, 'too_many'), 2); startIdle(c);
     } else interact(c, false);
+    // 아이템 전용 대사 → 없으면 기본 대사. 상대는 아이템 전용 반응 → 없으면 가끔 기본 반응
+    const mine = lineList(cid === 1 ? it.s1 : it.s2);
+    if (mine.length) bubble(c, pick(mine));
+    const theirs = lineList(cid === 1 ? it.r1 : it.r2);
+    if (theirs.length) partnerSay(c, theirs);
+    else if (Math.random() < 0.5) partnerSay(c, lineList(dgSet(other(c)).partner_dress));
   }
   function removeWorn(cid: Cid, uid: number) {
     const c = chars[cid];
@@ -246,6 +259,7 @@ export function makeEngine(A: { current: EngineApi }) {
     pushWorn(c);
     interact(c, false, true);
     bubble(c, pick(dgList(c, 'take_off_list')));
+    if (Math.random() < 0.5) partnerSay(c, lineList(dgSet(other(c)).partner_strip));
   }
   function bumpZ(cid: Cid, uid: number, d: number) {
     const c = chars[cid];
@@ -295,10 +309,27 @@ export function makeEngine(A: { current: EngineApi }) {
     c.worn = c.worn.map(w => ({ ...w, anim: w.type === 'hair' ? 'anim-fly-up' : 'anim-fly-down' }));
     pushWorn(c);
     c.isPanic = true; anim(c, 'anim-shake'); sweat(c); bubble(c, dg(c, 'panic_enter'), 2);
+    if (Math.random() < 0.7) partnerSay(c, lineList(dgSet(other(c)).partner_strip));
     window.setTimeout(() => {
       c.worn = []; pushWorn(c); startIdle(c);
       c.nakedT = window.setTimeout(() => startBlush(c), 3000);
     }, 500);
+  }
+  /** 저장한 코디 입히기 — 입던 옷은 날려 보내고 새 코디가 내려앉는다 */
+  function applyLook(cid: Cid, ents: { item: ClosetItem; z: number }[]) {
+    const c = chars[cid];
+    resetT(c);
+    clouds(c, false); blush(c, false);
+    cvRemove(c, ['anim-gloom', 'anim-weak-shake', 'anim-heavy', 'anim-heavy-slow']);
+    c.isIdle = false; c.isBlush = false; c.isPanic = false;
+    c.worn = ents.map(x => ({ uid: ++seq, src: x.item.src, type: x.item.type, desc: x.item.desc, zi: x.z || x.item.zi || ZI[x.item.type] || 20, anim: x.item.type === 'hair' ? 'anim-fly-in-down' : 'anim-fly-in-up' }));
+    pushWorn(c);
+    window.setTimeout(() => { c.worn = c.worn.map(w => ({ ...w, anim: '' })); pushWorn(c); }, 600);
+    const own = dgSet(c).look_load;
+    chBody(c, 3); anim(c, 'anim-jump');
+    bubble(c, own && own.trim() ? own : pick(dgList(c, 'dress_list')), 3);
+    startIdle(c);
+    if (!hasTop(c)) c.nakedT = window.setTimeout(() => startBlush(c), 3000);
   }
   function init(cid: Cid) {
     const c = chars[cid];
@@ -309,10 +340,11 @@ export function makeEngine(A: { current: EngineApi }) {
   function dispose() { ([1, 2] as Cid[]).forEach(i => { resetT(chars[i]); clearTimeout(chars[i].bubT); }); }
 
   return {
-    init, restore, reset, drop, removeWorn, bumpZ, dispose,
+    init, restore, reset, drop, applyLook, removeWorn, bumpZ, dispose,
     click: (cid: Cid) => click(chars[cid]),
     bubble: (cid: Cid, msg: string, face?: number) => bubble(chars[cid], msg, face),
     dg: (cid: Cid, k: string) => dg(chars[cid], k),
+    say: (cid: Cid, k: string) => { const v = dgSet(chars[cid])[k]; return v && v.trim() ? v : ''; },
     wornOf: (cid: Cid) => chars[cid].worn,
   };
 }

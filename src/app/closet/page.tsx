@@ -5,7 +5,7 @@ import React, { Suspense, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { ClosetBook, ClosetItem, ClosetRoom, newRoom, useClosetBook, useResolvedCloset } from '@/lib/closetStore';
+import { ClosetBook, ClosetItem, ClosetLook, ClosetRoom, newRoom, useClosetBook, useResolvedCloset } from '@/lib/closetStore';
 import { newId } from '@/lib/postStore';
 import { ClosetStage } from '@/components/closet/ClosetStage';
 import { ClosetLobby } from '@/components/closet/ClosetLobby';
@@ -21,13 +21,16 @@ function Room({ room, book, save, isAdmin, loaded }: {
     ...r, items: r.items.filter(i => i.id !== id),
     design: { ...r.design, char1Default: r.design.char1Default.filter(x => x !== id), char2Default: r.design.char2Default.filter(x => x !== id) },
   }));
+  const saveLook = (l: ClosetLook) => patch(r => ({ ...r, looks: [...r.looks, l] }));
+  const delLook = (id: string) => patch(r => ({ ...r, looks: r.looks.filter(l => l.id !== id) }));
   return (
     <>
       <div className="page-head">
         <PageTitle href="/closet">CLOSET</PageTitle>
         <p><Link href="/closet">← 옷장 목록</Link></p>
       </div>
-      <ClosetStage key={room.id} data={shown} ready={loaded} isAdmin={isAdmin} roomId={room.id} onEditItem={editItem} onDeleteItem={delItem} />
+      <ClosetStage key={room.id} data={shown} ready={loaded} isAdmin={isAdmin} roomId={room.id} onEditItem={editItem} onDeleteItem={delItem}
+        onSaveLook={isAdmin ? saveLook : undefined} onDeleteLook={isAdmin ? delLook : undefined} />
     </>
   );
 }

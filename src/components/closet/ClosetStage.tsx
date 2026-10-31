@@ -5,6 +5,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { ClosetData, ClosetItem } from '@/lib/closetStore';
 import { tabInfo } from '@/lib/closetStore';
+import type { ClosetLook } from '@/lib/closetStore';
+import { Lookbook } from './Lookbook';
+import { ItemLines } from './ItemLines';
 import { Modal, useConfirmDelete } from '@/components/ui/Modal';
 import { KInput, KSelect, KStep } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
@@ -61,10 +64,12 @@ function TypedTitle({ text }: { text: string }) {
   );
 }
 
-export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDeleteItem }: {
+export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDeleteItem, onSaveLook, onDeleteLook }: {
   data: ClosetData; ready: boolean; isAdmin: boolean; roomId: string;
   onEditItem?: (id: string, p: Partial<ClosetItem>) => void;
   onDeleteItem?: (id: string) => void;
+  onSaveLook?: (l: ClosetLook) => void;
+  onDeleteLook?: (id: string) => void;
 }) {
   const toast = useToast();
   const del = useConfirmDelete();
@@ -79,6 +84,8 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [ghost, setGhost] = useState<{ src: string; x: number; y: number } | null>(null);
   const [saveAsk, setSaveAsk] = useState(false);
+  const [lookAsk, setLookAsk] = useState(false);
+  const [lookName, setLookName] = useState('');
   const [saveName, setSaveName] = useState('');
   const zone = useRef<Record<Cid, HTMLDivElement | null>>({ 1: null, 2: null });
 
@@ -229,6 +236,33 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     } catch { toast('저장 실패'); }
   };
 
+  /* ── 룩북 ── */
+  const itemById = (id: string) => data.items.find(i => i.id === id);
+  const saveLook = () => {
+    const entry = (cid: Cid) => E.wornOf(cid)
+      .map(w => ({ it: data.items.find(i => i.src === w.src), z: w.zi }))
+      .filter((x): x is { it: ClosetItem; z: number } => !!x.it)
+      .map(x => ({ i: x.it.id, z: x.z }));
+    const bgId = (cid: Cid) => { const b = views[cid].bg; return b ? data.items.find(i => i.src === b)?.id : undefined; };
+    const b1 = bgId(1), b2 = bgId(2);
+    onSaveLook?.({
+      id: `lk-${Date.now().toString(36)}`, name: lookName.trim() || `코디 ${data.looks.length + 1}`, created: Date.now(),
+      c1: entry(1), c2: entry(2), ...(b1 ? { b1 } : {}), ...(b2 ? { b2 } : {}),
+    });
+    setLookAsk(false);
+    ([1, 2] as Cid[]).forEach((cid, n) => { const t = E.say(cid, 'look_save'); if (t) window.setTimeout(() => E.bubble(cid, t, 3), 400 + n * 300); });
+  };
+  const loadLook = (lk: ClosetLook) => {
+    sfx('magic');
+    ([1, 2] as Cid[]).forEach(cid => {
+      const ents = (cid === 1 ? lk.c1 : lk.c2).map(e => ({ item: itemById(e.i), z: e.z })).filter((x): x is { item: ClosetItem; z: number } => !!x.item);
+      E.applyLook(cid, ents);
+      const bid = cid === 1 ? lk.b1 : lk.b2;
+      const bg = bid ? itemById(bid)?.src ?? null : null;
+      setViews(v => ({ ...v, [cid]: { ...v[cid], bg } }));
+    });
+  };
+
   /* ── 그리기 ── */
   const cssVars = {
     '--pc': d.pointColor || 'var(--accent)', '--rm': d.ribbonColor || 'var(--ink)', '--tc': d.titleColor || 'var(--page-title)',
@@ -360,6 +394,7 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
                               <KStep value={it.zi} min={-99} max={99} onChange={v => onEditItem(it.id, { zi: v })} />
                               {onDeleteItem && <button type="button" className="dbl-btn" onClick={() => del.ask('이 아이템을 삭제할까요?', () => onDeleteItem(it.id))}>삭제</button>}
                             </div>
+                            <ItemLines item={it} names={names} onPatch={p => onEditItem(it.id, p)} />
                           </div>
                         </div>
                       ))}
@@ -370,6 +405,10 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
             </div>
           </FloatPanel>
         </div>
+
+        <Lookbook data={data} canEdit={isAdmin && !!onSaveLook}
+          onLoad={loadLook} onAsk={() => { setLookName(''); setLookAsk(true); }}
+          onDelete={l => del.ask(`「${l.name}」 코디를 지울까요?`, () => onDeleteLook?.(l.id))} />
 
         <div className="cl-credit">
           원본 제작 <a href="https://uchoman.ivyro.net/" target="_blank" rel="noreferrer">우초맨</a> · 효과음 <a href="https://sellbuymusic.com/md/spjqcbb-efbfbct" target="_blank" rel="noreferrer">셀바이뮤직</a>
@@ -404,6 +443,15 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
       )}
 
       {del.element}
+      <Modal open={lookAsk} small title="코디 저장" desc="지금 입고 있는 두 캐릭터의 코디(배경 포함)를 룩북에 저장해요"
+        onClose={() => setLookAsk(false)}
+        actions={<>
+          <button className="btn btn-dark" onClick={saveLook}>SAVE</button>
+          <button className="btn btn-ghost" onClick={() => setLookAsk(false)}>CANCEL</button>
+        </>}>
+        <KInput value={lookName} placeholder={`코디 ${data.looks.length + 1}`} autoFocus
+          onChange={e => setLookName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveLook(); }} />
+      </Modal>
       <Modal open={saveAsk} small title="찰칵!" desc="저장 파일명을 입력해주세요"
         onClose={() => setSaveAsk(false)}
         actions={<>
