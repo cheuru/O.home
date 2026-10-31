@@ -35,6 +35,10 @@ const AREA: Record<string, { kind?: SectionKind; href?: string; board?: boolean 
   characters: { kind: 'chars' },
   relations: { href: '/rels' },
   trpg_chars: { href: '/tchars' },
+  dressup_bodies: { href: '/dressup' },
+  dressup_parts: { href: '/dressup' },
+  myrooms: { href: '/myroom' },
+  myroom_catalog: { href: '/myroom' },
   applicants: { href: '/comm-apply' },
 };
 

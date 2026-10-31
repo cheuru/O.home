@@ -1,0 +1,668 @@
+@import url('https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap');
+
+.myroom-wrap {
+  max-width: 100%; margin: 0 auto; padding: 20px 24px;
+  font-family: 'Gowun Batang', serif; box-sizing: border-box;
+  text-align: center; background: transparent;
+}
+/* 예전에는 편집모드에 들어가면 .myroom-wrap이 화면 전체 폭(100vw)까지 튀어나가고
+   .mr-room의 max-width도 풀려서 캔버스가 커졌었는데, 방 주인 입장에서 "화면이 갑자기
+   다 바뀐다"는 느낌이 커서 없앴다. 지금은 편집모드에 들어가도 래퍼 폭은 그대로 두고,
+   .mr-side-slot(리모컨 자리)만 옆에 펼쳐진다. */
+.mr-back-to-list {
+  display: inline-block; font-size: 13px; color: #666;
+  text-decoration: none; padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px;
+}
+.mr-back-to-list:hover { background: #f5f5f5; }
+
+/* ---------- 상단 바: 방 이름 + 목록으로 버튼을 한 줄에 ---------- */
+.mr-topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; box-sizing: border-box; margin: 0 0 14px;
+  padding: 12px 16px; border-radius: 10px;
+  background: linear-gradient(90deg, #F4C6D3 0%, rgba(244,198,211,0.35) 100%);
+  border: 1px solid rgb(from #E88CA8 r g b / 40%);
+}
+.mr-topbar-title {
+  flex: 1 1 auto; min-width: 0; text-align: left;
+  font-size: 16px; font-weight: 800; color: #1a1a1a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mr-topbar .mr-back-to-list {
+  flex: 0 0 auto; margin: 0; border: none; font-weight: 700;
+  background: #1a1a1a; color: #F4C6D3;
+}
+.mr-topbar .mr-back-to-list:hover { background: #E88CA8; color: #1a1a1a; }
+.myroom-wrap h2 { text-align: center; }
+.myroom-toolbar h2 { font-family: 'Gowun Batang', serif; font-size: 22px; font-weight: 800; text-align: left; margin: 0; color: #1a1a1a; }
+.myroom-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #f2dee4;
+}
+.myroom-toolbar button {
+  padding: 7px 14px; border: 1px solid #ddd; background: #fff; border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+}
+.myroom-toolbar button:hover { background: #f5f5f5; }
+.myroom-toolbar button.mr-save { background: var(--btn-primary-bg, #2b2b2b); color: #fff; border-color: var(--btn-primary-bg, #2b2b2b); }
+.myroom-toolbar button.mr-save:hover { filter: brightness(1.3); }
+.myroom-toolbar select {
+  padding: 7px 10px; border: 1px solid #ddd; background: #fff; border-radius: 6px; font-size: 13px;
+}
+
+.mr-canvas-outer { position: relative; width: auto; max-width: 100%; flex: 0 0 auto; overflow: hidden; border: 1px solid #e2e2e2; background: transparent; box-sizing: border-box; }
+.mr-canvas-outer.mr-pan-mode { cursor: grab; }
+.mr-canvas-outer.mr-pan-mode:active { cursor: grabbing; }
+.mr-canvas-outer.mr-pan-mode .mr-item { cursor: grab; }
+.mr-canvas {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0);
+  background-size: cover;
+  background-position: center;
+  margin: 0 auto;
+}
+/* 방 주인/관리자가 편집모드에 있을 때만: 캔버스(방)의 실제 경계와 정중앙을 눈으로 확인할 수 있게
+   보조선을 보여준다. 방을 구경만 하는 사람에게는 기존처럼 투명하게(변화 없이) 보인다.
+   outline은 박스 크기 계산에 영향을 주지 않으므로 캔버스 픽셀 크기(canvasW x canvasH)는 그대로다.
+   스페이스바+드래그로 이 경계 밖까지 화면을 이동해도(=캔버스 밖의 빈 공간을 보는 것뿐) 버그가
+   아니라는 걸 바로 알 수 있다. */
+.mr-canvas.mr-show-center {
+  background-color: #fff;
+  outline: 1px dashed rgba(0, 0, 0, 0.22);
+  outline-offset: -1px;
+}
+/* 방의 정중앙 표시 - 아이템을 어디에 놓을지 가늠할 기준점 */
+.mr-canvas.mr-show-center::before,
+.mr-canvas.mr-show-center::after {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  background: rgba(0, 0, 0, 0.22); pointer-events: none; z-index: 1;
+}
+.mr-canvas.mr-show-center::before { width: 18px; height: 1.4px; margin: -0.7px 0 0 -9px; }
+.mr-canvas.mr-show-center::after { width: 1.4px; height: 18px; margin: -9px 0 0 -0.7px; }
+
+.mr-item {
+  position: absolute;
+  box-sizing: border-box;
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+}
+.mr-item img { width: 100%; height: 100%; display: block; pointer-events: none; object-fit: fill; }
+.mr-item.mr-selected { outline: 2px dashed var(--primary-color, #e88ca8); }
+.mr-item.mr-locked { cursor: default; }
+.mr-item.mr-multiselect-pickable { cursor: pointer; }
+.mr-item.mr-multiselected { outline: 3px solid #4a90d9; outline-offset: 1px; }
+
+.mr-text .mr-text-content {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--content-font-color, #1a1a1a); text-align: center; word-break: break-all;
+}
+
+.mr-handle { position: absolute; background: #fff; border: 1px solid #333; border-radius: 50%; }
+.mr-resize {
+  width: 14px; height: 14px; right: -7px; bottom: -7px; cursor: nwse-resize;
+}
+.mr-rotate {
+  width: 14px; height: 14px; left: 50%; top: -26px; margin-left: -7px; cursor: grab;
+}
+.mr-rotate::after {
+  content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 12px;
+  background: #333; transform: translateX(-50%);
+}
+
+.mr-sidepanel {
+  width: 260px; background: #fff;
+  border: 1px solid #e2e2e2; border-radius: 8px; padding: 14px; font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.mr-sidepanel.mr-empty { color: #999; text-align: center; padding: 30px 14px; }
+.mr-panel-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.mr-panel-field { flex: 1; }
+.mr-panel-field label { display: block; font-size: 11px; color: #888; margin-bottom: 3px; }
+.mr-panel-field input[type="number"],
+.mr-panel-field input[type="text"],
+.mr-panel-field select {
+  width: 100%; box-sizing: border-box; padding: 6px 7px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;
+}
+.mr-panel-field textarea {
+  width: 100%; box-sizing: border-box; padding: 6px 7px; border: 1px solid #ddd; border-radius: 5px;
+  font-size: 13px; resize: vertical; min-height: 54px; font-family: inherit;
+}
+.mr-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-top: 1px solid #f0f0f0;
+}
+.mr-toggle-row .mr-toggle-text { padding-right: 10px; }
+.mr-toggle-row .mr-toggle-title { font-size: 13px; color: var(--content-font-color, #1a1a1a); }
+.mr-toggle-row .mr-toggle-desc { font-size: 11px; color: #999; margin-top: 2px; }
+.mr-switch { position: relative; width: 38px; height: 22px; flex: none; }
+.mr-switch input { opacity: 0; width: 0; height: 0; }
+.mr-switch .mr-slider {
+  position: absolute; cursor: pointer; inset: 0; background: #ddd; border-radius: 22px; transition: 0.15s;
+}
+.mr-switch .mr-slider::before {
+  content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: 0.15s;
+}
+.mr-switch input:checked + .mr-slider { background: var(--primary-color, #e88ca8); }
+.mr-switch input:checked + .mr-slider::before { transform: translateX(16px); }
+
+.mr-imgbtn {
+  width: 100%; padding: 9px; margin-bottom: 8px; border: 1px solid #ddd; background: #fff;
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.mr-imgbtn:hover { background: #f5f5f5; }
+
+.mr-advanced { margin-top: 10px; border-top: 1px solid #f0f0f0; padding-top: 10px; }
+.mr-advanced summary { cursor: pointer; font-size: 12px; color: #888; margin-bottom: 8px; }
+
+.mr-ctxmenu {
+  position: fixed; z-index: 9999; background: #fff; border: 1px solid #ddd; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14); padding: 4px; display: flex; flex-direction: column;
+  min-width: 140px; font-family: 'Gowun Batang', serif;
+}
+.mr-ctxmenu button {
+  text-align: left; padding: 8px 10px; border: none; background: none; cursor: pointer;
+  font-size: 13px; border-radius: 5px; color: var(--content-font-color, #1a1a1a);
+}
+.mr-ctxmenu button:hover { background: rgb(from var(--primary-color, #e88ca8) r g b / 30%); }
+.mr-ctxmenu button.mr-ctx-danger { color: #c0392b; }
+.mr-ctxmenu button.mr-ctx-danger:hover { background: #fbe4e4; }
+
+.mr-canvas.mr-dragover { outline: 2px dashed var(--primary-color, #e88ca8); outline-offset: -2px; background-color: rgb(from var(--primary-color, #e88ca8) r g b / 6%); }
+.mr-item.mr-dragover-target { outline: 2px solid var(--primary-color, #e88ca8); }
+
+.mr-select-box {
+  position: absolute; border: 1px dashed #4a90d9; background: rgba(74, 144, 217, 0.12);
+  pointer-events: none; z-index: 9999;
+}
+
+.mr-layout { display: flex; gap: 16px; align-items: flex-start; justify-content: center; flex-wrap: nowrap; width: 100%; box-sizing: border-box; }
+
+@media (max-width: 700px) {
+  /* 위아래 여백 축소: 래퍼 패딩과 상단바 여백을 줄여서 화면을 더 넓게 씀 */
+  .myroom-wrap { padding: 8px 16px 40px; }
+  .mr-topbar { margin: 0 0 8px; padding: 9px 12px; }
+
+  .mr-layout { flex-direction: column; align-items: stretch; gap: 8px; }
+  .mr-sidepanel { width: auto; }
+  .mr-room { max-width: 100% !important; }
+  .mr-side-slot { width: 100%; justify-content: center; }
+  .mr-remote { width: 100%; }
+
+  /* 확대/축소 컨트롤: 슬라이더는 숨기고 버튼 2개만 남겨서 세로 폭을 줄임 */
+  .mr-zoom-slider-wrap { display: none; }
+  .mr-zoom-control { padding: 4px; gap: 2px; }
+}
+
+/* 방(캔버스) 영역 - 실제 캔버스 박스를 가운데로 모아서 보여줌(남는 공간이 한쪽으로 쏠리지 않도록) */
+.mr-room {
+  position: relative; width: 100%; min-width: 0; box-sizing: border-box; flex: 1 1 0;
+  display: flex; align-items: flex-start; justify-content: center;
+}
+
+/* 리모콘이 있던 자리를 항상 같은 너비로 예약해서, 편집 진입/종료 시 캔버스 위치가 흔들리지 않도록 함 */
+.mr-side-slot {
+  width: 272px; max-width: 100%; flex: 0 0 auto;
+  display: flex; align-items: flex-start; justify-content: flex-start;
+}
+
+/* ---------- 큰 캔버스 모드(mr-fullscreen) ----------
+   방 주인/관리자가 방에 들어오면 켜지는 모드. 사이트 자체의 상단 메뉴(.myroom-wrap 위쪽)는
+   그대로 두고, 그 아래 남는 화면 전체를 방 캔버스 작업공간으로 쓴다. 실제 남는 세로 공간은
+   JS(updateBigCanvasHeight)가 계산해서 .mr-layout의 height로 넣어준다. 리모콘(.mr-remote)은
+   이 캔버스 위에 떠 있는 오버레이라서, Tab으로 켜고 꺼도 캔버스 크기에 전혀 영향이 없다.
+   편집을 종료해도(저장하고 편집 종료) 이 큰 캔버스 레이아웃 자체는 유지되고, mr-editing
+   클래스만 빠지면서 배경이 투명해지고 리모콘만 사라진다. */
+.myroom-wrap.mr-fullscreen {
+  max-width: none !important; width: 100%;
+}
+.myroom-wrap.mr-fullscreen .mr-layout {
+  position: relative; width: 100%; align-items: stretch;
+}
+.myroom-wrap.mr-fullscreen .mr-room {
+  position: absolute; inset: 0; max-width: none !important; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border-radius: 10px; transition: background 0.15s ease;
+}
+.myroom-wrap.mr-fullscreen.mr-editing .mr-room {
+  background: #f3f3f5;
+}
+/* 리모콘 자리 자체를 오버레이로 바꿔서, 리모콘을 켜고 꺼도 .mr-room의 폭/배율에
+   전혀 영향을 주지 않는다(레이아웃 계산에서 완전히 빠짐) */
+.myroom-wrap.mr-fullscreen .mr-side-slot {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 280px; max-width: 92vw;
+  flex: none; display: block; pointer-events: none;
+}
+.myroom-wrap.mr-fullscreen .mr-remote {
+  width: 100%; max-width: 100%;
+  position: absolute; top: 0; right: 0; height: 100%; max-height: 100%;
+  overflow-y: auto; pointer-events: auto;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.18); border-radius: 12px;
+}
+
+@media (max-width: 700px) {
+  /* 모바일에서는 리모컨을 화면에 떠 있는 오버레이로 두지 않고, 방 아래에 이어지는
+     카드 형태로 배치한다(스크린샷처럼 캔버스 → 꾸미기 패널이 세로로 이어지는 모습).
+     .mr-room의 실제 높이는 JS(updateBigCanvasHeight)가 화면 높이의 일정 비율로 잡아준다. */
+  .myroom-wrap.mr-fullscreen .mr-layout {
+    position: static; height: auto !important;
+    display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .myroom-wrap.mr-fullscreen .mr-room {
+    position: static; width: 100%; max-width: 100% !important;
+  }
+  .myroom-wrap.mr-fullscreen .mr-side-slot {
+    position: static; width: 100%; max-width: 100%; height: auto; max-height: none;
+    flex: none; display: block; pointer-events: auto;
+  }
+  .myroom-wrap.mr-fullscreen .mr-remote {
+    position: static; width: 100%; max-width: 100%; height: auto; max-height: none;
+    overflow: visible; border-radius: 20px; padding: 0 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+  }
+  /* 손잡이(::before)는 전용 핸들 요소(.mr-sheet-handle)로 대체 - 한 지점이 아니라 위쪽 전체 폭을 다 쓸 수 있음 */
+  .myroom-wrap.mr-fullscreen .mr-remote::before { content: none; }
+  .myroom-wrap.mr-fullscreen .mr-sheet-handle {
+    display: block; width: 100%; height: 26px; margin: 0 -14px 4px; cursor: grab;
+    position: relative; touch-action: none;
+  }
+  .myroom-wrap.mr-fullscreen .mr-sheet-handle::before {
+    content: ''; position: absolute; top: 10px; left: 50%; width: 36px; height: 4px;
+    margin-left: -18px; border-radius: 4px; background: #ddd;
+  }
+  .myroom-wrap.mr-fullscreen .mr-remote-hint { display: none; } /* PC의 "Tab 키" 안내는 모바일엔 필요 없음(손잡이로 대체) */
+
+  /* 시트 헤더: 제목 "꾸미기" + 닫기(X) 한 줄로 - 스샷의 "데코 ... ✕" 라인과 동일한 역할 */
+  .myroom-wrap.mr-fullscreen .mr-sheet-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+  }
+  .myroom-wrap.mr-fullscreen .mr-sheet-header-title { display: block; font-size: 17px; font-weight: 800; color: #1a1a1a; }
+  .myroom-wrap.mr-fullscreen .mr-remote-close {
+    background: #f2f2f2; width: 30px; height: 30px; border-radius: 50%; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+
+  /* 꾸미기 / 설정 탭 */
+  .myroom-wrap.mr-fullscreen .mr-sheet-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .myroom-wrap.mr-fullscreen .mr-sheet-tab {
+    flex: 1; padding: 9px 0; text-align: center; border: none; border-radius: 10px;
+    background: #f5f5f5; color: #888; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .myroom-wrap.mr-fullscreen .mr-sheet-tab.active { background: var(--primary-color, #e88ca8); color: #fff; }
+  .myroom-wrap.mr-fullscreen #sheet-panel-settings { display: none; } /* 기본은 "꾸미기" 탭이 보이는 상태 */
+
+  /* 카테고리(왼쪽 세로 아이콘 목록) / 아이템(오른쪽 그리드)을 좌우로 배치 */
+  .myroom-wrap.mr-fullscreen .mr-catalog-body { flex-direction: row; align-items: stretch; gap: 10px; }
+  .myroom-wrap.mr-fullscreen .mr-catalog-tabs-row {
+    flex: 0 0 64px; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 0;
+  }
+  .myroom-wrap.mr-fullscreen .mr-catalog-tabs {
+    flex-direction: column; flex-wrap: nowrap; gap: 8px;
+    max-height: calc(4 * 68px + 3 * 8px); overflow-y: auto; padding-right: 2px;
+  }
+  .myroom-wrap.mr-fullscreen .mr-cat-tab {
+    flex-direction: column; justify-content: center; gap: 4px;
+    padding: 8px 2px; border-radius: 14px; font-size: 10.5px; font-weight: 600; text-align: center; white-space: nowrap;
+  }
+  .myroom-wrap.mr-fullscreen .mr-cat-tab-icon {
+    display: flex; align-items: center; justify-content: center; margin: 0 auto;
+    width: 40px; height: 40px; border-radius: 12px; background: #f2f2f2; color: #999; font-weight: 800; font-size: 15px;
+  }
+  .myroom-wrap.mr-fullscreen .mr-cat-tab.active .mr-cat-tab-icon {
+    background: var(--primary-color, #e88ca8); color: #fff; box-shadow: 0 2px 8px rgb(from var(--primary-color, #e88ca8) r g b / 45%);
+  }
+  .myroom-wrap.mr-fullscreen .mr-catalog-more {
+    width: 100%; height: 32px; border: 1px dashed #ddd; border-radius: 10px; order: 99;
+  }
+  .myroom-wrap.mr-fullscreen .mr-catalog-grid {
+    flex: 1 1 auto; min-width: 0; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    max-height: calc(4 * 88px + 3 * 10px);
+  }
+  /* 아이템 카드 - 스샷처럼 둥근 카드형으로 */
+  .myroom-wrap.mr-fullscreen .mr-catalog-item { border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .myroom-wrap.mr-fullscreen .mr-catalog-item img { max-width: 82%; max-height: 82%; }
+  .myroom-wrap.mr-fullscreen .mr-catalog-item:active { transform: scale(0.97); border-color: var(--primary-color, #e88ca8); }
+
+  .myroom-wrap.mr-fullscreen .mr-remote-save {
+    padding: 13px; border-radius: 12px; font-size: 14px; font-weight: 800;
+  }
+}
+
+/* ---------- 편집모드 진입 아이콘(방 보기 <-> 홈 편집) - 제목과 같은 라인, 방 우측 상단에 고정 ---------- */
+.mr-enter-edit-tab {
+  position: absolute; top: 10px; right: 10px; z-index: 5;
+  width: 34px; height: 34px;
+  border: 1px solid var(--primary-color, #e88ca8); background: var(--primary-color, #e88ca8); color: #fff;
+  border-radius: 50%; cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.mr-enter-edit-tab:hover { background: var(--secondary-color, #e07b9a); }
+
+/* ---------- 화면 이동(팬) 모드 토글 - 캔버스 좌측 하단, 줌 컨트롤과 대칭되는 위치 ----------
+   PC의 "스페이스바+드래그"(가구를 건드리지 않고 화면만 이동)를 버튼 하나로 대신한다.
+   특히 스페이스바가 없는 모바일에서 유용하다. 눌려있는 동안(.active)은 화면 전체가 손 도구로 바뀐다. */
+.mr-pan-toggle {
+  position: absolute; left: 10px; bottom: 10px; z-index: 6;
+  width: 40px; height: 40px; padding: 0; border: 1px solid #e2e2e2;
+  background: rgba(255,255,255,0.92); color: #555; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.mr-pan-toggle:hover { background: #fff; color: #1a1a1a; }
+.mr-pan-toggle.active {
+  background: var(--primary-color, #e88ca8); border-color: var(--primary-color, #e88ca8); color: #fff;
+  box-shadow: 0 2px 10px rgb(from var(--primary-color, #e88ca8) r g b / 55%);
+}
+
+/* ---------- 확대/축소(줌) 컨트롤 - 캔버스 우측 하단에 고정 ---------- */
+.mr-zoom-control {
+  position: absolute; right: 10px; bottom: 10px; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.92); border: 1px solid #e2e2e2; border-radius: 20px;
+  padding: 8px 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: transform 0.15s ease;
+}
+.mr-zoom-btn {
+  width: 26px; height: 26px; flex: none; padding: 0;
+  border: none; background: transparent; color: #555; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+}
+.mr-zoom-btn:hover { background: #f0f0f0; color: #1a1a1a; }
+.mr-zoom-slider-wrap { width: 26px; height: 84px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mr-zoom-slider {
+  width: 78px; height: 4px; margin: 0; transform: rotate(-90deg);
+  -webkit-appearance: none; appearance: none; background: #e2e2e2; border-radius: 4px; outline: none; cursor: pointer;
+}
+.mr-zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--primary-color, #e88ca8); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.mr-zoom-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%; border: none;
+  background: var(--primary-color, #e88ca8); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.mr-zoom-slider::-moz-range-track { background: #e2e2e2; height: 4px; border-radius: 4px; }
+/* 확대된 상태(보기 전용)에서는 드래그로 화면을 옮길 수 있다는 것을 커서로 알려줌 */
+.mr-canvas-outer.mr-zoomed { cursor: grab; }
+.mr-canvas-outer.mr-zoomed.mr-panning { cursor: grabbing; }
+
+/* ---------- 리모콘(아이템 추가 패널) ---------- */
+.mr-remote {
+  width: 272px; max-width: 100%; flex: 0 0 auto; box-sizing: border-box;
+  background: #fff; border: 1px solid #e2e2e2; border-radius: 10px;
+  padding: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); font-size: 13px;
+  height: auto; align-self: flex-start;
+}
+.mr-remote-hint {
+  font-size: 11px; color: #999; text-align: center; margin: -2px 0 10px;
+  padding: 5px 6px; background: #fafafa; border-radius: 6px;
+}
+.mr-remote-field { margin-bottom: 10px; text-align: left; }
+.mr-canvas-size-row { display: flex; align-items: center; gap: 6px; }
+.mr-canvas-size-row input[type="number"] {
+  width: 0; flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 7px 6px;
+  border: 1px solid #ddd; border-radius: 6px; font-size: 12px; text-align: center;
+}
+.mr-canvas-size-x { flex: 0 0 auto; color: #999; font-size: 12px; }
+.mr-canvas-size-row button {
+  flex: 0 0 auto; padding: 7px 10px; border: 1px solid var(--primary-color, #e88ca8);
+  background: var(--primary-color, #e88ca8); color: #fff; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.mr-canvas-size-row button:hover { background: var(--secondary-color, #e07b9a); }
+.mr-remote-field label { display: block; font-size: 11px; color: #888; margin-bottom: 3px; }
+.mr-remote-field input[type="text"] {
+  width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+}
+.mr-remote-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.mr-remote-controls button {
+  padding: 6px 10px; border: 1px solid #ddd; background: #fff; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.mr-remote-controls button:hover { background: #f5f5f5; }
+.mr-remote-controls select {
+  padding: 6px 8px; border: 1px solid #ddd; background: #fff; border-radius: 6px; font-size: 12px;
+}
+.mr-remote-close {
+  border: none; background: none; cursor: pointer; font-size: 15px; font-weight: 700;
+  color: var(--primary-color, #e88ca8); padding: 4px 8px; margin: -2px 0 8px -4px; border-radius: 6px;
+}
+.mr-remote-close:hover { background: rgb(from var(--primary-color, #e88ca8) r g b / 6%); }
+
+/* ---------- 시트 헤더(제목+닫기)/꾸미기·설정 탭 - 좁은 화면(모바일)에서만 의미가 있음.
+   PC(폭 700px 초과)에서는 탭 줄을 숨기고 두 패널을 예전처럼 세로로 이어서 그대로 보여준다. */
+.mr-sheet-header-title { display: none; }
+.mr-sheet-tabs { display: none; }
+.mr-sheet-panel { display: block; }
+.mr-sheet-handle { display: none; }
+.mr-remote-controls button#btn-multiselect {
+  flex: 0 0 auto; border: 1px solid #ddd; background: #fff;
+  border-radius: 6px; cursor: pointer; font-size: 12px; color: #666; padding: 7px 10px;
+}
+.mr-remote-controls button#btn-multiselect:hover { background: #f5f5f5; }
+.mr-multiselect-menu {
+  position: relative; margin: 4px 0 8px; padding: 4px; border: 1px solid #e2e2e2; border-radius: 8px;
+  background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.1); display: flex; flex-direction: column; z-index: 6;
+}
+.mr-multiselect-menu button {
+  text-align: left; padding: 8px 10px; border: none; background: none; cursor: pointer;
+  font-size: 12px; border-radius: 5px; color: var(--content-font-color, #1a1a1a);
+}
+.mr-multiselect-menu button:hover { background: rgb(from var(--primary-color, #e88ca8) r g b / 6%); }
+.mr-multiselect-bar {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px; padding: 6px 8px;
+  background: rgb(from var(--primary-color, #e88ca8) r g b / 6%); border: 1px solid rgb(from var(--primary-color, #e88ca8) r g b / 30%); border-radius: 8px; font-size: 12px; color: #555;
+}
+.mr-multiselect-bar span { flex: 1; }
+.mr-multiselect-bar button {
+  border: 1px solid var(--primary-color, #e88ca8); background: var(--primary-color, #e88ca8); color: #fff; border-radius: 6px;
+  font-size: 12px; padding: 5px 9px; cursor: pointer;
+}
+.mr-multiselect-bar button:hover { background: var(--secondary-color, #e07b9a); }
+.mr-multiselect-bar button#multiselect-cancel { background: #fff; color: #666; border-color: #ddd; }
+.mr-multiselect-bar button#multiselect-cancel:hover { background: #f5f5f5; }
+/* ---------- 리모콘: 아이템 보관함(카테고리 탭 + 아이템 그리드) ---------- */
+.mr-catalog { margin-bottom: 10px; }
+.mr-catalog-body { display: flex; flex-direction: column; }
+.mr-catalog-tabs-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.mr-catalog-tabs { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.mr-cat-tab {
+  padding: 6px 12px; border: 1px solid #ddd; background: #fff; border-radius: 999px;
+  cursor: pointer; font-size: 12px; color: #555;
+  display: flex; align-items: center; gap: 6px;
+}
+.mr-cat-tab-icon { display: none; }
+.mr-cat-tab:hover { background: #f5f5f5; }
+.mr-cat-tab.active {
+  border-color: var(--primary-color, #e88ca8); background: var(--primary-color, #e88ca8); color: #fff; font-weight: 700;
+}
+.mr-catalog-more {
+  flex: 0 0 auto; width: 26px; height: 26px; border: 1px solid #ddd; background: #fff; border-radius: 50%;
+  cursor: pointer; font-size: 13px; color: #888; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.mr-catalog-more:hover { background: #f5f5f5; }
+
+.mr-catalog-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: min-content; gap: 8px; margin-bottom: 8px;
+  max-height: calc(6 * 56px + 5 * 8px); overflow-y: auto; overflow-x: hidden; padding-right: 2px;
+}
+.mr-catalog-item {
+  position: relative; aspect-ratio: 1 / 1; border: 1px solid #e2e2e2; border-radius: 8px;
+  overflow: hidden; cursor: pointer; background: #fafafa; display: flex; align-items: center; justify-content: center;
+}
+.mr-catalog-item:hover { border-color: var(--primary-color, #e88ca8); }
+.mr-catalog-item img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mr-catalog-item-remove {
+  position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,0.55); color: #fff; font-size: 9px; line-height: 16px;
+  padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.mr-catalog-item-remove:hover { background: rgba(0,0,0,0.8); }
+.mr-catalog-add {
+  border: 1.5px dashed #ddd; background: #fff; color: #bbb; font-size: 20px; font-weight: 300;
+}
+.mr-catalog-add:hover { border-color: var(--primary-color, #e88ca8); color: var(--primary-color, #e88ca8); }
+
+.mr-catalog-manage { border-top: 1px solid #f0f0f0; padding-top: 8px; margin-bottom: 8px; }
+.mr-catalog-manage summary { cursor: pointer; font-size: 12px; color: #888; }
+.mr-catalog-manage-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.mr-catmanage-row, .mr-catmanage-addrow { display: flex; align-items: center; gap: 4px; }
+.mr-catmanage-row input[type="text"], .mr-catmanage-addrow input[type="text"] {
+  flex: 1 1 auto; min-width: 0; padding: 5px 7px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px;
+}
+.mr-catmanage-row button, .mr-catmanage-addrow button {
+  flex: 0 0 auto; padding: 5px 8px; border: 1px solid #ddd; background: #fff; border-radius: 5px;
+  cursor: pointer; font-size: 11px; color: #666;
+}
+.mr-catmanage-row button:hover, .mr-catmanage-addrow button:hover { background: #f5f5f5; }
+.mr-catmanage-row button:disabled { opacity: 0.35; cursor: default; }
+.mr-catmanage-row button.mr-catmanage-del { color: #c0392b; border-color: #f0c9c9; }
+.mr-catmanage-row button.mr-catmanage-del:hover { background: #fbe4e4; }
+
+.mr-remote-dropzone {
+  border: 1.5px dashed #ddd; border-radius: 8px; padding: 22px 10px; text-align: center;
+  color: #999; font-size: 12px; cursor: pointer; margin-bottom: 10px;
+}
+.mr-remote-dropzone:hover { background: #fafafa; border-color: var(--primary-color, #e88ca8); }
+
+.mr-remote-save {
+  width: 100%; padding: 10px; border: none; border-radius: 6px; background: var(--btn-primary-bg, #2b2b2b); color: #fff;
+  font-size: 13px; cursor: pointer; margin-top: 6px;
+}
+.mr-remote-save:hover { filter: brightness(1.3); }
+
+/* ---------- 새 방 만들기 / 방 이름 수정 폼 ---------- */
+.mr-write-card {
+  background: #fff; border: 1px solid #e2e2e2; border-radius: 12px; padding: 28px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06); text-align: left;
+  max-width: 420px; margin: 0 auto; box-sizing: border-box;
+}
+.mr-write-title { font-family: 'Gowun Batang', serif; font-size: 20px; font-weight: 800; margin: 0 0 20px; text-align: left; }
+.mr-write-field { margin-bottom: 18px; }
+.mr-write-field label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+.mr-write-field input[type="text"] {
+  width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #ddd;
+  border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.15s;
+}
+.mr-write-field input[type="text"]:focus {
+  outline: none; border-color: var(--primary-color, #e88ca8); box-shadow: 0 0 0 3px rgb(from var(--primary-color, #e88ca8) r g b / 15%);
+}
+.mr-write-submit {
+  width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--btn-primary-bg, #2b2b2b); color: #fff;
+  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.mr-write-submit:hover { filter: brightness(1.3); }
+
+/* ---------- 아이템 편집 팝업(모달) ---------- */
+.mr-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9998;
+  display: flex; align-items: center; justify-content: center;
+}
+.mr-modal {
+  width: 300px; max-width: calc(100vw - 32px); background: #fff; border-radius: 10px;
+  padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); font-size: 13px; position: relative;
+}
+.mr-modal-title { font-weight: 700; margin-bottom: 12px; }
+.mr-modal-close {
+  position: absolute; right: 12px; top: 12px; border: none; background: none; cursor: pointer;
+  font-size: 16px; color: #999; line-height: 1;
+}
+.mr-modal-close:hover { color: #333; }
+
+.mr-modal-btn-row {
+  display: flex; gap: 8px; justify-content: flex-end; flex-wrap: nowrap;
+}
+.mr-modal-btn {
+  flex: 0 0 auto; width: auto; margin: 0; padding: 8px 16px; border: 1px solid #ddd;
+  background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap;
+}
+.mr-modal-btn:hover { background: #f5f5f5; }
+.mr-modal-btn-danger {
+  border-color: #c0392b; background: #c0392b; color: #fff;
+}
+.mr-modal-btn-danger:hover {
+  background: #a93226 !important;
+  border-color: #a93226 !important;
+  color: #fff !important;
+  filter: none;
+}
+
+/* ---------- 목록 페이지: 환경설정(⚙) / 새 방 추가(✏) / 선택 삭제·복사·이동(⋮) ----------
+   사이트의 .btn_bo_user 버튼과 톤을 맞춤(어두운 배경 + 핑크 아이콘, hover 시 반전) */
+.mr-toolbar-icons { display: flex; gap: 8px; align-items: center; position: relative; }
+.mr-icon-btn {
+  box-sizing: border-box; width: 38px; height: 38px; border-radius: 12px; flex: 0 0 auto; border: none;
+  padding: 0; margin: 0; font-family: inherit;
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #1a1a1a !important; color: #F4C6D3 !important; text-decoration: none; cursor: pointer;
+  font-size: 16px; line-height: 1; transition: 0.2s;
+}
+.mr-icon-btn:hover {
+  background: var(--primary-color, #e88ca8) !important; color: #fff !important; transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgb(from var(--primary-color, #e88ca8) r g b / 35%);
+}
+.mr-icon-btn-disabled {
+  background: #eee !important; color: #bbb !important; cursor: default;
+}
+.mr-icon-btn-disabled:hover { transform: none; }
+.mr-guest-hint { font-size: 12px; color: #999; margin: 6px 0 0; text-align: right; }
+
+.mr-room-more-menu {
+  position: absolute; top: 46px; right: 0; z-index: 20; min-width: 130px;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  background: #fff; border: 1px solid #e2e2e2; border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.14);
+}
+.mr-room-more-menu button {
+  text-align: left; padding: 9px 10px; border: none; background: none; cursor: pointer;
+  font-size: 13px; color: var(--content-font-color, #1a1a1a); border-radius: 6px; font-family: inherit;
+}
+.mr-room-more-menu button:hover { background: #FADDE8; }
+
+.mr-room-card {
+  width: 100%; text-decoration: none; color: inherit; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px;
+  overflow: hidden; background: #fff; position: relative; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.mr-room-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 22px rgb(from var(--primary-color, #e88ca8) r g b / 20%);
+  border-color: rgb(from var(--primary-color, #e88ca8) r g b / 35%);
+}
+.mr-room-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(160px, 240px)); gap: 20px; margin-top: 16px; justify-content: center;
+}
+@media (max-width: 900px) {
+  .mr-room-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); justify-content: center; gap: 14px; }
+}
+.mr-room-card.selected { outline: 2px solid var(--primary-color, #e88ca8); }
+.mr-room-select {
+  position: absolute; top: 8px; right: 8px; z-index: 4; width: 24px; height: 24px; border-radius: 50%;
+  border: 1.5px solid rgb(from var(--primary-color, #e88ca8) r g b / 45%); background: rgba(255,255,255,0.92); color: transparent; font-size: 13px;
+  cursor: pointer; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.mr-room-card.selected .mr-room-select { background: var(--primary-color, #e88ca8); border-color: var(--primary-color, #e88ca8); color: #fff; }
+
+.mr-room-info { padding: 12px 12px 15px; text-align: center; }
+.mr-room-title {
+  font-weight: 700; font-size: 16px; color: #1a1a1a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mr-room-writer { font-size: 11px; color: #c48b9c; font-weight: 600; margin-top: 4px; }
+
+/* ---------- 목록 페이지 방 미리보기 ---------- */
+.mr-preview-frame {
+  height: 168px; background: #fafafa; overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.mr-preview-empty {
+  height: 168px; background: #fafafa; display: flex; align-items: center; justify-content: center;
+  color: #ccc; font-size: 13px;
+}
+.mr-preview-canvas { position: relative; flex: none; transform-origin: center center; }
+.mr-preview-item { position: absolute; box-sizing: border-box; }
+.mr-preview-item img { width: 100%; height: 100%; display: block; object-fit: fill; }
