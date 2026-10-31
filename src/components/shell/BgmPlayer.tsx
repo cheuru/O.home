@@ -2,7 +2,7 @@
 // BGM 미니 플레이어 (4.1) — 유튜브 IFrame API, 화면은 숨기고 자체 컨트롤만 표시
 // 기본 위치 오른쪽 아래 · 곡 리스트 팝업 (v1.9) · 페이지 이동에도 유지(레이아웃 상주)
 // 브라우저 정책상 소리 재생은 사용자의 첫 클릭부터 시작
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useBgm } from '@/lib/bgmStore';
 
 /** 흐르는 글씨 — 재생 중이고 글자가 넘칠 때만 무한 스크롤, 평소엔 말줄임.
@@ -60,10 +60,8 @@ const ListIcon = () => (
 );
 
 export function BgmPlayer() {
-  const { state, source } = useBgm();
-  const { settings } = state;
-  // 재생목록 구조(친구 bgmStore) → 플레이어는 곡을 한 줄로 이어 붙여 재생
-  const tracks = useMemo(() => state.playlists.flatMap(p => p.tracks).filter(t => t.videoId), [state.playlists]);
+  const { state } = useBgm();
+  const { tracks, settings } = state;
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -172,9 +170,8 @@ export function BgmPlayer() {
       do { n = Math.floor(Math.random() * tracks.length); } while (n === cur);
     } else {
       n = cur + 1;
-      if (settings.repeat === 'one') n = cur;
-      else if (n >= tracks.length) {
-        if (settings.repeat === 'off') { setPlaying(false); return; }
+      if (n >= tracks.length) {
+        if (!settings.repeat) { setPlaying(false); return; }
         n = 0;
       }
     }
@@ -188,17 +185,6 @@ export function BgmPlayer() {
   const playingRef = useRef(playing);
   playingRef.current = playing;
   const armedRef = useRef(false);
-  const sourceRef = useRef(source);
-  useEffect(() => {
-    if (sourceRef.current === source) return;
-    sourceRef.current = source;
-    setIdx(0);
-    idxRef.current = 0;
-    if (tracks.length === 0) return;
-    if (playingRef.current && readyRef.current && playerRef.current) playAtRef.current(0);
-    else if (readyRef.current) playerRef.current?.cueVideoById(tracks[0].videoId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
   useEffect(() => {
     if (!settings.autoplay || !settings.enabled || tracks.length === 0) return;
     const fire = (ev: Event) => {
@@ -277,7 +263,7 @@ export function BgmPlayer() {
       <div className="title">
         {/* 흐르는 글씨는 제목만 — 설명은 항상 말줄임 (정신없지 않게) */}
         <Marquee className="tt" text={track?.title ?? ''} active={playing} />
-        {track?.artist && <div className="mq">{track.artist}</div>}
+        {track?.desc && <div className="mq">{track.desc}</div>}
       </div>
       <div className="ctrl">
         <button onClick={prev} data-tip="이전">◂◂</button>
@@ -303,7 +289,7 @@ export function BgmPlayer() {
             {tracks.map((t, i) => (
               <div key={t.id} className={`it ${i === idx ? 'on' : ''}`}
                 onClick={() => { playAt(i); setListOpen(false); }}>
-                <b>{t.title}</b><small>{t.artist}</small>
+                <b>{t.title}</b><small>{t.desc}</small>
               </div>
             ))}
           </div>
