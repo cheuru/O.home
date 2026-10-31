@@ -45,7 +45,7 @@ import { Mood, MOOD_SEED, moodTint } from '@/lib/diaryStore';
 import {
   TextSettingEditor, DdayEditor, TodoEditor, BannerEditor, DecoEditor,
 } from '@/components/main/widgetEditors';
-import { useBgm, BgmTrack, parseVideoId } from '@/lib/bgmStore';
+import { useBgm, BgmTrack, BgmPlaylist, parseVideoId } from '@/lib/bgmStore';
 import { useFonts, fontCssUrl, FontDef, FontRole, ROLE_LABEL, FOLLOW_MENU, FOLLOW_TITLE } from '@/lib/fontStore';
 import { useToast } from '@/components/ui/Toast';
 import { PageTitle, EditableDesc, getPageText, setPageText } from '@/components/ui/PageText';
@@ -2906,14 +2906,15 @@ function CommPane() {
   );
 }
 
-/** BGM 트랙 한 줄 — 인라인 수정(제목/설명/URL) + 삭제 확인 */
+/** BGM 트랙 한 줄 — 인라인 수정(제목/아티스트/URL/재생시간) + 삭제 확인 */
 function BgmTrackRow({ t, onPatch, onDelete }: {
-  t: BgmTrack; onPatch: (p: Partial<BgmTrack>) => void; onDelete: () => void;
+  t: BgmTrack; onPatch: (p: Partial<Omit<BgmTrack, 'id'>>) => void; onDelete: () => void;
 }) {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(t.title);
-  const [desc, setDesc] = useState(t.desc);
+  const [artist, setArtist] = useState(t.artist);
+  const [duration, setDuration] = useState(t.duration);
   const [url, setUrl] = useState(t.videoId);
 
   if (editing) {
@@ -2921,7 +2922,8 @@ function BgmTrackRow({ t, onPatch, onDelete }: {
       <div style={{ display: 'grid', gap: 7, padding: '10px 0', borderBottom: '1px dashed var(--line)', width: '100%' }}>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
           <KInput placeholder="곡 제목" value={title} onChange={e => setTitle(e.target.value)} style={{ maxWidth: 150 }} />
-          <KInput placeholder="설명 (선택)" value={desc} onChange={e => setDesc(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
+          <KInput placeholder="아티스트 (선택)" value={artist} onChange={e => setArtist(e.target.value)} style={{ flex: 1, minWidth: 130 }} />
+          <KInput placeholder="재생시간 (3:45)" value={duration} onChange={e => setDuration(e.target.value)} style={{ maxWidth: 90 }} />
         </div>
         <div style={{ display: 'flex', gap: 7 }}>
           <KInput placeholder="유튜브 URL 또는 영상 ID" value={url} onChange={e => setUrl(e.target.value)} />
@@ -2929,12 +2931,12 @@ function BgmTrackRow({ t, onPatch, onDelete }: {
             onClick={() => {
               const vid = parseVideoId(url);
               if (!title.trim() || !vid) { toast('제목과 올바른 유튜브 URL(또는 영상 ID)을 입력해 주세요'); return; }
-              onPatch({ title: title.trim(), desc: desc.trim(), videoId: vid });
+              onPatch({ title: title.trim(), artist: artist.trim(), duration: duration.trim(), videoId: vid });
               setEditing(false);
               toast('곡이 수정되었습니다');
             }}>SAVE</button>
           <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }}
-            onClick={() => { setEditing(false); setTitle(t.title); setDesc(t.desc); setUrl(t.videoId); }}>CANCEL</button>
+            onClick={() => { setEditing(false); setTitle(t.title); setArtist(t.artist); setDuration(t.duration); setUrl(t.videoId); }}>CANCEL</button>
         </div>
       </div>
     );
@@ -2944,7 +2946,7 @@ function BgmTrackRow({ t, onPatch, onDelete }: {
     <div className="set-row" style={{ width: '100%' }}>
       <div className="l" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
         <span className="drag-h">⠿</span>
-        <div><b>{t.title}</b><small>{t.desc || t.videoId}</small></div>
+        <div><b>{t.title}</b><small>{[t.artist, t.duration].filter(Boolean).join(' · ') || t.videoId}</small></div>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
@@ -2956,18 +2958,20 @@ function BgmTrackRow({ t, onPatch, onDelete }: {
   );
 }
 
-/** BGM 탭 (5.2 v1.9) — 곡 목록 등록(미니 플레이어 리스트에 노출) + 재생 설정 */
-function BgmPane() {
-  const { state, setTracks, addTrack, removeTrack, setSettings } = useBgm();
+/** 재생목록 한 칸 — 이름 수정 · 삭제 · 곡 목록(드래그 정렬) · 곡 추가 */
+function BgmPlaylistBox({ pl }: { pl: BgmPlaylist }) {
+  const { updatePlaylist, removePlaylist, setTracks, addTrack, updateTrack, removeTrack } = useBgm();
   const toast = useToast();
   const del = useConfirmDelete();
+  const [name, setName] = useState(pl.title);
   const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
+  const [artist, setArtist] = useState('');
+  const [duration, setDuration] = useState('');
   const [url, setUrl] = useState('');
 
   const add = () => {
-    if (addTrack(title, desc, url)) {
-      setTitle(''); setDesc(''); setUrl('');
+    if (addTrack(pl.id, title, artist, url, duration)) {
+      setTitle(''); setArtist(''); setDuration(''); setUrl('');
       toast('곡이 추가되었습니다');
     } else {
       toast('제목과 올바른 유튜브 URL(또는 영상 ID)을 입력해 주세요');
@@ -2975,58 +2979,114 @@ function BgmPane() {
   };
 
   return (
-    <div className="set-sec">
-      <h3>BGM</h3>
-      <div className="d">유튜브 곡 목록 관리 — 미니 플레이어 리스트에 노출 · 화면은 숨기고 소리만 재생</div>
+    <div style={{ border: '1.5px solid var(--line)', borderRadius: 'var(--radius-s, 8px)', padding: '12px 14px', marginTop: 14 }}>
+      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
+        <KInput value={name} onChange={e => setName(e.target.value)} style={{ maxWidth: 220 }} />
+        <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
+          onClick={() => { if (name.trim()) { updatePlaylist(pl.id, { title: name.trim() }); toast('이름이 수정되었습니다'); } }}>RENAME</button>
+        <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
+          onClick={() => del.ask(`재생목록 「${pl.title}」과 안의 곡 ${pl.tracks.length}개를 삭제하시겠습니까?`, () => removePlaylist(pl.id))}>DELETE LIST</button>
+      </div>
 
       <DragList
-        items={state.tracks}
+        items={pl.tracks}
         keyOf={t => t.id}
-        onReorder={setTracks}
+        onReorder={items => setTracks(pl.id, items)}
         render={t => (
           <BgmTrackRow t={t}
-            onPatch={p => setTracks(state.tracks.map(x => (x.id === t.id ? { ...x, ...p } : x)))}
-            onDelete={() => del.ask(`곡 「${t.title}」을 삭제하시겠습니까?`, () => removeTrack(t.id))} />
+            onPatch={p => updateTrack(pl.id, t.id, p)}
+            onDelete={() => del.ask(`곡 「${t.title}」을 삭제하시겠습니까?`, () => removeTrack(pl.id, t.id))} />
         )}
       />
       {del.element}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <KInput placeholder="곡 제목" value={title} onChange={e => setTitle(e.target.value)} style={{ maxWidth: 150 }} />
-        <KInput placeholder="설명 (선택)" value={desc} onChange={e => setDesc(e.target.value)} style={{ maxWidth: 130 }} />
+        <KInput placeholder="아티스트 (선택)" value={artist} onChange={e => setArtist(e.target.value)} style={{ maxWidth: 130 }} />
         <KInput placeholder="유튜브 URL 또는 영상 ID" value={url} onChange={e => setUrl(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+        <KInput placeholder="재생시간 (3:45)" value={duration} onChange={e => setDuration(e.target.value)} style={{ maxWidth: 90 }} />
         <button className="btn btn-dark" onClick={add}>＋ ADD</button>
+      </div>
+    </div>
+  );
+}
+
+/** BGM 탭 — 재생목록(무드 카드) 등록 + 재생 설정 */
+function BgmPane() {
+  const { state, addPlaylist, setSettings } = useBgm();
+  const toast = useToast();
+  const [newTitle, setNewTitle] = useState('');
+
+  const addList = () => {
+    if (!newTitle.trim()) { toast('재생목록 이름을 입력해 주세요'); return; }
+    addPlaylist(newTitle);
+    setNewTitle('');
+    toast('재생목록이 추가되었습니다');
+  };
+  const st = state.settings;
+
+  return (
+    <div className="set-sec">
+      <h3>BGM</h3>
+      <div className="d">유튜브 재생목록 관리 — 미니 플레이어 리스트에 노출 · 화면은 숨기고 소리만 재생</div>
+
+      {state.playlists.map(pl => <BgmPlaylistBox key={pl.id} pl={pl} />)}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        <KInput placeholder="새 재생목록 이름 (예: Deep Focus)" value={newTitle} onChange={e => setNewTitle(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <button className="btn btn-dark" onClick={addList}>＋ 재생목록 추가</button>
       </div>
 
       <div className="set-row" style={{ marginTop: 16 }}>
         <div className="l"><b>기본 볼륨</b></div>
-        <KStep value={state.settings.volume} min={0} max={100} suffix="%" onChange={v => setSettings({ volume: v })} />
+        <KStep value={st.volume} min={0} max={100} suffix="%" onChange={v => setSettings({ volume: v })} />
       </div>
       <div className="set-row">
         <div className="l"><b>플레이어 위치</b><small>기본: 오른쪽 아래</small></div>
         <div className="mini-seg">
-          <button className={state.settings.position === 'br' ? 'on' : ''} onClick={() => setSettings({ position: 'br' })}>오른쪽 아래</button>
-          <button className={state.settings.position === 'bl' ? 'on' : ''} onClick={() => setSettings({ position: 'bl' })}>왼쪽 아래</button>
+          <button className={st.position === 'br' ? 'on' : ''} onClick={() => setSettings({ position: 'br' })}>오른쪽 아래</button>
+          <button className={st.position === 'bl' ? 'on' : ''} onClick={() => setSettings({ position: 'bl' })}>왼쪽 아래</button>
         </div>
       </div>
       <div className="set-row">
         <div className="l"><b>셔플</b></div>
-        <KToggle checked={state.settings.shuffle} onChange={v => setSettings({ shuffle: v })} />
+        <KToggle checked={st.shuffle} onChange={v => setSettings({ shuffle: v })} />
       </div>
       <div className="set-row">
-        <div className="l"><b>반복 재생</b><small>목록 끝에서 처음으로</small></div>
-        <KToggle checked={state.settings.repeat} onChange={v => setSettings({ repeat: v })} />
+        <div className="l"><b>재생목록 넘나들기</b><small>켜면 이전/다음 곡이 재생목록 경계에서 다음 재생목록으로 이어짐</small></div>
+        <KToggle checked={st.crossPlaylist} onChange={v => setSettings({ crossPlaylist: v })} />
+      </div>
+      <div className="set-row">
+        <div className="l"><b>반복 재생</b></div>
+        <div className="mini-seg">
+          {(['off', 'all', 'one'] as const).map(m => (
+            <button key={m} className={st.repeat === m ? 'on' : ''} onClick={() => setSettings({ repeat: m })}>
+              {m === 'off' ? '끔' : m === 'all' ? '전체 반복' : '한 곡 반복'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="set-row">
+        <div className="l"><b>곡이 바뀔 때 서서히 전환</b><small>현재 곡을 줄이고 다음 곡을 키움</small></div>
+        <KToggle checked={st.crossfade} onChange={v => setSettings({ crossfade: v })} />
+      </div>
+      <div className="set-row">
+        <div className="l"><b>페이지별 BGM에서 돌아왔을 때</b><small>캐릭터·자관 BGM을 듣다 돌아오면 처음부터 / 듣던 구간부터</small></div>
+        <div className="mini-seg">
+          <button className={st.switchMode === 'restart' ? 'on' : ''} onClick={() => setSettings({ switchMode: 'restart' })}>처음부터</button>
+          <button className={st.switchMode === 'resume' ? 'on' : ''} onClick={() => setSettings({ switchMode: 'resume' })}>이어서</button>
+        </div>
       </div>
       <div className="set-row">
         <div className="l"><b>플레이어 표시</b><small>끄면 사이트에서 BGM 플레이어가 사라짐</small></div>
-        <KToggle checked={state.settings.enabled} onChange={v => setSettings({ enabled: v })} />
+        <KToggle checked={st.enabled} onChange={v => setSettings({ enabled: v })} />
       </div>
       <div className="set-row">
         <div className="l"><b>재생 방식</b><small>자동: 접속 후 처음 클릭/키 입력하는 순간 재생 (브라우저 정책상 완전 무동작 자동재생은 불가) · 수동: 재생 버튼을 눌러야 재생</small></div>
         <div className="mini-seg">
-          <button className={state.settings.autoplay ? 'on' : ''}
+          <button className={st.autoplay ? 'on' : ''}
             onClick={() => setSettings({ autoplay: true })}>접속 시 자동 재생</button>
-          <button className={!state.settings.autoplay ? 'on' : ''}
+          <button className={!st.autoplay ? 'on' : ''}
             onClick={() => setSettings({ autoplay: false })}>버튼 눌러야 재생</button>
         </div>
       </div>

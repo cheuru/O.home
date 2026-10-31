@@ -63,6 +63,12 @@ export interface ThemeVars {
   ddShadow?: number;
   // 드롭섀도우 색 (블록·드롭다운 공통, 기본 검정)
   shColor?: string;
+  // 메인 외 화면 배경 따로 지정 (친구 ThemeProvider 대응) — subBgOn이 켜져 있으면 '/' 아닌 화면에서 이 값을 쓴다
+  subBgOn?: boolean; subBgType?: 'gradient' | 'image';
+  subBgG1?: string; subBgG2?: string; subBgAngle?: number;
+  subBgImageId?: string; bgBlurSub?: number;
+  // 페이지 타이틀 그림자 (친구 ThemeProvider 대응)
+  pageTitleShadow?: boolean; pageTitleShadowColor?: string; pageTitleShadowAmt?: number;
 }
 
 export interface ThemeState {
