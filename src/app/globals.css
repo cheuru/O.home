@@ -2706,3 +2706,33 @@ body.rs-full .page-rel-detail.rs-on .rs{margin-top:0!important}
 @keyframes rxPan{from{transform:scale(1.14) translateX(-5%)}to{transform:scale(1.14) translateX(5%)}}
 @keyframes rxCard{0%{opacity:0;clip-path:inset(0 0 100% 0);transform:translateY(34px)}60%{opacity:1}100%{opacity:1;clip-path:inset(0);transform:none}}
 @keyframes rxDraw{to{stroke-dashoffset:0}}
+
+/* ---------- 캐릭터 상세 스테이지 본체(.cs) — 친구 chars-rels.css에 빠져 있던 기본 규칙 ----------
+   .cs 는 좌측 정보(.cs-left) · 가운데 그림(.cs-bg) · 우측 링크(.cs-right)가 모두 기대는 바깥 틀.
+   기준 위치(position)와 --cs-* 변수가 없으면 그림과 글이 전부 화면 왼쪽 위로 몰린다.
+   PC(961px~)는 화면 전체를 차지하는 fixed, 모바일은 위에서 아래로 쌓이는 일반 흐름. */
+.cs{
+  --cs-px:clamp(32px,4vw,96px);
+  --cs-top:clamp(128px,12.5vh,150px);
+  --cs-floor:clamp(36px,6vh,64px);
+  --cs-bottom:calc(var(--cs-floor) + 70px);
+  --cs-accent:var(--char-theme,var(--accent,#e0668c));
+  position:relative;
+}
+@media (min-width:961px){
+  .cs{position:fixed;inset:0;z-index:1;overflow:hidden}
+}
+/* 글자색 — data-ink: light = 밝은 글자(어두운 배경) · dark = 어두운 글자(밝은 배경).
+   직접 지정한 색은 page.tsx가 인라인으로 --cs-body 를 덮어쓴다 */
+.cs[data-ink="light"]{
+  --cs-body:#fff;--cs-body-sh:0 1px 10px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.35);
+  --ink:#fff;--sub:rgba(255,255,255,.74);--faint:rgba(255,255,255,.52);--line:rgba(255,255,255,.28);
+}
+.cs[data-ink="dark"]{
+  --cs-body:#16191f;--cs-body-sh:0 1px 10px rgba(255,255,255,.6),0 0 2px rgba(255,255,255,.4);
+  --ink:#16191f;--sub:rgba(22,25,31,.74);--faint:rgba(22,25,31,.52);--line:rgba(22,25,31,.2);
+}
+/* 그림 그림자 — 자동은 .cs-art 기본값(어두운 그림자) 그대로 */
+.cs[data-art-sh="dark"]{--cs-art-sh:0 14px 34px rgba(0,0,0,.6)}
+.cs[data-art-sh="light"]{--cs-art-sh:0 0 28px rgba(255,255,255,.6)}
+.cs[data-art-sh="none"]{--cs-art-sh:0 0 0 transparent}
