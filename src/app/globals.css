@@ -2736,3 +2736,4 @@ body.rs-full .page-rel-detail.rs-on .rs{margin-top:0!important}
 .cs[data-art-sh="dark"]{--cs-art-sh:0 14px 34px rgba(0,0,0,.6)}
 .cs[data-art-sh="light"]{--cs-art-sh:0 0 28px rgba(255,255,255,.6)}
 .cs[data-art-sh="none"]{--cs-art-sh:0 0 0 transparent}
+.page-rel-detail.rs-on .rs{height:calc(100vh - 58px);min-height:560px}
