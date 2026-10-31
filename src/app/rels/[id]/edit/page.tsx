@@ -4,10 +4,9 @@
 import React, { Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { useLocalList, newId } from '@/lib/postStore';
+import { useLocalList } from '@/lib/postStore';
 import { Character, CHAR_SEED, Relation, REL_SEED, findByKey } from '@/lib/charStore';
-import { usePageBgm } from '@/lib/bgmStore';
-import { RelForm, type AddMemberInput } from '@/components/rels/RelForm';
+import { RelForm } from '@/components/rels/RelForm';
 import { useToast } from '@/components/ui/Toast';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
 
@@ -19,31 +18,11 @@ function RelEditInner() {
   const params = useSearchParams();
   const auId = params.get('au') ?? undefined;
   const [rels, setRels, loaded] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
-  const [chars, setChars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
 
   // 별명 주소로도 열린다 (v2.0 사용자 요청)
   const rel = findByKey(rels, id);
   const auObj = auId ? rel?.aus.find(a => a.id === auId && a.id !== 'base') : undefined;
-  // 수정 화면에서도 이 자관에 지정해 둔 BGM을 들을 수 있게 — 상세와 같은 키라 상세에서 이어서 들린다
-  usePageBgm(loaded && isAdmin && rel ? `rel:${rel.id}` : undefined, loaded && isAdmin && rel ? rel.bgm : undefined);
-  // ADD CHARACTER — 자관 상세의 「멤버 추가」와 같은 처리. 폼에 적던 내용은 건드리지 않고 멤버만 바로 저장한다
-  const addMember = (a: AddMemberInput): boolean => {
-    if (!rel) return false;
-    let cid = a.mode === 'exist' ? a.charId : '';
-    if (a.mode === 'new') {
-      const nc: Character = {
-        id: newId(), name: a.name, sub: a.sub, color: a.color,
-        colors: [], specs: [], tabs: [],
-        basicHtml: '', visibility: 'public', thumbClass: '', own: false,
-        grants: a.grants.length ? a.grants : undefined,
-      };
-      setChars([...chars, nc]);
-      cid = nc.id;
-    }
-    if (!cid || rel.members.some(m => m.charId === cid)) return false;
-    setRels(rels.map(r => (r.id === rel.id ? { ...r, members: [...r.members, { charId: cid, quote: a.quote, keywords: [], desc: '', palette: [] }] } : r)));
-    return true;
-  };
   if (!loaded) return <section className="page" />;
   if (!isAdmin || !rel) {
     return (
@@ -63,34 +42,24 @@ function RelEditInner() {
         initial={rel}
         auId={auObj?.id}
         myChars={chars.filter(c => c.own)}
-        addCandidates={chars.filter(c => !rel.members.some(m => m.charId === c.id))}
-        onAddMember={addMember}
         memberNames={Object.fromEntries(rel.members.map(m => [m.charId, chars.find(c => c.id === m.charId)?.name ?? m.charId]))}
         onCancel={() => router.push(`/rels/${rel.id}`)}
         existingIds={rels.filter(r => r.id !== rel.id).flatMap(r => [r.id, ...(r.slug ? [r.slug] : [])])}
-        onSave={(v, dest) => {
-          // 다인관 멤버 순서 (v6.7) — 자관 공통 멤버 목록을 설정에서 정한 순서로. AU 편집에서는 건드리지 않는다
-          const applyOrder = (x: Relation): Relation => {
-            if (auObj || !v.memberOrder) return x;
-            const pos = new Map(v.memberOrder.map((id, i) => [id, i]));
-            return { ...x, members: [...x.members].sort((a, b) => (pos.get(a.charId) ?? 999) - (pos.get(b.charId) ?? 999)) };
-          };
-          setRels(rels.map(r => (r.id === rel.id ? applyOrder({
+        onSave={v => {
+          setRels(rels.map(r => (r.id === rel.id ? {
             ...r,
             name: v.name, kind: v.kind, visibility: v.visibility,
             // 폰트는 AU 편집이면 그 AU에만 (v2.0 사용자 제보 — 여태 원본에 저장돼 전체가 같이 바뀌었다)
-            ...(auObj ? {} : { fontId: v.fontId, bodyFontId: v.bodyFontId, titleSize: v.titleSize }),
+            ...(auObj ? {} : { fontId: v.fontId, bodyFontId: v.bodyFontId }),
             // 헤더는 AU 편집이면 그 AU에만 저장 — base 헤더는 유지 (v1.9 AU별 헤더 분리)
-            ...(auObj ? {} : { headerImgId: v.headerImgId, headerCrop: v.headerCrop, headerBlur: v.headerBlur, slug: v.slug }),
+            ...(auObj ? {} : { headerImgId: v.headerImgId, headerCrop: v.headerCrop, slug: v.slug }),
             // 페이지 테마 — AU 편집이면 그 AU에만 (base 테마는 유지, v1.9)
             ...(auObj ? {} : { themeMode: v.themeMode, themeColor: v.themeColor, themeTone: v.themeTone, illuBg: v.illuBg, illuOn: v.illuOn, nameColor: v.nameColor, cpColor: v.cpColor, cpTagBg: v.cpTagBg, cpTagFg: v.cpTagFg,
                 nameShadowColor: v.nameShadowColor, nameShadow: v.nameShadow,
                 headerBgG1: v.headerBgG1, headerBgG2: v.headerBgG2, headerBgAngle: v.headerBgAngle,
                 pageBgG1: v.pageBgG1, pageBgG2: v.pageBgG2, pageBgAngle: v.pageBgAngle }),
             // CP/문답 숨김은 자관 전체 설정(AU 폼에는 없음) · 전신 앞뒤는 AU면 그 AU에만 (v2.0)
-            ...(auObj ? {} : { detailLayout: v.detailLayout, deco: v.deco, decoBg: v.decoBg, decoFontId: v.decoFontId, decoScript: v.decoScript, decoGhost: v.decoGhost,
-                cp: v.cp, qaHide: v.qaHide, linkBoard: v.linkBoard, bgm: v.bgm, leftBoard: v.leftBoard, fullFront: v.fullFront ?? r.fullFront,
-                heroLayout: v.heroLayout ?? r.heroLayout }),
+            ...(auObj ? {} : { cp: v.cp, qaHide: v.qaHide, fullFront: v.fullFront ?? r.fullFront }),
             illustMode: v.kind === 'pair' ? r.illustMode : 'one',
             // 전신 크기·위치·한마디·대사 색 — **AU를 편집 중이면 자관 공통을 건드리지 않는다**
             // (v2.0 사용자 발견: AU에서 고치면 다른 AU 페이지까지 같이 바뀌던 것.
@@ -105,9 +74,6 @@ function RelEditInner() {
                 quote: v.quotes?.[m.charId] ?? m.quote,
                 nameSize: v.nameSizes?.[m.charId] ?? m.nameSize,
                 nameBold: v.nameBolds?.[m.charId] ?? m.nameBold,
-                heroNameSize: v.heroNameSizes?.[m.charId] ?? m.heroNameSize,
-                badgeAlign: v.badgeAligns?.[m.charId] ?? m.badgeAlign,
-                badgeTextAlign: v.badgeTextAligns?.[m.charId] ?? m.badgeTextAlign,
                 quoteColor: v.quoteColors?.[m.charId]?.fg ?? m.quoteColor,
                 quoteMarkColor: v.quoteColors?.[m.charId]?.mark ?? m.quoteMarkColor,
               }))
@@ -119,12 +85,8 @@ function RelEditInner() {
                   ...a, arts: v.arts, catchphrase: v.catchphrase,
                   // AU별 자관명 (v2.0 사용자 요청) — 비우면 자관 이름 그대로 쓰게 아예 지운다
                   name: v.auName?.trim() ? v.auName.trim() : undefined,
-                  cp: v.cp,   // AU별 CP/NCP 배지 — 저장이 빠져 있어 AU에서 바꿔도 반영되지 않았다
-                  galleryTags: v.auGalleryTags && v.auGalleryTags.length ? v.auGalleryTags : undefined,
                   // AU별 폰트·전신 앞뒤 (v2.0 사용자 제보) — 원본이 아니라 이 AU에 담는다
-                  fontId: v.fontId, bodyFontId: v.bodyFontId, titleSize: v.titleSize, fullFront: v.fullFront,
-                  // AU별 히어로 레이어·스티커·제목/이름 배치 (v5.6) — 원본·다른 AU는 건드리지 않는다
-                  heroLayout: v.heroLayout ?? a.heroLayout,
+                  fontId: v.fontId, bodyFontId: v.bodyFontId, fullFront: v.fullFront,
                   // AU별 색·배경 (v2.0 사용자 요청) — 「직접 지정」을 끄면 undefined가 되어
                   // 자관 값으로 되돌아간다(auStyle이 묶음 단위로 판정한다)
                   style: {
@@ -144,16 +106,12 @@ function RelEditInner() {
                     quote: v.quotes?.[m.charId],
                     nameSize: v.nameSizes?.[m.charId],
                     nameBold: v.nameBolds?.[m.charId],
-                    heroNameSize: v.heroNameSizes?.[m.charId],
-                    badgeAlign: v.badgeAligns?.[m.charId],
-                    badgeTextAlign: v.badgeTextAligns?.[m.charId],
                     quoteColor: v.quoteColors?.[m.charId]?.fg,
                     quoteMarkColor: v.quoteColors?.[m.charId]?.mark,
                   }])),
                   // AU별 헤더 (v1.9) — 제거하면 "없음 명시"(null): base 헤더로 되돌아가지 않음
                   headerImgId: v.headerRemoved ? undefined : v.headerImgId,
                   headerCrop: v.headerRemoved ? undefined : v.headerCrop,
-                  headerBlur: v.headerRemoved ? undefined : v.headerBlur,
                   // AU별 페이지 테마 — 기존 따라가기면 미지정 (v1.9)
                   theme: v.themeFollow ? undefined : { mode: v.themeMode, color: v.themeColor, tone: v.themeTone },
                   fulls: v.fulls
@@ -173,18 +131,15 @@ function RelEditInner() {
                       quote: v.quotes?.[m.charId] ?? m.quote,
                       nameSize: v.nameSizes?.[m.charId] ?? m.nameSize,
                       nameBold: v.nameBolds?.[m.charId] ?? m.nameBold,
-                heroNameSize: v.heroNameSizes?.[m.charId] ?? m.heroNameSize,
-                badgeAlign: v.badgeAligns?.[m.charId] ?? m.badgeAlign,
-                badgeTextAlign: v.badgeTextAligns?.[m.charId] ?? m.badgeTextAlign,
                       quoteColor: v.quoteColors?.[m.charId]?.fg ?? m.quoteColor,
                       quoteMarkColor: v.quoteColors?.[m.charId]?.mark ?? m.quoteMarkColor,
                     })),
                   }
                   : {}),
               }),
-          }) : r)));
+          } : r)));
           toast('저장되었습니다');
-          router.push(dest ?? `/rels/${rel.id}`);
+          router.push(`/rels/${rel.id}`);
         }}
       />
     </section>

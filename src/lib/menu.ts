@@ -26,8 +26,6 @@ export const FEATURES: { href: string; label: string }[] = [
   { href: '/diary', label: '다이어리' },
   { href: '/threads', label: '감상타래' },
   { href: '/memo', label: '메모장' },
-  { href: '/dressup', label: '옷입히기' },
-  { href: '/myroom', label: '마이룸' },
   { href: '/guest', label: '방명록' },
   { href: '/intro', label: '소개' },
 ];

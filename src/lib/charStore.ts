@@ -15,143 +15,22 @@ export interface CharTab {
   title: string;
   subtitle?: string;     // 제목 아래 작은 글씨 (선택)
   html: string;          // HTML 에디터 내용 (스크립트 불허 — 렌더 시 sanitize)
-  /** 이 탭 전용 TRPG 룰 이름 — 선택하면 기본 정보 항목과 같은 방식으로 룰별 정보란(specs)을
-   *  이 탭에도 띄울 수 있다(캐릭터 정보란 룰별 항목 기능, ADD TAB에도 동일 적용). 미선택 시 기존처럼
-   *  HTML 본문(html)만 있는 자유 탭 그대로 동작한다. */
-  rule?: string;
-  specs?: import('./charRuleConfig').Spec[];
-  /** 이 탭 전용 아트(상세 화면 좌측 대표 아트 대체) — 목록 대표·썸네일은 탭에서 바꿀 수 없어 따로
-   *  thumbId 개념 없이 전부 "추가 아트"로만 다룬다 (v2.4 ADD TAB 요청) */
-  arts?: string[];
 }
-
-/** 캐릭터 갤러리 사진 한 장 — 갤러리 게시판 글쓰기와 같은 첨부 방식(v3.3):
- *  crop = ✂ 썸네일 영역(카드 4:3), original = 원본/최적화 선택(기본 원본) */
-export interface GalleryImg { ref: string; artist?: string; crop?: import("@/components/ui/CropEditor").CropValue; original?: boolean }
-
-/** 캐릭터 갤러리의 사진 묶음 하나 (v3.4) — 갤러리 게시판 글과 같은 항목:
- *  제목·유형(로그/단일/단일(세로))·사진들·설명·태그·제작일·공개범위·접기 */
-export interface GalleryPost {
-  id: string;
-  title: string;
-  type: 'log' | 'single' | 'vlist';
-  images: GalleryImg[];
-  desc: string;
-  tags?: string[];
-  madeDate?: string;
-  date: string;
-  visibility: Visibility;
-  fold?: { type: 'spoiler' | 'adult' | 'custom'; label?: string } | null;
-  /** 표시 전용(저장 안 함) — 자관 갤러리가 태그 연동으로 가져온 묶음이면 원래 캐릭터 이름 */
-  from?: string;
-}
-
-/** 캐릭터의 갤러리 묶음 목록 — 새 방식(galleryPosts)이 있으면 그대로,
- *  예전에 사진만 쌓아 둔 갤러리(gallery)는 사진 한 장 = 단일 묶음 하나로 바꿔 보여준다 */
-export function galleryPostsOf(c: { gallery?: GalleryImg[]; galleryPosts?: GalleryPost[] }): GalleryPost[] {
-  if (c.galleryPosts) return c.galleryPosts;
-  return (c.gallery ?? []).map((g, i) => ({
-    id: `lg${i}`, title: g.artist || `${i + 1}번째 그림`, type: 'single' as const,
-    images: [g], desc: '', date: '', visibility: 'public' as Visibility, fold: null,
-  }));
-}
-/** 갤러리 기능이 켜져 있는가 (빈 갤러리 포함) */
-export const hasGallery = (c: { gallery?: GalleryImg[]; galleryPosts?: GalleryPost[] }) =>
-  c.galleryPosts !== undefined || c.gallery !== undefined;
-
-/** 상세 배경의 「필기체 글씨」 — 큰 이름 글씨 위에 다른 색·다른 폰트로 겹쳐 쓰는 글씨 (처음 나타날 때 써 내려가는 효과) */
-export interface DecoScript {
-  text?: string;      // 비우면 「이름 다른 표기」
-  fontId?: string;    // 필기체로 쓸 폰트
-  color?: string;     // 비우면 포인트색
-  size: number;       // 글씨 크기 (화면 높이의 %, 기본 22)
-  x: number;          // 가로 위치 (화면 폭의 %, 가운데=50)
-  y: number;          // 세로 위치 (화면 높이의 %, 기본 36)
-  rot: number;        // 기울기 (도)
-  blur?: number;      // 번짐 (px, 기본 0)
-}
-export const DEFAULT_DECO_SCRIPT: DecoScript = { size: 22, x: 52, y: 36, rot: -4 };
-
-/** 상세 배경의 큰 이름 글씨 위치·크기 */
-export interface DecoGhost {
-  x: number;          // 가로 위치 (화면 폭의 %, 가운데=50)
-  y: number;          // 세로 위치 (화면 높이의 %, 기본 30)
-  scale: number;      // 크기 (기본 크기 대비 %, 기본 100)
-  color?: string;     // 글씨 색 (자관 스테이지 — 비우면 테마에 맞춰 자동)
-  opacity?: number;   // 불투명도 % (자관 스테이지 — 기본 100)
-}
-export const DEFAULT_DECO_GHOST: DecoGhost = { x: 50, y: 30, scale: 100 };
 
 export interface Character {
   id: string;
   name: string;          // 대표 이름 (전용 폰트 적용 대상)
   sub: string;           // 한글명 · 소속 한 줄
-  /** 캐릭터 이름의 다른 표기 (선택) — 상세 화면 이름 아래에 작게 표시. 비우면 표시하지 않는다 */
-  altName?: string;
-  /** 상세(스테이지) 소개 본문 글자색 — 비우거나 'auto'면 배경 밝기를 보고 자동(기본),
-   *  'light'/'dark'는 밝은/어두운 글자로 고정, 'custom'이면 bodyInkColor 그대로 */
-  bodyInk?: 'auto' | 'light' | 'dark' | 'custom';
-  bodyInkColor?: string;
-  /** 상세(스테이지) 아트 그림자 — 비우거나 'auto'면 배경이 밝을 때 밝은 그림자·어두울 때 어두운 그림자, 'dark'/'light'는 고정, 'none'은 그림자 없음 */
-  artShadow?: 'auto' | 'dark' | 'light' | 'none';
-  /** 상세(스테이지) 배경 장식 (대각 띠·원·십자 표식 등) — 비우면 켜짐, 'off'면 장식 없음.
-   *  색은 포인트색, 바탕은 밝은 테마=흰색 계열·어두운 테마=검은색 계열 */
-  deco?: 'on' | 'off';
-  /** 배경 이미지를 등록했을 때 — 비우면 'full'(이미지는 전체 배경, 장식은 흰색/검은색), 'band'면 이미지를 장식(뒤쪽 큰 반원) 안에 넣고 나머지는 포인트색 */
-  decoBg?: 'full' | 'band';
-  /** 배경 장식의 고스트 글씨(이름 다른 표기) 폰트 — 비우면 이름 폰트와 같게 */
-  decoFontId?: string;
-  /** 큰 이름 글씨 위에 겹치는 필기체 글씨 — 없으면(비우면) 쓰지 않는다 */
-  decoScript?: DecoScript | null;
-  /** 큰 이름 글씨 위치·크기 — 없으면 기본 자리 */
-  decoGhost?: DecoGhost | null;
   color: string;         // 대표 테마색 (말풍선·리스트 점)
   // 상세 페이지 테마 (v1.9 사용자 확정) — custom이면 대표 테마색으로 홈 팔레트 임시 전환 (4.18 방식)
   themeMode?: 'default' | 'custom';
-  /** 캐릭터 테마색일 때 만들 팔레트 — 'site'(기본)는 홈페이지 지금 톤 그대로, 'auto'는 대표 테마색 밝기를 보고 밝은/어두운 테마 중 알맞은 쪽, 'dark'/'light'는 고정 */
-  themeTone?: 'site' | 'auto' | 'dark' | 'light';
   colors: ColorChip[];   // 테마 컬러 나열
   /** 테마컬러 점 테두리 (v2.0 사용자 요청) — 'none' = 없음 · hex = 그 색으로 1px.
    *  미지정이면 지금까지와 같은 옅은 테두리(안 정한 홈은 모습이 안 바뀐다) */
   colorBd?: string;
   colorTipMode?: 'hex' | 'both' | 'label'; // 색 점 툴팁 표기: hex / 이름+hex / 이름만
-  specs: import('./charRuleConfig').Spec[];
-  /** 기본 정보 항목에 적용된 TRPG 룰 이름 (v2.1 — 자놀 캐릭터 룰별 정보란).
-   *  미지정/빈 문자열이면 지금까지와 같은 자유 항목(specs) 그대로 동작한다. */
-  rule?: string;
-  /** CHARACTER SHEET 외부 링크 (v2.1) — 룰 선택 여부와 무관하게 항상 편집 가능한 고정 필드 */
-  sheetUrl?: string;
+  specs: { label: string; value: string }[];
   tabs: CharTab[];       // 기본 정보 외 추가 탭
-  /** 캐릭터 갤러리 (v2.5) — 미지정이면 갤러리 기능 자체를 안 쓰는 캐릭터.
-   *  빈 배열이어도 "갤러리 켜짐" 상태이며, /chars/{id}/gallery 에서 그리드+라이트박스로 보여준다.
-   *  AU별로 따로 두지 않고 캐릭터(원본) 하나에만 있다. */
-  gallery?: GalleryImg[];            // (구) 사진만 쌓던 갤러리 — galleryPosts가 생기면 그쪽이 우선
-  /** 사진 묶음 목록 (v3.4) — 있으면 갤러리 기능 켜짐 (빈 배열 포함) */
-  galleryPosts?: GalleryPost[];
-  /** 캐릭터 갤러리에 연동해 보일 자관 갤러리 태그 (v6.3) — 이 캐릭터가 멤버인 자관의 갤러리 묶음 중 이 태그가 달린 것이 함께 보인다 */
-  galleryTagLinks?: string[];
-  /** REL(관계) 탭 (v6.8) — 켜져 있으면 상세 화면에 REL 버튼이 보인다.
-   *  내용은 따로 저장하지 않고 자관(페어·다인관)에서 이 캐릭터가 멤버인 것 +
-   *  직접 지정한 관계(relLinks)를 그때그때 모아 보여준다 (GALLERY·TRPG 탭과 같은 방식) */
-  /** 상세 화면 레이아웃 (v7.0) — 비우면 스테이지(등록한 그림 배경 + 좌 정보 · 우 소개/항목 창), 'classic'이면 예전 좌 아이콘탭·중앙 아트·우 패널 */
-  detailLayout?: 'stage' | 'classic';
-  relEnabled?: boolean;
-  relLinks?: RelLinkItem[];
-  /** 자관 설명 박스에서 고른 자관의 AU — 키 relId, 값 AU id (비우면 자관 원본) */
-  relAu?: Record<string, string>;
-  /** 이 캐릭터의 AU(키 = AU 키)별 관계란 — 지정하면 그 AU 화면에서는 원본 대신 이 값을 쓴다 */
-  auRel?: Record<string, RelSet>;
-  /** 관계 카드 옆 설명 박스의 글 — 키는 카드 키(자관 `rel:<id>` · 직접 지정 `link:<charId>`). RELATIONS 편집 화면에서 고친다 */
-  relNotes?: Record<string, string>;   // 직접 지정한 관계 — 상대 캐릭터 + 꼬리표(예: 라이벌)
-  /** 이 캐릭터 상세 페이지에서만 나오는 BGM (v5.9) — 환경설정 BGM과 같은 구조, 페이지를 나가면 홈페이지 BGM으로 복귀 */
-  bgm?: import('./bgmStore').PageBgm;
-  /** TRPG 참여 세션 탭 (v2.8) — 켜져 있으면 상세 화면에 TRPG 버튼이 보인다.
-   *  실제 세션 목록은 여기 저장하지 않고, 플레이기록 게시판(PlayRecord.charIds)에서
-   *  이 캐릭터 id를 참조하는 기록을 찾아 그때그때 보여준다(단일 출처로 양쪽 자동 반영). */
-  trpgEnabled?: boolean;
-  /** TRPG 탭에서 세션을 보여줄 순서 (v2.9) — PlayRecord id 배열. 여기 없는(새로 연결된)
-   *  기록은 이 목록 뒤에 붙는다. 연결을 끊으면 여기서도 제거해 목록을 깔끔하게 유지한다. */
-  trpgOrder?: string[];
   basicHtml: string;     // 기본 정보 탭의 소개 본문 (HTML)
   visibility: Visibility;
   /** 페이지 주소 별명 (v2.0 사용자 요청) — /chars/{별명}. 만들 때 정하는 주소(id)와 달리
@@ -168,10 +47,6 @@ export interface Character {
    *  같은 크롭을 쓰면 원하는 부분이 안 나온다. 따로 잡으면 상세에서는 이 값을 쓴다. */
   artCrop?: import("@/components/ui/CropEditor").CropValue;
   arts?: string[];       // 아트 목록 (IndexedDB — 첫 장이 대표 풀 아트이자 썸네일 원본)
-  /** 상세 페이지 배경 이미지 (v5.8 사용자 요청) — 자관 배경·환경설정 배경 변경과 같은 방식:
-   *  페이지 전체에 고정·cover로 깔리고 블러(px)만 조절한다. 지정하지 않으면 지금처럼 사이트 배경 그대로 */
-  bgImgId?: string;
-  bgBlur?: number;
   artId?: string;        // (구) 단일 풀 아트
   artUrl?: string;       // (구) 풀 아트 URL
   fontId?: string;       // 전용 폰트 — 이름·타이틀 (5.1)
@@ -189,9 +64,6 @@ export interface Character {
   // 상세 우상단에 AU 리스트가 뜨고, 선택 시 프로필 전체가 이 값으로 전환.
   // 편집은 /chars/[id]/edit?au= — AU 전용 편집 페이지에서 아예 새 프로필처럼 작성 (사용자 확정)
   auProfiles?: Record<string, AuCharProfile>;
-  /** 자관과 무관하게 이 캐릭터가 직접 만든 AU (키 `own:<id>`) — 프로필은 auProfiles 에 같은 키로 담긴다.
-   *  link = 나중에 연결한 자관 AU 키(`relId:auId`). 연결하면 자관 쪽 화면도 이 AU의 프로필을 쓴다. */
-  ownAus?: OwnAu[];
 }
 
 /** AU 캐릭터 프로필 (v1.9 전면 확장) — 이름·키·성별부터 전부 AU별로 달라질 수 있음.
@@ -201,88 +73,34 @@ export interface AuCharProfile {
   arts?: string[];
   name?: string;
   sub?: string;
-  altName?: string;      // 이름 다른 표기 — AU에서 비웠다면 '' 로 저장해 원본 값을 물려받지 않게 한다
-  bodyInk?: 'auto' | 'light' | 'dark' | 'custom';   // 소개 본문 글자색 — AU에서 자동이면 'auto'로 저장해 원본의 지정을 물려받지 않게 한다
-  bodyInkColor?: string;
-  deco?: 'on' | 'off';
-  decoBg?: 'full' | 'band';
-  decoFontId?: string;
-  decoScript?: DecoScript | null;
-  decoGhost?: DecoGhost | null;
-  artShadow?: 'auto' | 'dark' | 'light' | 'none';   // AU도 자기 값을 따로 — 자동이면 'auto'로 저장해 원본의 지정을 물려받지 않게 한다
   color?: string;
   themeMode?: 'default' | 'custom';
-  themeTone?: 'site' | 'auto' | 'dark' | 'light';   // AU도 자기 톤을 따로 — 원본 값을 물려받지 않게 'site'로 저장
   colors?: ColorChip[];
   colorTipMode?: 'hex' | 'both' | 'label';
-  specs?: import('./charRuleConfig').Spec[];
-  rule?: string;
-  sheetUrl?: string;
+  specs?: { label: string; value: string }[];
   tabs?: CharTab[];
   thumbId?: string;
   thumbCrop?: import("@/components/ui/CropEditor").CropValue;
-  bgImgId?: string;      // 상세 배경 이미지 (v5.8) — AU는 자기 배경만, 원본 것을 물려받지 않음
-  bgBlur?: number;
   artCrop?: import("@/components/ui/CropEditor").CropValue;   // 상세 중앙 아트 위치 (v2.0)
   fontId?: string;
   nameSize?: number;     // 상세 큰 이름 크기 px (v2.0)
   nameBold?: boolean;    // 상세 큰 이름 굵게 (v2.0 사용자 요청 — 폰트에 따라 볼드가 안 어울린다)
   bodyFontId?: string;
-  /** 서랍(갤러리) — AU별로 따로 (v7.x). galleryOwn=true 로 저장된 AU 프로필은 원본 갤러리를 물려받지 않고 이 값만 쓴다 */
-  galleryOwn?: boolean;
-  galleryPosts?: GalleryPost[];
-  galleryTagLinks?: string[];
-}
-
-/** 캐릭터 테마색으로 만들 페이지 팔레트의 톤 — 'site'/미지정이면 undefined(홈페이지 현재 톤 유지).
- *  'auto'는 대표 테마색이 밝으면 밝은 테마, 어두우면 어두운 테마를 만든다 (상대 휘도 0.4 기준 — 파스텔·노랑 계열은 밝은 쪽) */
-export function resolveThemeTone(tone: Character['themeTone'], color: string | undefined): 'dark' | 'light' | undefined {
-  if (tone === 'dark' || tone === 'light') return tone;
-  if (tone !== 'auto') return undefined;
-  const m = /^#?([0-9a-f]{6})$/i.exec((color ?? '').trim()) ?? /^#?([0-9a-f]{3})$/i.exec((color ?? '').trim());
-  if (!m) return undefined;
-  const h = m[1].length === 3 ? m[1].split('').map(x => x + x).join('') : m[1];
-  const lin = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-  const lum = 0.2126 * lin(parseInt(h.slice(0, 2), 16)) + 0.7152 * lin(parseInt(h.slice(2, 4), 16)) + 0.0722 * lin(parseInt(h.slice(4, 6), 16));
-  return lum > 0.4 ? 'light' : 'dark';
-}
-
-export interface OwnAu { id: string; label: string; link?: string }
-export const ownAuKey = (id: string) => `own:${id}`;
-
-/** AU 키에 해당하는 프로필 — 직접 키가 없으면 그 자관 AU에 연결된 내 AU의 프로필 */
-export function auProfileOf(c: Character, key?: string | null): AuCharProfile | undefined {
-  if (!key) return undefined;
-  const direct = c.auProfiles?.[key];
-  if (direct) return direct;
-  const o = c.ownAus?.find(a => a.link === key);
-  return o ? c.auProfiles?.[ownAuKey(o.id)] : undefined;
 }
 
 /** AU 프로필을 합성한 표시용 캐릭터 — AU에서 지정한 필드만 대체 (상세·편집 프리필 공용) */
 export function charWithAu(c: Character, auKey?: string | null): Character {
-  const p = auProfileOf(c, auKey);
+  const p = auKey ? c.auProfiles?.[auKey] : undefined;
   if (!p) return c;
   return {
     ...c,
     ...(p.name !== undefined ? { name: p.name } : {}),
     ...(p.sub !== undefined ? { sub: p.sub } : {}),
-    ...(p.altName !== undefined ? { altName: p.altName } : {}),
-    ...(p.bodyInk !== undefined ? { bodyInk: p.bodyInk, bodyInkColor: p.bodyInkColor } : {}),
-    ...(p.artShadow !== undefined ? { artShadow: p.artShadow } : {}),
-    ...(p.deco !== undefined ? { deco: p.deco } : {}),
-    ...(p.decoBg !== undefined ? { decoBg: p.decoBg } : {}),
-    ...(p.decoFontId !== undefined ? { decoFontId: p.decoFontId } : {}),
-    ...(p.decoScript !== undefined ? { decoScript: p.decoScript } : {}),
-    ...(p.decoGhost !== undefined ? { decoGhost: p.decoGhost } : {}),
     ...(p.color !== undefined ? { color: p.color } : {}),
     ...(p.themeMode !== undefined ? { themeMode: p.themeMode } : {}),
-    ...(p.themeTone !== undefined ? { themeTone: p.themeTone } : {}),
     ...(p.colors !== undefined ? { colors: p.colors } : {}),
     ...(p.colorTipMode !== undefined ? { colorTipMode: p.colorTipMode } : {}),
     ...(p.specs !== undefined ? { specs: p.specs } : {}),
-    ...(p.rule !== undefined ? { rule: p.rule } : {}),
-    ...(p.sheetUrl !== undefined ? { sheetUrl: p.sheetUrl } : {}),
     ...(p.tabs !== undefined ? { tabs: p.tabs } : {}),
     ...(p.basicHtml !== undefined ? { basicHtml: p.basicHtml } : {}),
     // 이미지는 **물려받지 않는다** (v2.0 사용자 요청) — AU 프로필에 안 넣었으면 비워 둔다.
@@ -293,12 +111,8 @@ export function charWithAu(c: Character, auKey?: string | null): Character {
     artId: p.arts?.[0],
     thumbId: p.thumbId,
     thumbCrop: p.thumbCrop,
-    // 배경 이미지도 그림이라 물려받지 않는다 (v5.8) — 자관 배경이 AU별로 완전 분리된 것과 같은 규칙
-    bgImgId: p.bgImgId,
-    bgBlur: p.bgBlur,
     ...(p.fontId !== undefined ? { fontId: p.fontId } : {}),
     ...(p.bodyFontId !== undefined ? { bodyFontId: p.bodyFontId } : {}),
-    ...(p.galleryOwn ? { gallery: undefined, galleryPosts: p.galleryPosts, galleryTagLinks: p.galleryTagLinks } : {}),
     // nameSize는 여태 병합에 빠져 있었다 — AU에 저장은 되는데 표시가 base 크기를 따랐다 (v2.0 수정)
     ...(p.nameSize !== undefined ? { nameSize: p.nameSize } : {}),
     ...(p.nameBold !== undefined ? { nameBold: p.nameBold } : {}),
@@ -324,9 +138,6 @@ export function charGrant(c: Character, userId?: string): 'play' | 'edit' | null
 
 export interface RelMember {
   charId: string;
-  /** 캐릭터의 공개 표시용 사본(이름·색 등) — 캐릭터가 나만보기/멤버공개라 목록에서 빠지는 방문자에게도 자관 페이지에 이름이 보이게.
-   *  관리자가 자관 페이지를 열 때 자동으로 갱신된다 */
-  snap?: { name: string; sub?: string; fontId?: string; color?: string; thumbClass?: string; colors?: ColorChip[] };
   quote: string;                 // 캐릭터별 한마디
   keywords: string[];            // 키워드 뱃지
   desc: string;                  // 소개글
@@ -343,12 +154,6 @@ export interface RelMember {
   nameBold?: boolean;
   /** 멤버 카드 이름 크기 px (v2.0) — 기본 17. 카드 폭이 좁아 이름마다 알맞은 크기가 다르다 */
   nameSize?: number;
-  /** PC 상세 전신 히어로의 캐릭터 이름 크기 px — 미지정이면 창 폭에 맞춰 자동(clamp). 위 nameSize(멤버 카드)와 별개 */
-  heroNameSize?: number;
-  /** (구) 이름·배지 묶음 세로 위치 — 설정 화면에서는 없앴다(전신 드래그로 자유 배치). 예전에 저장된 값만 그대로 따른다 */
-  badgeAlign?: 'top' | 'mid' | 'bottom';
-  /** 전신 위 이름·부제·배지 묶음의 가로 정렬(v6.4) — 이름 기준 좌측/가운데/우측. 없으면 왼쪽 캐릭터는 좌측, 오른쪽 캐릭터는 우측 */
-  badgeTextAlign?: 'left' | 'center' | 'right';
   quoteColor?: string;           // 히어로 대사 글씨색 (페어, v1.9 — 기본 #d7dae0)
   quoteMarkColor?: string;       // 히어로 대사 따옴표색 (기본 포인트 소프트)
 }
@@ -423,10 +228,6 @@ export interface RelAuMember {
   fullOffY?: number;
   nameSize?: number;
   nameBold?: boolean;
-  heroNameSize?: number;
-  badgeAlign?: 'top' | 'mid' | 'bottom';
-  /** 전신 위 이름·부제·배지 묶음의 가로 정렬(v6.4) — 이름 기준 좌측/가운데/우측. 없으면 왼쪽 캐릭터는 좌측, 오른쪽 캐릭터는 우측 */
-  badgeTextAlign?: 'left' | 'center' | 'right';
   quoteColor?: string;
   quoteMarkColor?: string;
   /** 멤버 카드 얼굴칸 위치 — AU마다 따로 (v2.0 사용자 제보 — 원본에서 바꾸면 AU도 같이 바뀌었다).
@@ -515,62 +316,6 @@ export function fullShadow(color?: string, strength?: number, geom = '0 8px 18px
   return `drop-shadow(${geom} rgba(${r},${g},${b},${a}))`;
 }
 
-/**
- * 2인 전신 히어로의 레이어·배치 (v5.6 사용자 요청 — 「메인 이미지 · 레이어」).
- *
- * 설정의 레이어 목록에서 손잡이로 끌어 앞뒤를 바꾸고, 미리보기에서 제목·이름·배지·스티커를
- * 직접 끌어 배치한다. 값은 모두 **히어로 영역 대비 %** — 상세 화면과 미리보기가 같은 비라서
- * 어느 창 크기에서도 같은 자리에 놓인다.
- *
- * 레이어 id: 'ui'(제목·이름·배지 같은 글자 묶음) · `full:${charId}`(전신) · `st:${stickerId}`(스티커)
- * order 는 **아래 → 위** 순서. 없으면 예전 방식(fullFront)대로 — 앞 캐릭터가 위, 글자는 맨 위.
- */
-export interface HeroSticker {
-  id: string;
-  ref: string;   // 이미지 blob id
-  x: number;     // 중심 가로 위치 (히어로 폭 대비 %)
-  y: number;     // 중심 세로 위치 (히어로 높이 대비 %)
-  w: number;     // 폭 (히어로 폭 대비 %)
-}
-export interface HeroLayout {
-  order?: string[];
-  stickers?: HeroSticker[];
-  /** 제목(CP 뱃지 + 자관명) 묶음의 기본 자리에서 옮긴 거리 — 히어로 폭/높이 대비 % */
-  title?: { x: number; y: number };
-  /** 멤버별 이름·배지 묶음의 기본 자리에서 옮긴 거리 — 히어로 폭/높이 대비 % */
-  names?: Record<string, { x: number; y: number }>;
-  /** 스테이지 가운데 INFO(자관명·서랍 바로가기)의 기본 자리에서 옮긴 거리 — 히어로 폭/높이 대비 % */
-  info?: { x: number; y: number };
-  /** 눈 버튼으로 숨긴 레이어 — 'ui' · 'full:{charId}' · 'st:{id}' · 'tile'(장식 판) · 'ghost'(큰 자관명) · 'script'(필기체) · 'info'(가운데 INFO·서랍) */
-  hidden?: string[];
-  /** true면 이름 밑 배지 하위 항목(키워드·기본 정보·컬러 점)을 숨기고 이름·프로필 이동만 보인다 (스테이지) */
-  badgeOff?: boolean;
-}
-
-export const HERO_UI_ID = 'ui';
-export const heroFullId = (charId: string) => `full:${charId}`;
-export const heroStickerId = (id: string) => `st:${id}`;
-
-/** 레이어 순서(아래 → 위)를 지금 있는 항목에 맞게 정리한다 — 저장된 순서를 우선하고,
- *  없어진 항목은 빼고, 새로 생긴 항목은 알맞은 자리에 채운다. */
-export function heroOrder(layout: HeroLayout | undefined, charIds: string[], fullFront?: string): string[] {
-  const stickers = (layout?.stickers ?? []).map(s => heroStickerId(s.id));
-  // 기본: 뒤 캐릭터 → 앞 캐릭터 → 글자 (앞 캐릭터는 fullFront, 없으면 오른쪽)
-  const front = fullFront && charIds.includes(fullFront) ? fullFront : charIds[charIds.length - 1];
-  const fullsDefault = [...charIds.filter(c => c !== front), ...(front ? [front] : [])].map(heroFullId);
-  const valid = new Set([HERO_UI_ID, ...charIds.map(heroFullId), ...stickers]);
-  const saved = (layout?.order ?? []).filter(id => valid.has(id));
-  const missing = [...fullsDefault, ...stickers, HERO_UI_ID].filter(id => !saved.includes(id));
-  // 저장된 순서 뒤에 이어 붙인다 — 새로 생긴 항목(방금 올린 스티커 등)은 맨 위에 놓여 가려지지 않는다
-  return [...saved, ...missing];
-}
-
-/** 레이어 순서에서 이 항목의 z-index (히어로 안에서 쓰는 값 — 10부터) */
-export function heroZ(order: string[], id: string): number {
-  const i = order.indexOf(id);
-  return 10 + (i < 0 ? 0 : i);
-}
-
 export interface RelAu {
   id: string;
   label: string;
@@ -581,12 +326,8 @@ export interface RelAu {
    *  미지정이면 자관 기본 폰트 */
   fontId?: string;
   bodyFontId?: string;
-  /** AU별 자관 이름(제목) 크기 px — 미지정이면 자관 기본 */
-  titleSize?: number;
   /** AU별 전신 앞뒤 (v2.0) — AU 편집의 앞으로/뒤로가 원본 배치를 바꾸지 않게. 미지정: 자관 기본 */
   fullFront?: string;
-  /** AU별 히어로 레이어·배치 (v5.6) — AU는 자기 전신·스티커만 쓰므로 자관 것을 물려받지 않는다 */
-  heroLayout?: HeroLayout;
   /** AU별 색·배경 — 없으면 자관 기본 (위 RelAuStyle 설명 참조) */
   style?: RelAuStyle;
   /** AU별 멤버 표시값 — 없으면 자관 기본 (위 RelAuMember 설명 참조) */
@@ -601,39 +342,16 @@ export interface RelAu {
   fulls?: Record<string, string>;  // AU별 전신 이미지 (charId → blob id, 없으면 멤버 공통 전신)
   headerImgId?: string | null;     // AU별 헤더 이미지 (v1.9) — base를 물려받지 않음, 이 AU 것만
   headerCrop?: import("@/components/ui/CropEditor").CropValue;
-  headerBlur?: number;             // AU별 헤더 배경 블러(px) (v5.0)
   // AU별 페이지 테마 (v1.9 사용자 확정) — 미지정이면 base(원본) 테마 따라가기
   theme?: { mode: 'site' | 'custom'; color?: string; tone?: 'dark' | 'light' };
   /** 상세 하단의 역극/로그 연동 리스트 숨김 (v2.0 사용자 요청) — AU마다 따로.
    *  원본(base)의 설정은 aus의 base 항목에 담긴다 */
   hideRp?: boolean;
   hideLog?: boolean;
-  /** 이 AU로 전환했을 때 갤러리 서랍에 보일 사진 태그 — 비우면 자관 기본(자기 묶음 + 자관 연동 태그) */
-  galleryTags?: string[];
 }
 
 export interface Relation {
   id: string;
-  /** 이 자관 페이지에서만 나오는 BGM (v5.9) — 캐릭터와 같은 방식 */
-  bgm?: import('./bgmStore').PageBgm;
-  /** 상세 하단 좌측 칸 — 역극 목록(기본) / 갤러리 (v6.0). 갤러리면 작은 썸네일로 보이고 더보기에서 보기·편집 */
-  /** 상세 화면 구성 — 스테이지(스크롤 인터랙티브, 기본) / 클래식(예전 구성) */
-  detailLayout?: 'stage' | 'classic';
-  /** 스테이지 배경 장식 (캐릭터 상세와 같은 설정) — 'off'면 끔. 큰 도형은 왼쪽 위가 둥근 판 */
-  deco?: 'off';
-  /** 배경 이미지를 등록했을 때 어디에 쓸지 — 비우면 전체 배경, 'band'면 큰 도형 안 */
-  decoBg?: 'band';
-  /** 가운데 자관명(큰 글씨) 폰트 — 비우면 자관 이름 폰트 */
-  decoFontId?: string;
-  /** 필기체 글씨 겹치기 */
-  decoScript?: DecoScript;
-  /** 가운데 자관명(큰 글씨) 위치·크기 — 비우면 기본 배치 */
-  decoGhost?: DecoGhost;
-  leftBoard?: 'rp' | 'gallery';
-  /** 자관 갤러리에 연동해 보일 캐릭터 갤러리 태그 (v6.2) — 이 자관 멤버 캐릭터의 갤러리 묶음 중 이 태그가 달린 것이 함께 보인다 */
-  galleryTagLinks?: string[];
-  /** 자관 갤러리 사진 묶음 (v6.0) — 캐릭터 갤러리와 같은 구조 */
-  galleryPosts?: GalleryPost[];
   /** 페이지 주소 별명 (v2.0 사용자 요청) — /rels/{별명}. 나중에 수정 화면에서 바꿀 수 있다.
    *  참조(AU 프로필 키·로그 연동 등)는 언제나 id로 저장되므로 바꿔도 끊어지지 않는다. */
   slug?: string;
@@ -642,11 +360,9 @@ export interface Relation {
   kind?: 'pair' | 'multi';         // 페어(2인) / 다인(3인+) — 등록 시 선택
   fontId?: string;               // 자관 이름 폰트 (4.5 필수 요구 — 5.1 라이브러리)
   bodyFontId?: string;           // 본문 폰트 — 카드 소개·타임라인·문답 텍스트
-  titleSize?: number;            // 자관 이름(제목) 크기 px — 미지정이면 기본 크기(PC 2인 히어로 22px·그 외 64px)
   arts?: string[];               // 아트 목록 (첫 장 = 대표 = 리스트 썸네일 원본)
   headerImgId?: string;          // 헤더 이미지 (v1.5 — 상단 풀폭 블러 + 페이드아웃)
   headerCrop?: import("@/components/ui/CropEditor").CropValue; // 헤더 이미지 위치 크롭 (원본 무손실)
-  headerBlur?: number;           // 헤더 배경 이미지 블러(px) (v5.0)
   themeMode?: 'site' | 'custom'; // 페이지 테마: 홈페이지 그대로 / 별도 테마컬러 (4.18 방식)
   themeColor?: string;           // 별도 테마컬러 (custom일 때)
   themeTone?: 'dark' | 'light';  // 테마컬러의 다크/라이트 느낌
@@ -676,7 +392,6 @@ export interface Relation {
   illustMode: 'duo' | 'one';     // 2인: 전신 2장 / 일러 1장 (v1.8)
   aus: RelAu[];                  // AU 리스트 (첫 항목 = 원본 base)
   cp?: RelCpTag;                 // 자관 기본 CP/NCP (등록 시 선택, v1.9)
-  heroLayout?: HeroLayout;       // 2인 전신 히어로 레이어·스티커·글자 배치 (v5.6)
   fullFront?: string;            // 전신 모드에서 앞에 보일 캐릭터 id (v1.9 — 미리보기에서 클릭 선택)
   pairRight?: string;            // 페어에서 오른쪽 자리에 둘 캐릭터 id (v2.0 — 없으면 등록 순서대로)
   /** 상세 중앙 일러가 어디를 보여 줄지 (v2.0 사용자 요청) — 리스트 썸네일(thumbCrop)과 별개.
@@ -692,8 +407,6 @@ export interface Relation {
    *  **화면에서 가리는 것일 뿐 완전한 차단이 아니다** — 답변은 공개로 저장돼 있어 주소를 직접
    *  다루는 사람에게는 보일 수 있다. 설정 화면에도 그대로 적어 둔다. */
   qaHide?: boolean;
-  /** 상세 하단에 보일 연동 리스트 — 로그 백업(log) / 세션 게시판(session). 미지정이면 지금까지대로 로그 */
-  linkBoard?: 'log' | 'session';
 }
 
 export const CHAR_SEED: Character[] = [];
@@ -710,196 +423,3 @@ export const findByKey = <T extends { id: string; slug?: string }>(list: T[], ke
 export const charPath = (c: { id: string; slug?: string }) => `/chars/${c.slug?.trim() || c.id}`;
 /** 이 자관의 주소 — 별명을 정했으면 그것, 아니면 id */
 export const relPath = (r: { id: string; slug?: string }) => `/rels/${r.slug?.trim() || r.id}`;
-
-
-/* ---------- 자관 갤러리 ↔ 캐릭터 갤러리 태그 연동 (v6.2) ---------- */
-
-/** 이 자관 멤버 캐릭터들의 갤러리 묶음에 달린 태그 모음 — 연동 태그 고르기용 (많이 쓴 순) */
-export function memberGalleryTags(rel: Relation, chars: Character[]): { tag: string; count: number; names: string[] }[] {
-  const map = new Map<string, { count: number; names: Set<string> }>();
-  for (const m of rel.members) {
-    const c = chars.find(x => x.id === m.charId);
-    if (!c) continue;
-    for (const p of galleryPostsOf(c)) {
-      for (const t of p.tags ?? []) {
-        const e = map.get(t) ?? { count: 0, names: new Set<string>() };
-        e.count += 1; e.names.add(c.name);
-        map.set(t, e);
-      }
-    }
-  }
-  return [...map.entries()]
-    .map(([tag, e]) => ({ tag, count: e.count, names: [...e.names] }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-}
-
-/** 자관 갤러리에 같이 보일 묶음 = 자기 묶음 + 연동 태그가 달린 멤버 캐릭터 묶음.
- *  연동분은 복사하지 않고 캐릭터 쪽 데이터를 그대로 가리킨다(캐릭터에서 고치면 자관에도 반영) —
- *  id는 `캐릭터id:묶음id`, from에 캐릭터 이름. 열람 권한(캐릭터·묶음 공개범위)은 여기서 거른다 */
-export function relGalleryPosts(rel: Relation, chars: Character[], viewer: { isAdmin: boolean; loggedIn: boolean },
-  /** AU로 전환한 상태에서 그 AU가 고른 태그 — 있으면 이 태그가 달린 묶음(자관 자기 것 + 멤버 캐릭터 것)만 보인다. charAuKey = 멤버의 AU 프로필 키 */
-  au?: { tags: string[]; charAuKey?: string | null }): GalleryPost[] {
-  const ok = (v: Visibility) => v === 'public' || (v === 'member' && viewer.loggedIn) || viewer.isAdmin;
-  if (au && au.tags.length > 0) {
-    const has = (p: GalleryPost) => (p.tags ?? []).some(t => au.tags.includes(t));
-    const mine = galleryPostsOf(rel).filter(p => ok(p.visibility) && has(p));
-    const got: GalleryPost[] = [];
-    for (const m of rel.members) {
-      const base = chars.find(x => x.id === m.charId);
-      if (!base || !ok(base.visibility)) continue;
-      const c = charWithAu(base, au.charAuKey);
-      for (const p of galleryPostsOf(c)) {
-        if (!ok(p.visibility) || !has(p)) continue;
-        got.push({ ...p, id: `${c.id}:${p.id}`, from: c.name });
-      }
-    }
-    return [...mine, ...got];
-  }
-  const own = galleryPostsOf(rel).filter(p => ok(p.visibility));
-  const tags = rel.galleryTagLinks ?? [];
-  if (tags.length === 0) return own;
-  const linked: GalleryPost[] = [];
-  for (const m of rel.members) {
-    const c = chars.find(x => x.id === m.charId);
-    if (!c || !ok(c.visibility)) continue;
-    for (const p of galleryPostsOf(c)) {
-      if (!ok(p.visibility)) continue;
-      if (!(p.tags ?? []).some(t => tags.includes(t))) continue;
-      linked.push({ ...p, id: `${c.id}:${p.id}`, from: c.name });
-    }
-  }
-  return [...own, ...linked];
-}
-
-
-/* ---------- 캐릭터 갤러리 ← 자관 갤러리 태그 연동 (v6.3) — 위 자관→캐릭터 연동의 반대 방향 ----------
-   연동으로 가져오는 건 상대 쪽이 직접 올린 묶음(galleryPostsOf)뿐이라, 서로 연동해도 되돌아 꼬리를 물지 않는다 */
-
-/** 이 캐릭터가 멤버인 자관들의 갤러리 묶음에 달린 태그 모음 — 연동 태그 고르기용 */
-export function relGalleryTagsForChar(charId: string | undefined, rels: Relation[]): { tag: string; count: number; names: string[] }[] {
-  if (!charId) return [];
-  const map = new Map<string, { count: number; names: Set<string> }>();
-  for (const r of rels) {
-    if (!r.members.some(m => m.charId === charId)) continue;
-    for (const p of galleryPostsOf(r)) {
-      for (const t of p.tags ?? []) {
-        const e = map.get(t) ?? { count: 0, names: new Set<string>() };
-        e.count += 1; e.names.add(r.name);
-        map.set(t, e);
-      }
-    }
-  }
-  return [...map.entries()]
-    .map(([tag, e]) => ({ tag, count: e.count, names: [...e.names] }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-}
-
-/** 캐릭터 갤러리에 같이 보일 묶음 = 자기 묶음 + 연동 태그가 달린 자관 묶음. id는 `rel~자관id:묶음id`, from에 자관 이름.
- *  canEdit = 이 캐릭터를 편집할 수 있는 사람(관리자·편집 권한) — 나만보기 묶음까지 봄 */
-export function charGalleryPosts(c: Character, rels: Relation[], viewer: { isAdmin: boolean; canEdit: boolean; loggedIn: boolean }): GalleryPost[] {
-  const okOwn = (v: Visibility) => v === 'public' || (v === 'member' && viewer.loggedIn) || viewer.canEdit;
-  const okRel = (v: Visibility) => v === 'public' || (v === 'member' && viewer.loggedIn) || viewer.isAdmin;
-  const own = galleryPostsOf(c).filter(p => okOwn(p.visibility));
-  const tags = c.galleryTagLinks ?? [];
-  if (tags.length === 0) return own;
-  const linked: GalleryPost[] = [];
-  for (const r of rels) {
-    if (!r.members.some(m => m.charId === c.id) || !okRel(r.visibility)) continue;
-    for (const p of galleryPostsOf(r)) {
-      if (!okRel(p.visibility)) continue;
-      if (!(p.tags ?? []).some(t => tags.includes(t))) continue;
-      linked.push({ ...p, id: `rel~${r.id}:${p.id}`, from: r.name });
-    }
-  }
-  return [...own, ...linked];
-}
-
-
-/* ---------- REL(관계) 탭 (v6.8) — 참고: OC-homepage의 관계 탭(페어 자동 목록) ---------- */
-/** 직접 지정한 관계 한 줄 — au = 상대 캐릭터의 AU 키(비우면 상대 원본) */
-export interface RelLinkItem { charId: string; label?: string; au?: string }
-/** 관계란 한 벌 — 원본 또는 AU 하나분 */
-export interface RelSet { notes?: Record<string, string>; links?: RelLinkItem[]; relAu?: Record<string, string> }
-
-/** 이 캐릭터의 AU 목록(원본 제외) — 내가 만든 AU + 속한 자관의 AU (연결된 것은 한 번만) */
-export function charAuList(ch: Character, rels: Relation[]): { key: string; label: string; relName: string }[] {
-  const own = (ch.ownAus ?? []).map(a => ({ key: ownAuKey(a.id), label: a.label, relName: '' }));
-  const linked = new Set((ch.ownAus ?? []).map(a => a.link).filter(Boolean));
-  const fromRels = rels.flatMap(r => r.members.some(m => m.charId === ch.id)
-    ? r.aus.filter(a => a.id !== 'base' && !linked.has(`${r.id}:${a.id}`)).map(a => ({ key: `${r.id}:${a.id}`, label: a.label, relName: r.name }))
-    : []);
-  return [...own, ...fromRels];
-}
-
-export interface RelCardInfo {
-  key: string; name: string; sub: string;
-  label?: string;          // 카드 왼쪽 위 꼬리표 (CP·관계명)
-  thumbRef?: string;       // 이미지 (IndexedDB 키)
-  thumbClass?: string;     // 이미지가 없을 때 쓰는 플레이스홀더
-  href: string;
-  /** 자관 카드의 크롭·테마색 — 목록과 같은 썸네일(테마색 대각선)로 그리려는 값 */
-  thumbCrop?: import("@/components/ui/CropEditor").CropValue;
-  themeColor?: string;
-  /** 카드 표기용 — 꼬리표(CP·NCP·PAIR…)·멤버 수·소개 문구·멤버(이름·색) */
-  tag?: string; memberCount?: number; catchphrase?: string;
-  who?: { name: string; color: string }[];
-  /** 'char' = 직접 지정한 관계(캐릭터) — 캐릭터 목록 썸네일과 같은 3:4 비율로 보인다. 페어·그룹(자관)은 기존 세로로 긴 카드 */
-  shape?: 'char';
-  /** 카드 옆 설명 박스 — 관계 설명(있을 때만 박스가 붙는다) · 관계 캐릭터 이름들 · CP/NCP(또는 직접 지정 꼬리표) */
-  desc?: string; names?: string; cpTag?: string;
-  /** 열람 권한이 없는 캐릭터 — 카드와 설명은 보이되 프로필로는 들어가지 못한다 */
-  blocked?: boolean;
-}
-export interface RelGroupInfo { name: string; cards: RelCardInfo[] }
-
-/** 이 캐릭터의 관계 그룹들 — Pair(페어 자관) · Group(다인관) · 직접 지정 순.
- *  자관은 이 캐릭터가 멤버인 것, 열람 권한이 없는 자관·캐릭터는 뺀다 */
-export function charRelGroups(ch: Character, chars: Character[], rels: Relation[], viewer: { isAdmin: boolean; loggedIn: boolean }, auKey?: string | null): RelGroupInfo[] {
-  // 이 AU 전용 관계란이 있으면 그것을, 없으면 원본 관계란을 쓴다
-  const set: RelSet = (auKey && ch.auRel?.[auKey]) || { notes: ch.relNotes, links: ch.relLinks, relAu: ch.relAu };
-  const ok = (v: Visibility) => v === 'public' || (v === 'member' && viewer.loggedIn) || viewer.isAdmin;
-  const charOf = (id: string) => chars.find(c => c.id === id);
-  const charHref = (c: Character) => `/chars/${c.slug ?? c.id}`;
-  const pairs: RelCardInfo[] = [];
-  const groups: RelCardInfo[] = [];
-  for (const r of rels) {
-    if (!r.members.some(m => m.charId === ch.id) || !ok(r.visibility)) continue;
-    const others = r.members.filter(m => m.charId !== ch.id).map(m => charOf(m.charId)).filter((c): c is Character => !!c);
-    const isPair = (r.kind ?? (r.members.length === 2 ? 'pair' : 'multi')) === 'pair';
-    const rau = set.relAu?.[r.id] ? r.aus.find(a => a.id === set.relAu![r.id] && a.id !== 'base') : undefined;
-    const card: RelCardInfo = {
-      key: `rel:${r.id}`, name: rau?.name?.trim() || r.name,
-      sub: others.length ? `with ${others.map(o => o.name).join(', ')}` : '',
-      label: r.cp === 'cp' ? 'CP' : r.cp === 'ncp' ? 'NCP' : undefined,
-      thumbRef: rau?.arts?.[0] ?? r.thumbId ?? others[0]?.thumbId, thumbClass: others[0]?.thumbClass ?? r.thumbClass,
-      href: `/rels/${r.slug ?? r.id}`,
-      thumbCrop: !rau?.arts?.[0] && r.thumbId ? r.thumbCrop : undefined,
-      themeColor: r.themeMode === 'custom' && r.themeColor ? r.themeColor : undefined,
-      tag: r.cp === 'ncp' ? 'NCP' : r.cp === 'cp' ? 'CP' : r.kind === 'multi' ? 'MULTI' : 'PAIR',
-      memberCount: r.members.length, catchphrase: rau?.catchphrase || r.catchphrase,
-      who: r.members.map(m => ({ name: charOf(m.charId)?.name || '—', color: charOf(m.charId)?.color ?? '#666' })),
-      desc: set.notes?.[`rel:${r.id}`]?.trim() || undefined,
-      names: r.members.map(m => charOf(m.charId)?.name).filter(Boolean).join(' × '),
-      cpTag: r.cp === 'cp' ? 'CP' : r.cp === 'ncp' ? 'NCP' : undefined,
-    };
-    (isPair ? pairs : groups).push(card);
-  }
-  const out: RelGroupInfo[] = [];
-  if (pairs.length) out.push({ name: 'Pair', cards: pairs });
-  if (groups.length) out.push({ name: 'Group', cards: groups });
-
-  const manual: RelCardInfo[] = [];
-  for (const l of set.links ?? []) {
-    const c0 = charOf(l.charId);
-    if (!c0 || c0.id === ch.id) continue;
-    // 상대 캐릭터의 AU를 골랐으면 그 AU의 이름·썸네일로
-    const c = l.au && auProfileOf(c0, l.au) ? charWithAu(c0, l.au) : c0;
-    manual.push({ key: `link:${c0.id}:${l.au ?? ''}`, name: c.name, sub: c.sub, label: l.label || undefined, thumbRef: c.thumbId, thumbClass: c.thumbClass,
-      href: `${charHref(c0)}${l.au && auProfileOf(c0, l.au) ? `?au=${encodeURIComponent(l.au)}` : ''}`, shape: 'char', blocked: !ok(c0.visibility),
-      who: [{ name: c.name, color: c.color }], themeColor: c.color,
-      desc: set.notes?.[`link:${c0.id}${l.au ? `:${l.au}` : ''}`]?.trim() || undefined, names: `${ch.name} × ${c.name}`, cpTag: l.label || undefined });
-  }
-  if (manual.length) out.push({ name: '관계', cards: manual });
-
-  return out;
-}

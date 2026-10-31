@@ -39,17 +39,8 @@ service cloud.firestore {
         'posts', 'guestbook', 'characters', 'relations', 'gallery', 'roadview',
         'trpg_logs', 'trpg_log_bodies', 'trpg_chars', 'dotori', 'playlog', 'rp_rooms', 'threads',
         'diary', 'memos', 'commissions', 'applicants', 'moods', 'comments', 'qa_answers', 'rp_messages',
-        'notifications', 'dressup_bodies', 'dressup_parts', 'myrooms', 'myroom_catalog'
+        'notifications'
       ];
-    }
-
-    // 마이룸 보관함(myroom_catalog)도 관리자만 등록·수정한다.
-    // 옷입히기: 몸통은 관리자만 등록·수정 · 파츠는 회원이 올리면 반드시 비공개(승인 대기)로만 저장된다.
-    // 관리자가 승인하면 공개(public)로 바꾼다 — 회원이 스스로 공개로 바꾸는 것은 막는다.
-    function dressOk(name) {
-      return !(name in ['dressup_bodies', 'dressup_parts', 'myroom_catalog'])
-        || isAdmin()
-        || (name == 'dressup_parts' && request.resource.data.visibility == 'private');
     }
 
     // ── 소유자(관리자) 지정 — 아직 없을 때 딱 한 번 ──────────────
@@ -85,8 +76,7 @@ service cloud.firestore {
       // 쓰기: 로그인 회원 — 방명록·댓글은 비로그인 방문자도 남길 수 있음(닉네임+비밀번호 방식)
       // notifications: 손님 댓글·방명록이 관리자에게 알림을 남길 수 있어야 한다 (v2.0) —
       // 행 주인(authorId)은 받는 사람이라 읽기·수정·삭제는 받는 사람·관리자만 (아래 공통 규칙)
-      allow create: if isContent(coll) && (signedIn() || coll in ['guestbook', 'comments', 'notifications'])
-        && dressOk(coll);
+      allow create: if isContent(coll) && (signedIn() || coll in ['guestbook', 'comments', 'notifications']);
 
       // 수정·삭제: 작성자 본인 · 편집 권한을 받은 회원 · 관리자
       // 댓글은 글과 따로 저장되므로(v2.0) 댓글을 달 때 글을 수정할 필요가 없다 —
@@ -95,15 +85,7 @@ service cloud.firestore {
       // 지우는 것은 관리자만 — 방명록의 게스트 글과 같은 규칙이다.
       // editorIds: 캐릭터에 「편집까지」 권한을 준 회원 (v2.0). grants는 객체 배열이라
       // 규칙에서 훑을 수 없어, 저장할 때 회원 id만 뽑아 둔 평평한 배열을 본다.
-      allow update: if isContent(coll)
-        && signedIn()
-        && (resource.data.authorId == request.auth.uid
-            || isAdmin()
-            || (resource.data.keys().hasAny(['editorIds'])
-                && request.auth.uid in resource.data.editorIds))
-        && dressOk(coll);
-
-      allow delete: if isContent(coll)
+      allow update, delete: if isContent(coll)
         && signedIn()
         && (resource.data.authorId == request.auth.uid
             || isAdmin()
