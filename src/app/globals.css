@@ -1809,12 +1809,6 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 @keyframes upSpin{to{transform:rotate(360deg)}}
 /* 캐릭터(/chars) · 자관(/rels) 게시판 전용 CSS — 기존 globals.css 맨 아래에 이어 붙이세요 */
 /* 정적 컬러 점 — 호버 시 hex 툴팁만 (4.4) */
-.sw-static{width:18px;height:18px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);position:relative}
-.sw-static[data-hex]:hover::after{
-  content:attr(data-hex);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
-  background:rgba(28,31,37,.96);color:#dfe2e7;font-size:calc(10px*var(--fs,1));letter-spacing:.05em;padding:4px 8px;border-radius:6px;
-  white-space:nowrap;z-index:20;box-shadow:0 6px 18px rgba(0,0,0,.3);
-}
 .thr-card .info{padding:10px 12px 12px}
 .thr-card .info .tt{font-size:calc(14px*var(--fs,1));font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .thr-card .info .row{padding:1px 0;font-size:calc(11px*var(--fs,1));color:var(--sub)}
@@ -1838,65 +1832,43 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .profile-center{border-radius:var(--radius);display:flex;align-items:center;justify-content:center;min-height:200px}
 /* 스티키 안정성 (v1.9): 끝까지 스크롤했을 때 아트 하단 == 정보 패널 하단이 되도록
    하단 여백을 계산값으로 고정 — viewH(100vh-58) - top(10) - artH(100vh-150) = 82px */
-.page-char-detail{padding-bottom:82px}
-.profile-info{padding:24px;overflow:auto}
 /* 세리프는 **탭 제목에만** (v2.0 사용자 제보) — 예전 `.profile-info h3`는 본문(.prose)에
    직접 쓴 h3까지 잡아서, 본문 폰트를 바꿔도 h3만 세리프로 남았다 */
 .profile-info h3.tab-tt{font-family:var(--serif);font-size:calc(19px*var(--fs,1));letter-spacing:.14em;margin-bottom:4px}
 .profile-info .sub{font-size:calc(11px*var(--fs,1));color:var(--faint);letter-spacing:.1em;margin-top:7px;margin-bottom:16px}
 /* 카드 구석 표시라 작게 (v2.0 사용자 요청) */
 /* 자관 상세 — 헤더 이미지: 풀폭 블러 + 아래로 페이드아웃 (v1.5) */
-.page-rel-detail{position:relative;max-width:1280px}
 /* 배경 위 레이어링 — absolute로 배치되는 요소(AU·관리자 액션·모달)는 제외 */
 .page-rel-detail > *:not(.rel-backdrop):not(.modal-ov):not(.au-list):not(.rel-admin-actions):not(.pair-name){position:relative;z-index:1}
-.rel-backdrop{position:absolute;top:0;left:50%;transform:translateX(-50%);width:100vw;height:600px;z-index:0!important;overflow:hidden;pointer-events:none;
-  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 35%,transparent 96%);
-  mask-image:linear-gradient(to bottom,#000 0%,#000 35%,transparent 96%);}
 /* 헤더 이미지가 있을 때만 이 블록 자체가 렌더된다 (v2.0) — 예전엔 없을 때도 데모
    그라데이션을 깔았는데, 없으면 아예 안 그리는 쪽으로 바뀌어 배경색 자체가 필요 없어졌다 */
-.rel-backdrop .img{position:absolute;inset:-40px;filter:blur(16px) brightness(.8) saturate(.9)}
 .rel-backdrop .img img{width:100%;height:100%;object-fit:cover}
-.rel-hero{position:relative;text-align:center;padding:34px 0 10px;color:#fff}
 /* 2인 전신 히어로에서는 제목·뱃지를 아래(.pair-name)로 옮겨서 이 칸의 실제 내용이
    인용구·캐치프레이즈뿐인데, 그래도 padding·줄 높이만큼 자리를 차지해 전신 히어로 전체가
    그만큼 아래로 밀려 보였다(v4.6 사용자 제보 — "글씨가 살짝 아래로 내려갔다"). 흐름 높이를
    0으로 만들어 밀어내지 않게 하고, 내용(인용구)은 overflow:visible로 그대로 보이게 둔다 */
 .rel-hero.rel-hero-flat{padding:0;height:0;overflow:visible}
 .rel-hero .quote{position:absolute;top:auto;bottom:-10px;font-family:var(--serif);font-size:calc(15px*var(--fs,1));letter-spacing:.08em;color:#d7dae0}
-.rel-hero .quote.l{left:2%}
-.rel-hero .quote.r{right:2%}
-.rel-hero .quote::before{content:"\201C";color:var(--q-mark,var(--accent-soft));font-size:calc(22px*var(--fs,1));margin-right:5px}
 /* 따옴표색 — 자관 수정에서 멤버별 지정 (v1.9) */
-.rel-hero .cp-top{margin-bottom:9px}
 /* CP/NCP 뱃지 — 자관명 위 가운데 (v2.0) */
 /* 자간(letter-spacing)은 마지막 글자 뒤에도 붙어서, 가운데정렬하면 그 절반만큼 왼쪽으로 밀린다.
    같은 값만큼 들여써서 되돌린다 (v2.0 사용자 발견 — 「묘하게 가운데가 아닌」 원인 · 실측으로 값 확정) */
 .rel-hero h1{font-family:var(--serif);font-size:calc(64px*var(--fs,1));font-weight:600;letter-spacing:.3em;text-indent:.3em;text-shadow:0 4px 30px rgba(0,0,0,.6)}
-.rel-hero .catch{font-size:calc(11px*var(--fs,1));letter-spacing:.7em;text-indent:.7em;color:#b9bec7;margin-top:2px}
 .rel-body{display:grid;grid-template-columns:320px 1fr 320px;gap:16px;margin-top:26px;align-items:start}
 /* 간단 프로필 카드 */
-.mini-prof{padding:0;overflow:hidden}
 .mini-prof .hd{display:flex;gap:12px;padding:15px 15px 11px;align-items:center;border-bottom:1px solid var(--line)}
-.mini-prof .hd .face{width:52px;height:52px;border-radius:10px;flex-shrink:0;overflow:hidden}
 /* 이름·소개 칸은 줄어들 수 있어야 한다 — 안 그러면 긴 이름이 카드를 밀어 넓혀
    「한 줄에 맞춰 줄이기」가 넘침을 감지하지 못한다 */
 .mini-prof .hd > div{min-width:0}
 .mini-prof .hd b{font-family:var(--serif);font-size:calc(17px*var(--fs,1));letter-spacing:.16em;display:block}
 .mini-prof .hd small{display:block;margin-top:5px;font-size:calc(9.5px*var(--fs,1));color:var(--faint);letter-spacing:.1em}
-.mini-prof .specs{padding:11px 16px;font-size:calc(11.5px*var(--fs,1));color:var(--sub)}
 .mini-prof .specs div{display:flex;gap:8px;padding:2.5px 0}
 .mini-prof .specs b{color:var(--faint);font-weight:600;min-width:34px}
-.mini-prof .foot{padding:9px 15px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;font-size:calc(9.5px*var(--fs,1));color:var(--faint)}
-.palette-row{display:flex;gap:6px;padding:0 15px 11px}
-.palette-row .gem{display:inline-block;width:14px;height:14px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);cursor:help;position:relative}
 /* 테두리용 안쪽 마름모 (v2.0) — 바깥 gem이 테두리색, 안쪽이 실제 색 */
 .palette-row .gem i{position:absolute;inset:1px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
-.rel-desc{font-size:calc(11.5px*var(--fs,1));line-height:1.8;color:#454a52;padding:13px 16px;border-top:1px solid var(--line);white-space:pre-line}
-.card-thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:11px 15px;border-top:1px dashed var(--line)}
 .card-thumbs .t{aspect-ratio:1;border-radius:7px;overflow:hidden;cursor:var(--cur-pointer,pointer);transition:.15s}
 .card-thumbs .t:hover{opacity:.8}
 /* 중앙 일러 — 전신 2장 겹침 / 일러 1장 (2인 한정, v1.8) */
-.rel-center{aspect-ratio:3/4.1;border-radius:var(--radius);overflow:hidden;position:relative}
 .rel-center .fb{position:absolute;top:5%;bottom:-2%;width:46%;border-radius:12px;filter:drop-shadow(0 10px 24px rgba(0,0,0,.4))}
 .rel-center .fb-l{left:0;z-index:2}
 .rel-center .fb-r{right:0;z-index:2}
@@ -1965,10 +1937,7 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .fb-name.fb-ta-c .fb-kw-row{align-items:center}
 .fb-name.fb-ta-l .fb-kw-row{align-items:flex-start}
 .fb-name.fb-ta-r .fb-kw-row{align-items:flex-end}
-.rel-center .single{position:absolute;inset:0;display:none}
 .rel-center.one-mode .single{display:grid}
-.illu-toggle{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:6;opacity:0;pointer-events:none;transition:opacity .2s}
-.rel-center:hover .illu-toggle{opacity:1;pointer-events:auto}
 /* 호버 시에만 보이는 스위치 — 이미지 위에서도 또렷하게 + 테마·포인트색 연동 (v1.9 사용자 피드백)
    자관별 색은 EDIT의 「전신/일러 스위치 색」 — --illu-bg/--illu-on 인라인 주입 */
 .illu-toggle.seg{background:var(--illu-bg,color-mix(in srgb,var(--btn-dark,#1d2025) 82%,transparent));border-color:color-mix(in srgb,var(--accent-soft,#c96a73) 45%,transparent);backdrop-filter:blur(6px)}
@@ -1979,7 +1948,6 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
    14px만 띄워 붙인다 — 히어로 높이가 화면 폭에 따라 달라도(86vh) AU 줄과 같이 움직인다 */
 .rel-center-full .illu-toggle{top:calc(100vh - 58px - 190px + 48px + 14px);bottom:auto;z-index:60}
 /* AU 리스트 (우상단, v1.8) — 자식 일괄 relative 규칙보다 뒤에서 absolute로 재고정 */
-.au-list{display:flex;gap:8px;align-items:flex-start}
 .page-rel-detail > .au-list{position:absolute;top:20px;right:28px;left:auto;z-index:6}
 /* 2인 자관은 전신 사이 중앙 하단으로 (v4.3 사용자 요청 — 참고 사진의 PairName 자리) */
 .page-rel-detail > .au-list.au-list-hero{
@@ -1998,7 +1966,6 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 /* 2인 전신 히어로에서는 우하단(BGM 플레이어 위)으로 — 스크롤해도 따라오도록 fixed (v4.6) */
 .page-rel-detail > .rel-admin-actions.rel-admin-hero{position:fixed;top:auto;left:auto;bottom:84px;right:20px;z-index:65}
 .au-item.add{border-style:dashed;display:grid;place-items:center;color:rgba(255,255,255,.75);font-size:calc(16px*var(--fs,1));background:rgba(255,255,255,.06)}
-.au-item{width:48px;aspect-ratio:1;border-radius:11px;cursor:var(--cur-pointer,pointer);overflow:hidden;position:relative;border:2px solid rgba(255,255,255,.25);transition:.15s}
 .au-item:hover{border-color:rgba(255,255,255,.6)}
 .au-item.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
 .au-item small{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-size:calc(8px*var(--fs,1));letter-spacing:.08em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);z-index:2}
@@ -2008,8 +1975,6 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 @media (max-width:960px){
 .multi-body{grid-template-columns:1fr}
 }
-.mrow{display:flex;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:var(--cur-pointer,pointer);transition:.13s;--cc:93,99,109}
-.mrow:last-child{border:none}
 .mrow:hover{background:rgba(127,127,127,.07)}
 .mrow .face{width:46px;height:46px;border-radius:10px;flex-shrink:0;border-left:3px solid rgb(var(--cc));position:relative;overflow:hidden}
 .mrow .nm{min-width:0}
@@ -2021,27 +1986,15 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .mrow .gem-mini i{width:12px;height:12px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
 .mrow .rm{flex-shrink:0;font-size:calc(10.5px*var(--fs,1));color:var(--accent);margin-left:6px}
 .mrow.add{justify-content:center;color:var(--faint);font-size:calc(12px*var(--fs,1))}
-.multi-illust{position:relative;aspect-ratio:16/10;border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-md);background:#20242a}
 /* 타임라인 (4.5) */
-.timeline{margin-top:30px;padding:26px;max-width:1010px;margin-left:auto;margin-right:auto}
 /* 본문보다 약 200px 좁게 (v1.8) */
-.tl-item{position:relative;padding:0 0 22px 26px;border-left:1.5px solid var(--line)}
-.tl-item:last-child{padding-bottom:0}
-.tl-item::before{content:"";position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid var(--steel-3)}
-.tl-item .era{font-size:calc(10px*var(--fs,1));letter-spacing:.15em;color:var(--faint);margin-bottom:4px}
-.tl-item .desc{font-size:calc(12.5px*var(--fs,1));line-height:1.75;color:#3a3f47;margin-bottom:9px;white-space:pre-line}
 /* 말풍선: 캐릭터 테마색(--cc, 저알파) — 좌우 여백 19%로 가운데 몰기 (v1.8) */
-.tl-say{max-width:48%;margin-bottom:7px;--cc:93,99,109}
 .tl-say.l{margin-left:19%}
-.tl-say.r{margin-right:19%}
-.timeline.multi .tl-say.l{margin-left:0;max-width:62%}
 /* 다인: 왼쪽 정렬 */
 .tl-say .who{font-size:calc(10px*var(--fs,1));letter-spacing:.1em;color:rgb(var(--cc));font-weight:700;margin-bottom:3px}
 .tl-say .bub{display:inline-block;padding:8px 13px;border-radius:12px;font-size:calc(12px*var(--fs,1));line-height:1.6;white-space:pre-line;
   background:rgba(var(--cc),.10);border:1px solid rgba(var(--cc),.22);color:var(--ink)}
-.tl-say.l .bub{border-bottom-left-radius:3px}
 .tl-say.r{margin-left:auto;text-align:right}
-.tl-say.r .bub{border-bottom-right-radius:3px}
 /* 타임라인/문답 탭 (v1.8) */
 .rel-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--line)}
 /* 직계 버튼(탭)만 — 우측 액션 버튼(.btn)이 margin-bottom:-1px로 하단 보더를 덮던 문제 수정 (v1.9) */
@@ -2053,7 +2006,6 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
    버튼들은 인라인 style로 padding을 갖고 있어 여기서는 !important로 눌러야 한다 */
 .lb-m{display:none}
 @media (max-width:620px){
-.lb-pc{display:none}
 .lb-m{display:inline}
 .rel-tabs{gap:16px}
 .rel-tabs > button{padding:6px 2px 10px;letter-spacing:0}
@@ -2063,50 +2015,22 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .qa-wrap{display:grid;grid-template-columns:1fr 290px;gap:18px;height:700px}
 /* 답변만 스크롤하고 입력란은 아래에 고정 (v2.0 사용자 발견) — 예전엔 입력란까지 한 상자에 들어
    있어 답변이 길어지면 입력란이 밀려 UI가 어긋났다 */
-.qa-today{display:flex;flex-direction:column;overflow:hidden;min-height:0}
-.qa-answers{flex:1;min-height:0;overflow:auto;padding-right:6px;scrollbar-color:var(--sb-thumb,#c9ccd2) transparent;scrollbar-width:thin;display:flex;flex-direction:column}
-.qa-no{font-size:calc(10px*var(--fs,1));letter-spacing:.3em;color:var(--faint)}
-.qa-q{font-family:'Noto Serif KR',serif;font-size:calc(20px*var(--fs,1));font-weight:700;line-height:1.5;margin:6px 0 4px}
 /* 질문에 대한 오너 설명 — 질문 바로 아래, 답변보다 한 톤 낮게 (v2.0) */
-.qa-note{
-  font-size:calc(12px*var(--fs,1));line-height:1.75;color:var(--sub);
-  border-left:2px solid var(--line-dark);padding:2px 0 2px 10px;margin:0 0 6px;white-space:pre-wrap;
-}
-.qa-date{font-size:calc(10.5px*var(--fs,1));color:var(--faint);margin-bottom:18px}
-.qa-ans{margin-bottom:14px;--cc:93,99,109;max-width:88%}
 /* 이름 한 단계 크게 (v2.0 사용자 요청) — 답변자 구분이 잘 보이도록 */
 .qa-ans .who{font-size:calc(11.5px*var(--fs,1));letter-spacing:.1em;color:rgb(var(--cc));font-weight:700;margin-bottom:3px}
 .qa-ans .bub{display:inline-block;position:relative;padding:9px 14px;border-radius:12px;border-top-left-radius:3px;font-size:calc(12.5px*var(--fs,1));line-height:1.7;
   background:rgba(var(--cc),.10);border:1px solid rgba(var(--cc),.22);color:var(--ink);white-space:pre-line}
 .qa-ans.r{margin-left:auto;text-align:right}
-.qa-ans.r .bub{border-radius:12px;border-top-right-radius:3px}
 /* 다인관 답변은 가운데 정렬 + 폭 제한 — 긴 글도 좌우 여백을 갖고 중앙에 (v1.9 사용자 요청) */
-.timeline.multi .qa-ans{margin-left:auto;margin-right:auto;max-width:min(560px,86%);text-align:center}
-.timeline.multi .qa-ans .bub{border-radius:12px;text-align:left}
 /* 오너 부연설명 — 우상단 테마색 점 + 호버 툴팁 (v1.8) */
-.qa-ans .bub[data-note]{cursor:help}
-.qa-ans .bub[data-note]::before{content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:rgb(var(--cc));box-shadow:0 0 0 2px var(--panel-solid)}
-.qa-ans .bub[data-note]:hover::after{
-  content:attr(data-note);position:absolute;left:0;bottom:calc(100% + 7px);z-index:20;width:max-content;max-width:240px;
-  background:rgba(28,31,37,.96);color:#dfe2e7;font-size:calc(11px*var(--fs,1));line-height:1.6;padding:8px 12px;border-radius:9px;
-  box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:left;white-space:normal;
-}
-.qa-ans.r .bub[data-note]:hover::after{left:auto;right:0}
-.qa-input{flex-shrink:0;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:11px;align-items:stretch}
-.qa-input .char-pick{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:var(--cur-pointer,pointer);flex-shrink:0}
-.qa-input .char-pick .f{width:56px;height:56px;border-radius:12px;overflow:hidden}
 /* 입력칸 높이에 맞게 확대 (v1.9 사용자 피드백) */
 .qa-input .char-pick small{font-size:calc(11px*var(--fs,1));font-weight:600;color:var(--ink);white-space:nowrap}
 /* 이름 확대 (v1.9 사용자 피드백) */
 .qa-list{display:flex;flex-direction:column;border-left:1px solid var(--line);padding-left:18px;overflow:hidden}
-.qa-search{display:flex;align-items:center;gap:7px;border:1.5px solid var(--line);border-radius:9px;background:#fff;padding:7px 11px;margin-bottom:11px}
 .qa-search input{border:none;outline:none;font-size:calc(12px*var(--fs,1));flex:1;background:none;color:var(--ink)}
 .qa-search span{color:var(--faint);font-size:calc(13px*var(--fs,1))}
-.qa-scroll{overflow:auto;flex:1;scrollbar-color:var(--sb-thumb,#c9ccd2) transparent;scrollbar-width:thin}
 /* 숨긴 답변 — 답변 영역 통째로 한 줄만 (v2.0 사용자 확정). 말풍선을 하나씩 가리면
    몇 명이 무슨 순서로 답했는지가 드러나므로 개수 자체를 보여 주지 않는다 */
-.qa-locked{flex:1;display:grid;place-items:center;color:var(--faint);letter-spacing:.22em;font-size:calc(12.5px*var(--fs,1))}
-.qa-item{padding:10px 11px;border-radius:9px;cursor:var(--cur-pointer,pointer);transition:.13s;margin-bottom:2px}
 .qa-item:hover{background:#f0f1f4}
 /* 고른 질문 — 진한 버튼과 같은 색을 따라간다 (v2.0 사용자 요청).
    예전엔 --ink(가장 짙은 글씨색)를 그대로 써서 다른 선택 상태보다 유난히 짙었다.
@@ -2133,22 +2057,16 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 @media(max-width:520px){
 .profile-info.gal-full .g3{grid-template-columns:1fr}
 }
-.cf-stack{display:grid;gap:8px}
 @media (max-width:960px){
 .profile-wrap{grid-template-columns:1fr;min-height:0;height:auto;align-items:start}
 .char-art-wrap{order:1;position:static;width:100%;max-width:560px;margin:0 auto}
 .profile-center{width:100%}
-.profile-info{order:2;max-width:560px;margin:0 auto;width:100%}
 .side-icons{order:3;position:static;flex-direction:row;flex-wrap:wrap;padding:0;gap:8px;justify-content:center}
 .rel-body{grid-template-columns:1fr;max-width:560px;margin-left:auto;margin-right:auto}
-.rel-center{order:-1}
 .rel-hero h1{font-size:calc(44px*var(--fs,1))}
 .rel-hero .quote{position:static;display:block;margin-top:4px}
 .qa-wrap{grid-template-columns:1fr;height:auto}
 .qa-list{border-left:none;padding-left:0;max-height:300px}
-}
-@media (max-width:620px){
-.chars-grid{grid-template-columns:repeat(3,1fr);gap:10px}
 }
 /* ---------- 캐릭터 상세 REL(관계) 탭 (v6.8) — OC-homepage 관계 카드 방식 ---------- */
 .rc-group + .rc-group{margin-top:22px}
