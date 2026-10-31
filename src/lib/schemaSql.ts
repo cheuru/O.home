@@ -84,8 +84,6 @@ declare content_tables text[] := array[
   'commissions',  -- 커미션
   'applicants',   -- 신청자
   'moods',        -- 무드 목록
-  'dressup_bodies', -- 옷입히기 몸통
-  'dressup_parts',  -- 옷입히기 파츠
   'comments',     -- 댓글 (v2.0 — 글 안이 아니라 자기 행으로. 글을 수정하지 않고 댓글을 달 수 있게)
   'qa_answers',   -- 자관 문답 답변 (v2.0 — 같은 이유로 자관 안이 아니라 자기 행으로)
   'rp_messages',  -- 역극 발화 (v2.0 — 같은 이유로 방 안이 아니라 자기 행으로)
@@ -145,21 +143,6 @@ end $$;
 -- 방명록·게시판 댓글은 비로그인 방문자도 남길 수 있음 (닉네임+비밀번호 방식)
 drop policy if exists "insert" on public.guestbook;
 create policy "insert" on public.guestbook for insert with check (true);
-
--- 옷입히기: 몸통은 관리자만 등록·수정 · 파츠는 회원이 올리면 비공개(승인 대기)로만 저장된다.
--- 관리자가 승인하면 공개로 바꾼다 — 회원이 스스로 공개로 바꾸는 것은 막는다.
-drop policy if exists "insert" on public.dressup_bodies;
-create policy "insert" on public.dressup_bodies for insert to authenticated with check (public.is_admin());
-drop policy if exists "update" on public.dressup_bodies;
-create policy "update" on public.dressup_bodies for update to authenticated
-  using (public.is_admin()) with check (public.is_admin());
-drop policy if exists "insert" on public.dressup_parts;
-create policy "insert" on public.dressup_parts for insert to authenticated
-  with check (public.is_admin() or visibility = 'private');
-drop policy if exists "update" on public.dressup_parts;
-create policy "update" on public.dressup_parts for update to authenticated
-  using (author_id = auth.uid() or public.is_admin())
-  with check (public.is_admin() or visibility = 'private');
 
 -- 댓글도 비로그인 방문자가 남길 수 있다 (닉네임+비밀번호 방식 — 방명록과 동일, v2.0).
 -- 수정·삭제는 위 공통 정책 그대로: 작성자 본인 또는 관리자.

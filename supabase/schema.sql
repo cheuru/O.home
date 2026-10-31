@@ -78,9 +78,7 @@ declare content_tables text[] := array[
   'memos',        -- 스티커 메모
   'commissions',  -- 커미션
   'applicants',   -- 신청자
-  'moods',        -- 무드 목록
-  'dressup_bodies', -- 옷입히기 몸통
-  'dressup_parts'   -- 옷입히기 파츠
+  'moods'         -- 무드 목록
 ];
 begin
   foreach t in array content_tables loop
@@ -129,21 +127,6 @@ end $$;
 -- 방명록·게시판 댓글은 비로그인 방문자도 남길 수 있음 (닉네임+비밀번호 방식)
 drop policy if exists "insert" on public.guestbook;
 create policy "insert" on public.guestbook for insert with check (true);
-
--- 옷입히기: 몸통은 관리자만 등록·수정 · 파츠는 회원이 올리면 비공개(승인 대기)로만 저장된다.
--- 관리자가 승인하면 공개로 바꾼다 — 회원이 스스로 공개로 바꾸는 것은 막는다.
-drop policy if exists "insert" on public.dressup_bodies;
-create policy "insert" on public.dressup_bodies for insert to authenticated with check (public.is_admin());
-drop policy if exists "update" on public.dressup_bodies;
-create policy "update" on public.dressup_bodies for update to authenticated
-  using (public.is_admin()) with check (public.is_admin());
-drop policy if exists "insert" on public.dressup_parts;
-create policy "insert" on public.dressup_parts for insert to authenticated
-  with check (public.is_admin() or visibility = 'private');
-drop policy if exists "update" on public.dressup_parts;
-create policy "update" on public.dressup_parts for update to authenticated
-  using (author_id = auth.uid() or public.is_admin())
-  with check (public.is_admin() or visibility = 'private');
 
 -- ── 7. 사이트 설정 권한 (읽기 공개 · 쓰기 관리자) ────────────
 alter table public.profiles enable row level security;

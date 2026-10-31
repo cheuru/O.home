@@ -122,9 +122,6 @@ export const COLLECTION_OF: Record<string, string> = {
   // 알림 — 기기 보관이던 것을 서버로 (v2.0 포크 제보 「알림이 안 와요」).
   // 행 주인(authorId)을 받는 사람으로 적어, 받는 사람 계정이 어느 기기에서나 받아 간다
   'ohome.notif.v1': 'notifications',
-  // 옷입히기 (dressup) — 몸통은 관리자만, 파츠는 회원 등록 후 관리자 승인 (v2.0 신규)
-  'ohome.dressbody.v1': 'dressup_bodies',
-  'ohome.dresspart.v1': 'dressup_parts',
 };
 
 export const CONTENT_COLLECTIONS = Object.values(COLLECTION_OF);

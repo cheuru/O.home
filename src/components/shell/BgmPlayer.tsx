@@ -3,7 +3,7 @@
 // 기본 위치 오른쪽 아래 · 곡 리스트 팝업 (v1.9) · 페이지 이동에도 유지(레이아웃 상주)
 // 브라우저 정책상 소리 재생은 사용자의 첫 클릭부터 시작
 import React, { useEffect, useRef, useState } from 'react';
-import { useBgm, BGM_LIST_TOGGLE_EVENT, BGM_LIST_STATE_EVENT } from '@/lib/bgmStore';
+import { useBgm } from '@/lib/bgmStore';
 
 /** 흐르는 글씨 — 재생 중이고 글자가 넘칠 때만 무한 스크롤, 평소엔 말줄임.
  *  넘침 판정은 숨김 측정용 스팬으로 — 마운트 직후(레이아웃·폰트 확정 전) 1회 측정만 하면
@@ -192,8 +192,6 @@ export function BgmPlayer() {
       // 플레이어 자체를 조작하는 클릭(재생/이전/다음 등)은 버튼 핸들러에 맡김 —
       // 여기서 먼저 재생을 시작하면 곧이어 오는 버튼 click이 "일시정지"로 뒤집힘
       if (rootRef.current?.contains(ev.target as Node)) return;
-      // 상단바 BGM 버튼도 마찬가지 — 여기서 먼저 재생하면 곧이어 오는 click이 "끄기"로 뒤집힘
-      if ((ev.target as Element | null)?.closest?.('.bgm-toggle')) return;
       if (playingRef.current) return;
       if (readyRef.current && playerRef.current) {
         // 첫 재생은 loadVideoById 경로 (큐 상태 playVideo 무시 이슈 회피)
@@ -216,7 +214,7 @@ export function BgmPlayer() {
   const prev = () => playAt((idxRef.current - 1 + tracks.length) % tracks.length);
 
   const togglePlay = () => {
-    if (!playerRef.current) { armedRef.current = true; return; } // 생성 전이면 무장 — onReady에서 재생
+    if (!playerRef.current) return;
     if (playing) {
       playerRef.current.pauseVideo();
       setPlaying(false); // 버튼 즉시 반영
@@ -246,33 +244,6 @@ export function BgmPlayer() {
     window.addEventListener('pointermove', mv);
     window.addEventListener('pointerup', up);
   };
-
-  // 상단바의 BGM 버튼과 재생목록 열림 상태 공유 (v2.1) — 열림/닫힘이 바뀔 때마다 알리고,
-  // 상단바 쪽 클릭은 이벤트로 받아 기존 목록 토글(listOpen) 그대로 재사용
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent(BGM_LIST_STATE_EVENT, { detail: { open: listOpen, playing } }));
-  }, [listOpen, playing]);
-  // 접힌 상태에선 목록이 CSS로 숨겨지므로, 상단바에서 열 땐 펼친 뒤 연다
-  const listOpenRef = useRef(listOpen);
-  listOpenRef.current = listOpen;
-  const foldedRef = useRef(folded);
-  foldedRef.current = folded;
-  const togglePlayRef = useRef(togglePlay);
-  togglePlayRef.current = togglePlay;
-  useEffect(() => {
-    // 상단바 BGM 버튼 (사용자 요청)
-    //  · 목록이 닫혀 있으면 → 목록 열기 + (꺼져 있으면) 재생 시작  ← 처음 누를 때
-    //  · 목록이 열려 있으면 → 목록 닫기 (두 번 누르면 닫힘). 이 버튼으로는 BGM을 끄지 않는다
-    const onToggle = () => {
-      if (listOpenRef.current) { setListOpen(false); return; }
-      if (foldedRef.current) setFold(false);
-      setListOpen(true);
-      if (!playingRef.current) togglePlayRef.current();
-    };
-    window.addEventListener(BGM_LIST_TOGGLE_EVENT, onToggle);
-    return () => window.removeEventListener(BGM_LIST_TOGGLE_EVENT, onToggle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   if (!settings.enabled || tracks.length === 0) return null;
 
@@ -309,21 +280,20 @@ export function BgmPlayer() {
       <button className="fold-btn" data-tip="접기" onClick={e => { e.stopPropagation(); setFold(true); }}>
         {settings.position === 'bl' ? '«' : '»'}
       </button>
-      {/* 곡 목록 팝업 — 닫기는 ✕ 버튼 또는 상단바 BGM 버튼 한 번 더 */}
+      {/* 곡 목록 팝업 (v1.9) — 바깥 클릭 시 닫힘 */}
       {listOpen && (
-        <div className="bgm-list on">
-          <div className="h">
-            <span>BGM LIST</span>
-            <button className="x" data-tip="닫기" aria-label="재생목록 닫기"
-              onClick={e => { e.stopPropagation(); setListOpen(false); }}>✕</button>
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: -1 }} onClick={() => setListOpen(false)} />
+          <div className="bgm-list on">
+            <div className="h">BGM LIST</div>
+            {tracks.map((t, i) => (
+              <div key={t.id} className={`it ${i === idx ? 'on' : ''}`}
+                onClick={() => { playAt(i); setListOpen(false); }}>
+                <b>{t.title}</b><small>{t.desc}</small>
+              </div>
+            ))}
           </div>
-          {tracks.map((t, i) => (
-            <div key={t.id} className={`it ${i === idx ? 'on' : ''}`}
-              onClick={e => { e.stopPropagation(); playAt(i); }}>
-              <b>{t.title}</b><small>{t.desc}</small>
-            </div>
-          ))}
-        </div>
+        </>
       )}
     </div>
   );

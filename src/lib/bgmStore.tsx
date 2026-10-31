@@ -30,12 +30,6 @@ const DEFAULT_STATE: BgmState = {
 
 const STORAGE_KEY = 'ohome.bgm.v1';
 
-// 상단바 버튼이 재생목록을 열고 닫기 위한 이벤트 (v2.1 사용자 요청 — 재생/정지는 이미
-// 기본 자동재생을 따르므로, 상단바 버튼은 재생목록 토글 전용). 목록 열림 상태는
-// BgmPlayer가 계속 소유하고, 이 이벤트로만 "토글해줘"/"지금 열려 있어"를 주고받는다.
-export const BGM_LIST_TOGGLE_EVENT = 'ohome-bgm-list-toggle';
-export const BGM_LIST_STATE_EVENT = 'ohome-bgm-list-state';
-
 interface BgmCtx {
   state: BgmState;
   setTracks: (t: BgmTrack[]) => void;
