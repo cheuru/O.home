@@ -239,6 +239,31 @@ export interface PlayRecord {
   playtime: string;          // 4h 30m 등 자유 표기
   url?: string;              // Url (optional) — 클립 아이콘, 새 탭
   logId?: string;            // 내 홈 로그 백업 연결 (모바일: Playtime 밑줄)
+  postId?: string;           // 세션 게시판(타래형 board) 글 연결 (5.4) — /board/{postId}로 이동
+  /** 참여 캐릭터 (v2.8) — 캐릭터 게시판(/chars)과 연동. 캐릭터 상세 화면의 TRPG 탭은
+   *  이 필드로 자신이 참여한 기록을 찾아 보여준다(단일 출처라 어느 쪽에서 고쳐도 자동 반영됨). */
+  charIds?: string[];
+  /** 자관 연동 — 자관 게시판(/rels)과 연동. 로그 백업(TrpgLog.relId)과 같은 방식으로, 이 값 하나만 보고
+   *  자관 상세의 세션 리스트와 세션 글의 자관 버튼을 그린다(단일 출처라 어느 쪽에서 고쳐도 자동 반영됨). */
+  relId?: string;
+  /** 여러 자관 연동 — 있으면 이것이 기준(relId 는 첫 번째를 같이 담아 옛 코드와 호환) */
+  relIds?: string[];
+}
+
+/** 이 기록에 연동된 자관 id 목록 (옛 단일 relId 포함) */
+export function recordRelIds(r: { relIds?: string[]; relId?: string }): string[] {
+  return r.relIds?.length ? r.relIds : (r.relId ? [r.relId] : []);
+}
+/** 대표 자관 — 2인 자관이 있으면 그것, 없으면 첫 번째 (없어진 자관은 건너뛴다) */
+export function repRel<T extends { id: string; members: unknown[] }>(ids: string[], rels: T[]): T | undefined {
+  const list = ids.map(id => rels.find(r => r.id === id)).filter((r): r is T => !!r);
+  return list.find(r => r.members.length === 2) ?? list[0];
+}
+/** 표시용 — 「자관 이름」, 여러 개면 「자관 이름 외 n」 */
+export function relsLabel<T extends { id: string; name: string; members: unknown[] }>(ids: string[], rels: T[]): { rep?: T; text: string } {
+  const rep = repRel(ids, rels);
+  const n = ids.filter(id => rels.some(r => r.id === id)).length;
+  return { rep, text: rep ? `${rep.name}${n > 1 ? ` 외 ${n - 1}` : ''}` : '' };
 }
 
 export const PLAYLOG_SEED: PlayRecord[] = [];

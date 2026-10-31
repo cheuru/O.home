@@ -4,7 +4,11 @@
 // · 포인트 자동은 기준색/톤을 "변경했을 때만" 전체 재파생
 // · 변경은 즉시 미리보기(DOM)되지만 저장은 [SAVE]를 눌러야 확정 — 새로고침 시 저장본으로 복귀
 // TODO(0차→): Supabase 연결 시 site_settings 테이블로 저장 위치 이동
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+
+// 서버 렌더링에서는 경고가 나지 않게 — 브라우저에서만 그리기 전에 적용한다
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 import {
   ThemeMode, PointTone, ThemeVars, ThemeState, ThemeStore, ThemePreset,
   DARK_THEME, DEFAULT_THEME_STORE, defaultVarsFor, derivePointTheme, themeToCssVars,
@@ -22,6 +26,10 @@ interface ThemeCtx {
   /** 페이지 배경만 따로 (v2.0 사용자 요청 — 자관별 배경 그라데이션).
    *  테마컬러(setPageTheme)가 팔레트 전체를 바꾸는 것과 달리 배경 두 색·각도만 덮어쓴다. */
   setPageBg: (bg: PageBg | null) => void;
+  /** 페이지 배경 사진 (v3.5 → v5.1 사용자 요청) — 자관 배경 이미지를 환경설정의 배경 변경과
+   *  똑같이 페이지 전체 배경(고정·cover·블러)으로 깐다. 상단 배너·페이드 없이 화면 전체가
+   *  한 장으로 이어져 끊김이 없다. 이미 풀어 둔 blob/원격 URL과 블러(px)를 받는다. */
+  setPageBgImage: (url: string | null, blur?: number) => void;
   /** 현재(드래프트) 상태 — 기존 소비자 호환 형태 {mode, pointTone, vars} */
   state: ThemeState;
   dirty: boolean;                              // 저장 안 된 변경 존재
@@ -68,6 +76,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [presets, setPresets] = useState<ThemePreset[]>([]);
   const [pageColor, setPageColor] = useState<{ color: string; tone?: PointTone } | null>(null);
   const [pageBg, setPageBgState] = useState<PageBg | null>(null);   // 자관별 배경 (v2.0)
+  const [pageBgImageState, setPageBgImageState] = useState<{ url: string; blur: number } | null>(null); // 자관 배경 사진 (v3.5, v5.1)
+  const pageBgImageUrl = pageBgImageState?.url ?? null;
+  const pageBgImageBlur = pageBgImageState?.blur ?? 0;
+  const pathname = usePathname();
   const [loaded, setLoaded] = useState(false);   // 저장본 로드 전 기본 다크를 DOM에 쓰지 않기 (FOUC 방지)
 
   // 최초 로드 — v2 우선, 없으면 v1 마이그레이션 (기존 vars를 해당 모드의 수정본으로 승계)
@@ -103,7 +115,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // 드래프트 변경 시 DOM 즉시 반영 (미리보기) — 저장은 save()에서만.
   // 로드 전에는 건드리지 않음 — 첫 페인트의 인라인 FOUC 맵을 기본 다크로 덮어써 깜빡이는 것 방지 (v1.9)
-  useEffect(() => {
+  useIsoLayoutEffect(() => {
     if (!loaded) return;
     /* 캐릭터·자관 테마컬러는 색만 바꾸는 것 — 파생 팔레트가 ThemeVars를 통째로 새로 만들어
        **표시 옵션까지 기본값으로 리셋**되던 것을 사이트 설정에서 이어받는다 (v2.0 사용자 제보 —
@@ -113,34 +125,76 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       ? {
         ...derivePointTheme(pageColor.color, pageColor.tone ?? draft.pointTone),
         pageHead: site.pageHead, pageHeadM: site.pageHeadM,
+        pageTitleShadow: site.pageTitleShadow, pageTitleShadowColor: site.pageTitleShadowColor, pageTitleShadowAmt: site.pageTitleShadowAmt,
       }
       : site);
     // 페이지 배경 지정 (v2.0) — 팔레트를 적용한 뒤에 배경 세 값만 덮어쓴다.
     // 이 effect가 팔레트를 다시 칠하므로 순서상 여기서 덮어야 남는다.
     const root = document.documentElement;
+    if (!pageColor && !pageBg && !pageBgImageUrl && pathname !== '/' && site.subBgOn) {
+      root.style.setProperty('--bg-g1', site.subBgG1 ?? site.bgG1);
+      root.style.setProperty('--bg-g2', site.subBgG2 ?? site.bgG2);
+      root.style.setProperty('--bg-angle', `${site.subBgAngle ?? site.bgAngle ?? 180}deg`);
+    }
     if (pageBg) {
       root.style.setProperty('--bg-g1', pageBg.g1);
       root.style.setProperty('--bg-g2', pageBg.g2);
       root.style.setProperty('--bg-angle', `${pageBg.angle}deg`);
       root.style.setProperty('--bg-image', 'none');   // 사이트 배경 이미지가 덮지 않게
     }
-  }, [draft, pageColor, pageBg, loaded]);
+    // 자관 배경 사진(pageBgImageUrl)이 있으면 블러는 자관에서 지정한 값으로 — 환경설정의
+    // 배경 변경과 똑같이 화면 전체(고정)에 cover로 깔고, 밝기·채도·높이는 건드리지 않는다 (v5.1).
+    // pageBgImageUrl이 풀리면 이 effect가 다시 실행되면서 자연히 테마값으로 되돌아간다
+    if (pageBgImageUrl) {
+      root.style.setProperty('--bg-blur', `${pageBgImageBlur}px`);
+    }
+    // 메인 외 화면은 따로 정한 블러 (자관 배경 사진이 있으면 그쪽 값이 우선)
+    else if (pathname !== '/' && site.bgBlurSub != null) {
+      root.style.setProperty('--bg-blur', `${Math.max(0, site.bgBlurSub)}px`);
+    }
+    root.style.removeProperty('--bg-brightness');
+    root.style.removeProperty('--bg-saturate');
+    root.style.removeProperty('--bg-page-height');
+  }, [draft, pageColor, pageBg, pageBgImageUrl, pageBgImageBlur, pathname, loaded]);
 
-  // 배경 이미지 (v1.9) — IndexedDB 파일을 blob URL로 풀어 --bg-image 적용 (그라데이션 모드면 해제)
-  useEffect(() => {
+  // 배경 이미지 (v1.9) — IndexedDB 파일을 blob URL로 풀어 --bg-image 적용 (그라데이션 모드면 해제).
+  // 자관 헤더 사진(pageBgImageUrl, v3.5)이 있으면 그게 최우선 — 상단 바가 투명이라
+  // body 배경이 그대로 비쳐 보이므로, 헤더 사진을 body 배경으로도 깔아 위쪽 빈 띠가 안 생기게 한다
+  // 배경 사진이 바뀔 때만 부드럽게 떠오르게 한다 — 게시판을 옮길 때 배경이 번쩍이지 않게. 같은 값이면(테마 슬라이더 조정 등) 건드리지 않는다
+  const lastBgImg = useRef<string | null>(null);
+  const setBgImage = (root: HTMLElement, value: string | null) => {
+    if (value === lastBgImg.current) return;
+    // 이전 사진은 한 겹 아래(body::after)에 그대로 두고, 새 사진이 그 위에서 떠오른다 — 맞교차
+    root.style.setProperty('--bg-image-prev', lastBgImg.current ?? 'none');
+    lastBgImg.current = value;
+    if (value) root.style.setProperty('--bg-image', value); else root.style.removeProperty('--bg-image');
+    root.classList.remove('bg-fx');
+    void root.offsetWidth;
+    root.classList.add('bg-fx');
+    window.setTimeout(() => { root.classList.remove('bg-fx'); root.style.removeProperty('--bg-image-prev'); }, 900);
+  };
+  useIsoLayoutEffect(() => {
     if (!loaded) return;
-    const vars = draft.perMode[draft.mode];
     const root = document.documentElement;
-    if (vars.bgType === 'image' && vars.bgImageId && !pageColor && !pageBg) {
-      const ref = vars.bgImageId;
+    if (pageBgImageUrl) {
+      setBgImage(root, `url("${pageBgImageUrl}")`);
+      return;
+    }
+    const vars = draft.perMode[draft.mode];
+    // 메인 외 화면에서 따로 정한 배경이 켜져 있으면 그쪽 종류·이미지를 쓴다
+    const subOn = !!vars.subBgOn && pathname !== '/';
+    const effType = subOn ? (vars.subBgType ?? 'gradient') : vars.bgType;
+    const effImg = subOn ? vars.subBgImageId : vars.bgImageId;
+    if (effType === 'image' && effImg && !pageColor && !pageBg) {
+      const ref = effImg;
       /* **주소면 그대로 쓴다** (v2.0 사용자 발견 — 「배경에 사진을 올렸는데 안 바뀐다」).
          서버 모드에서는 올린 이미지가 저장소의 공개 주소로 저장되는데, 여기서만 그것을
          `getBlob`으로 **다시 내려받아** blob 주소로 바꾸고 있었다. 그 fetch는 저장소의
          CORS 설정에 걸리면 조용히 실패한다 — 화면 어디에도 오류가 안 뜨고 배경만 안 바뀐다.
          다른 이미지들은 전부 주소를 그대로 쓰므로(useBlobUrl) 잘 나왔다. 여기만 예외였다. */
       if (/^(https?:|data:|blob:)/.test(ref)) {
-        root.style.setProperty('--bg-image', `url("${ref}")`);
-        return () => { root.style.removeProperty('--bg-image'); };
+        setBgImage(root, `url("${ref}")`);
+        return;
       }
       // 브라우저 저장(IndexedDB) 파일 id — 그때만 풀어서 blob 주소를 만든다
       let cancelled = false;
@@ -148,16 +202,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       getBlob(ref).then(b => {
         if (cancelled || !b) return;
         url = URL.createObjectURL(b);
-        root.style.setProperty('--bg-image', `url("${url}")`);
+        setBgImage(root, `url("${url}")`);
       });
       return () => {
         cancelled = true;
-        root.style.removeProperty('--bg-image');
-        if (url) URL.revokeObjectURL(url);
+        // 곧바로 다음 사진으로 바뀌는 경우가 많아 여기서 지우지 않는다(번쩍임 방지) — 주소만 나중에 풀어 준다
+        const u = url;
+        if (u) window.setTimeout(() => URL.revokeObjectURL(u), 1500);
       };
     }
-    root.style.removeProperty('--bg-image');
-  }, [draft, pageColor, pageBg, loaded]);
+    setBgImage(root, null);
+  }, [draft, pageColor, pageBg, pageBgImageUrl, pathname, loaded]);
 
   const dirty = useMemo(() => JSON.stringify(saved) !== JSON.stringify(draft), [saved, draft]);
 
@@ -232,6 +287,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setPageTheme = useCallback((color: string | null, tone?: PointTone) =>
     setPageColor(color ? { color, tone } : null), []);
   const setPageBg = useCallback((bg: PageBg | null) => setPageBgState(bg), []);
+  const setPageBgImage = useCallback((url: string | null, blur?: number) =>
+    setPageBgImageState(url ? { url, blur: Math.max(0, blur ?? 0) } : null), []);
 
   // 기존 소비자 호환 — state.vars = 현재 모드의 드래프트 값
   const state: ThemeState = useMemo(() => ({
@@ -241,7 +298,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{
       state, dirty, setMode, setPointAccent, setPointTone, setVar,
-      resetMode, save, discard, presets, savePreset, applyPreset, removePreset, setPageTheme, setPageBg,
+      resetMode, save, discard, presets, savePreset, applyPreset, removePreset, setPageTheme, setPageBg, setPageBgImage,
     }}>
       {children}
     </Ctx.Provider>

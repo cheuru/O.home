@@ -5,6 +5,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import { Mark, mergeAttributes } from '@tiptap/core';
+import { TextSelection } from '@tiptap/pm/state';
+import type { Transaction } from '@tiptap/pm/state';
 import { putBlob } from '@/lib/blobStore';
 import { useToast } from '@/components/ui/Toast';
 
@@ -18,6 +21,63 @@ function toDataUrl(f: File): Promise<string> {
   });
 }
 
+/** 글자색(대표 테마색) 표식 — <span data-theme-color="#hex" style="color:#hex">. 색은 #rrggbb만 받는다 */
+const ThemeColor = Mark.create({
+  name: 'themeColor',
+  addAttributes() {
+    return {
+      // 'theme' = 캐릭터 대표 테마색을 따라간다(페이지가 --char-theme로 현재 색을 내려줌), #rrggbb = 옛 데이터(고정 색)
+      color: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-theme-color'),
+        renderHTML: (attrs: { color?: string | null; fb?: string | null }) => {
+          if (!attrs.color) return {};
+          if (attrs.color === 'gray') return { 'data-theme-color': 'gray', style: 'color:var(--char-gray,var(--faint,#8a909a))' };
+          if (attrs.color !== 'theme') return { 'data-theme-color': attrs.color, style: `color:${attrs.color}` };
+          // 변수를 못 받는 곳(목록·미리보기 등)에서도 읽히도록 저장 시점의 색을 대체값으로
+          return { 'data-theme-color': 'theme', style: `color:var(--char-theme${attrs.fb ? `,${attrs.fb}` : ''})` };
+        },
+      },
+      fb: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-theme-fb'),
+        renderHTML: (attrs: { color?: string | null; fb?: string | null }) => (attrs.color === 'theme' && attrs.fb ? { 'data-theme-fb': attrs.fb } : {}),
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'span[data-theme-color]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['span', mergeAttributes(HTMLAttributes), 0]; },
+});
+
+/** 블록 서식(제목·목록·인용)은 원래 커서가 놓인 줄(문단) 전체에 걸린다 — 그래서 일부만 골라도 같은 문단의 나머지 글까지 같이 바뀌었다.
+ *  서식을 적용하기 전에 선택 시작·끝 지점에서 문단을 나눠, 고른 부분만 따로 한 줄이 되게 한다.
+ *  (Shift+Enter 줄바꿈으로 이어진 줄은 그 줄바꿈 자리에서 나누고 줄바꿈은 없앤다. 선택이 문단 경계에 있으면 나누지 않는다) */
+function splitAtSelection({ tr }: { tr: Transaction }) {
+  if (tr.selection.empty) return true;
+  let f = tr.selection.from, t = tr.selection.to;
+  const depthFor = (pos: number) => {
+    const $p = tr.doc.resolve(pos);
+    return $p.depth >= 2 && $p.node($p.depth - 1).type.name === 'listItem' ? 2 : 1;
+  };
+  const textblockAt = (pos: number) => tr.doc.resolve(pos).parent.isTextblock;
+  if (!textblockAt(f) || !textblockAt(t)) return true;
+  // 끝 지점 먼저 (앞쪽 위치가 밀리지 않게)
+  {
+    const $t = tr.doc.resolve(t);
+    if ($t.nodeAfter?.type.name === 'hardBreak') tr.delete(t, t + 1);
+    const $t2 = tr.doc.resolve(t);
+    if ($t2.parentOffset < $t2.parent.content.size) tr.split(t, depthFor(t));
+  }
+  {
+    const $f = tr.doc.resolve(f);
+    if ($f.nodeBefore?.type.name === 'hardBreak') { tr.delete(f - 1, f); f -= 1; t -= 1; }
+    const $f2 = tr.doc.resolve(f);
+    if ($f2.parentOffset > 0) { const d = depthFor(f); tr.split(f, d); f += 2 * d; t += 2 * d; }
+  }
+  tr.setSelection(TextSelection.create(tr.doc, f, t));
+  return true;
+}
+
 function TBtn({ on, label, title, onClick }: { on?: boolean; label: React.ReactNode; title: string; onClick: () => void }) {
   return (
     <button type="button" data-tip={title} className={`re-btn ${on ? 'on' : ''}`}
@@ -27,16 +87,18 @@ function TBtn({ on, label, title, onClick }: { on?: boolean; label: React.ReactN
   );
 }
 
-export function RichEditor({ value, onChange, placeholder }: {
+export function RichEditor({ value, onChange, placeholder, themeColor }: {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  /** 있으면 툴바에 「선택한 글자를 이 색(대표 테마색)으로」 버튼이 생긴다 */
+  themeColor?: string;
 }) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const editor = useEditor({
-    extensions: [StarterKit, Image],
+    extensions: [StarterKit, Image, ThemeColor],
     content: value || '<p></p>',
     immediatelyRender: false,
     editorProps: {
@@ -74,7 +136,7 @@ export function RichEditor({ value, onChange, placeholder }: {
   };
 
   return (
-    <div className="re-wrap">
+    <div className="re-wrap" style={themeColor ? ({ '--char-theme': themeColor } as React.CSSProperties) : undefined}>
       <div className="re-toolbar">
         <TBtn title="굵게" label={<b>B</b>} on={editor.isActive('bold')}
           onClick={() => editor.chain().focus().toggleBold().run()} />
@@ -82,18 +144,41 @@ export function RichEditor({ value, onChange, placeholder }: {
           onClick={() => editor.chain().focus().toggleItalic().run()} />
         <TBtn title="취소선" label={<s>S</s>} on={editor.isActive('strike')}
           onClick={() => editor.chain().focus().toggleStrike().run()} />
+        {/* 대표 테마색 — 선택한 글자를 캐릭터 대표 테마색으로 (이미 그 색이면 해제) */}
+        {themeColor && /^#[0-9a-f]{6}$/i.test(themeColor) && (
+          <TBtn title="글자를 대표 테마색으로 — 테마색을 바꾸면 같이 바뀝니다 (다시 누르면 해제)"
+            on={editor.isActive('themeColor')}
+            label={<span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+              <b style={{ fontSize: 13 }}>A</b>
+              <span style={{ width: 14, height: 3, borderRadius: 1, background: themeColor, marginTop: 1 }} />
+            </span>}
+            onClick={() => (editor.isActive('themeColor')
+              ? editor.chain().focus().unsetMark('themeColor').run()
+              : editor.chain().focus().setMark('themeColor', { color: 'theme', fb: themeColor }).run())} />
+        )}
+        {/* 회색 — 하나의 버튼. 글자는 「지금 화면 테마」를 따라 밝은 테마에선 밝은 회색, 어두운 테마에선 어두운 회색으로 바뀐다
+            (캐릭터 상세는 .cs의 --char-gray, 그 밖의 곳은 --faint). 테마색과 같은 표식이라 동시에 걸리지 않고, 다시 누르면 해제 */}
+        <TBtn title="글자를 회색으로 — 밝은 테마에선 밝은 회색, 어두운 테마에선 어두운 회색으로 바뀝니다 (다시 누르면 해제)"
+          on={editor.isActive('themeColor', { color: 'gray' })}
+          label={<span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+            <b style={{ fontSize: 13 }}>A</b>
+            <span style={{ width: 14, height: 3, borderRadius: 1, marginTop: 1, background: 'linear-gradient(90deg,#a3a9b3 50%,#565c67 50%)', boxShadow: '0 0 0 1px rgba(0,0,0,.18)' }} />
+          </span>}
+          onClick={() => (editor.isActive('themeColor', { color: 'gray' })
+            ? editor.chain().focus().unsetMark('themeColor').run()
+            : editor.chain().focus().setMark('themeColor', { color: 'gray', fb: null }).run())} />
         <span className="re-sep" />
         <TBtn title="제목" label="H2" on={editor.isActive('heading', { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} />
+          onClick={() => editor.chain().focus().command(splitAtSelection).toggleHeading({ level: 2 }).run()} />
         <TBtn title="소제목" label="H3" on={editor.isActive('heading', { level: 3 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} />
+          onClick={() => editor.chain().focus().command(splitAtSelection).toggleHeading({ level: 3 }).run()} />
         <span className="re-sep" />
         <TBtn title="글머리 목록" label="•≡" on={editor.isActive('bulletList')}
-          onClick={() => editor.chain().focus().toggleBulletList().run()} />
+          onClick={() => editor.chain().focus().command(splitAtSelection).toggleBulletList().run()} />
         <TBtn title="번호 목록" label="1≡" on={editor.isActive('orderedList')}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+          onClick={() => editor.chain().focus().command(splitAtSelection).toggleOrderedList().run()} />
         <TBtn title="인용" label="❝" on={editor.isActive('blockquote')}
-          onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+          onClick={() => editor.chain().focus().command(splitAtSelection).toggleBlockquote().run()} />
         <TBtn title="구분선" label="—" onClick={() => editor.chain().focus().setHorizontalRule().run()} />
         <span className="re-sep" />
         <TBtn title={busy ? '올리는 중…' : '이미지 올리기'} label={busy ? '⏳' : '🖼'}
