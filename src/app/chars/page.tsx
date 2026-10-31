@@ -9,7 +9,7 @@ import { Character, CHAR_SEED, charPath } from '@/lib/charStore';
 import { backend, isServerMode } from '@/lib/backend';
 import { useSectionParam, filterSection, sectionSetter, secQuery } from '@/lib/sectionStore';
 import { SearchBar, FitText } from '@/components/ui/Kit';
-import { CroppedBlobImg } from '@/components/ui/CropEditor';
+import { RxCard } from '@/components/rels/RxCard';
 
 import { useToast } from '@/components/ui/Toast';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
@@ -63,25 +63,25 @@ function CharsInner() {
           {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/chars/new' + secQuery('chars', sec.id))}>＋ ADD CHARACTER</button>}
         </div>
       </div>
-      <div className="g5 chars-grid">
+      {/* 캐릭터 인덱스 — 자관 목록과 같은 화면 틀(모서리 표식·머리줄·바닥줄·큰 배경 글씨) 안에 카드가 놓인다 */}
+      <div className="rx">
+        <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
+        <div className="rx-headline">
+          <span className="rx-cap">CHARACTER ARCHIVE // CHARACTER INDEX</span>
+          <span className="rx-count"><em>CHARACTER</em><b>{String(visible.length).padStart(2, '0')}</b></span>
+        </div>
+        <div className="rx-ghost" aria-hidden="true">CHARACTER</div>
+      <div className="g5 chars-grid rx-pad">
         {visible.map((c, i) => {
           const priv = c.visibility === 'private';
           const sp = sort(i) as { style?: React.CSSProperties };
           return (
-            <div key={c.id} className="char-card" {...sort(i)}
-              style={{ ...(priv ? { opacity: .45 } : undefined), ...sp.style }}
-              onClick={() => { if (!editOn) router.push(charPath(c)); }}>
-              <div className="thumb" style={{ position: 'relative' }}>
-                <CroppedBlobImg fileRef={c.arts?.[0] ?? c.thumbId} crop={c.thumbCrop} ph={c.thumbClass}
-                  label={priv ? '비공개' : '3:4'} />
-              </div>
-              <div className="nm">
-                {/* 리스트에서는 기본 폰트로 통일 — 개별 이름 폰트는 상세에서만 (사용자 확정).
-                    긴 이름은 두 줄로 갈라지지 않게 한 줄에 맞춰 줄인다 */}
-                <b style={{ minWidth: 0, flex: 1 }}><FitText>{c.name}</FitText></b>
-                <i style={{ background: c.color }} />
-              </div>
-            </div>
+            <RxCard adaptive key={c.id} {...(sort(i) as Record<string, unknown>)} no={i + 1} anim={i % 10}
+              fileRef={c.arts?.[0] ?? c.thumbId} crop={c.thumbCrop} ph={c.thumbClass} phLabel={priv ? '비공개' : '3:4'}
+              tc={c.color || 'var(--accent,#7fd6d0)'} fileText={'CHARACTER\nFILE'} small={c.sub} title={c.name}
+              who={[{ name: '', color: c.color || 'var(--accent,#7fd6d0)' }]} priv={priv}
+              style={{ aspectRatio: '214/325', ...sp.style }}
+              onClick={() => { if (!editOn) router.push(charPath(c)); }} />
           );
         })}
         {visible.length === 0 && (
@@ -89,6 +89,12 @@ function CharsInner() {
             표시할 캐릭터가 없습니다
           </p>
         )}
+      </div>
+        <div className="rx-foot">
+          <span className="rx-bar" aria-hidden="true" />
+          <span className="rx-cap">CHARACTER FILE // {String(visible.length).padStart(2, '0')}</span>
+          <span className="rx-chev" aria-hidden="true">›››</span>
+        </div>
       </div>
     </section>
   );

@@ -4,26 +4,42 @@
 // 아트는 여러 장 — 첫 장이 대표 풀 아트이자 리스트 썸네일(3:4 크롭) 원본 (6.1)
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { Character, CharTab, ColorChip, Visibility, CharGrant } from '@/lib/charStore';
+import { DecoScript, DecoGhost, DEFAULT_DECO_SCRIPT, DEFAULT_DECO_GHOST } from '@/lib/charStore';
+import { ScriptPlacer } from '@/components/chars/ScriptPlacer';
+import { Character, CharTab, ColorChip, Visibility, CharGrant, GalleryImg, GalleryPost, galleryPostsOf, hasGallery, CHAR_SEED, Relation, REL_SEED, relGalleryTagsForChar, RelSet, RelLinkItem, charAuList } from '@/lib/charStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
-import { newId } from '@/lib/postStore';
+import { RuleSelect, RuleSpecsEditor } from '@/components/chars/RuleSpecsEditor';
+import { Spec } from '@/lib/charRuleConfig';
+import { newId, useLocalList, FoldType } from '@/lib/postStore';
+import { PlayRecord, PLAYLOG_SEED } from '@/lib/galleryStore';
 import { putBlob, getBlob, useBlobUrl } from '@/lib/blobStore';
 import { useFonts, deVarFamily } from '@/lib/fontStore';
-import { KInput, KSelect, KStep, KCheck } from '@/components/ui/Kit';
+import { KInput, KTextarea, KSelect, KStep, KCheck, KRadio, KDate } from '@/components/ui/Kit';
 import { RichEditor } from '@/components/ui/RichEditor';
 import { ColorField } from '@/components/ui/ColorField';
 import { CropEditor, CropValue, CropImg } from '@/components/ui/CropEditor';
 import { DragList } from '@/components/ui/DragList';
+import { PageBgmEditor } from '@/components/bgm/PageBgmEditor';
+import { GalleryEditView, GalleryTagLinkPicker } from '@/components/gallery/GalleryPostsEditor';
+import type { PageBgm } from '@/lib/bgmStore';
 import { useConfirmDelete } from '@/components/ui/Modal';
 import { SymbolInput } from '@/components/ui/SymbolInput';
 import { fileDrop } from '@/lib/dnd';
 import { isValidSlug, slugify } from '@/lib/link';
 import { useToast } from '@/components/ui/Toast';
 import { Lightbox } from '@/components/ui/Lightbox';
+import { AuAddBlock } from '@/components/chars/AuAddBlock';
 
-interface SpecRow { id: string; label: string; value: string }
+interface SpecRow extends Spec { id: string }
 interface ColorRow extends ColorChip { id: string }
 interface ArtItem { id: string; ref?: string; url?: string; file?: File }
+
+/** 탭 목록 아래 "갤러리" 항목 전용 화면으로 쓰는 view 값 (탭 id와 겹치지 않는 고정 문자열) */
+const GALLERY_VIEW = '__gallery__';
+const REL_VIEW = '__rel__';
+const BGM_VIEW = '__bgm__';
+/** 탭 목록 아래 "TRPG 기록" 항목 전용 화면으로 쓰는 view 값 */
+const TRPG_VIEW = '__trpg__';
 
 function ArtThumb({ item, crop }: { item: ArtItem; crop?: CropValue }) {
   const loaded = useBlobUrl(item.ref);
@@ -32,7 +48,54 @@ function ArtThumb({ item, crop }: { item: ArtItem; crop?: CropValue }) {
   return <CropImg src={src} crop={crop} />;
 }
 
-export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }: {
+function TabArtThumb({ fileRef }: { fileRef: string }) {
+  const url = useBlobUrl(fileRef);
+  if (!url) return <div className="ph" style={{ width: '100%', height: '100%' }} />;
+  return <CropImg src={url} />;
+}
+
+/** 탭 전용 아트 편집 — 대표·썸네일 개념 없이 전부 "추가 아트"로만 다룬다.
+ *  선택 즉시 업로드해 ref로 들고 있어(파일은 임시 보관하지 않음), 본 폼의 SAVE와 별개로 동작한다. */
+function TabArtEditor({ arts, onChange }: { arts: string[]; onChange: (arts: string[]) => void }) {
+  const [lb, setLb] = useState<number | null>(null);
+  const add = async (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    const refs = await Promise.all(Array.from(list).map(f => putBlob(f)));
+    onChange([...arts, ...refs]);
+  };
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      {arts.length > 0 && (
+        <DragList items={arts.map(ref => ({ ref }))} keyOf={a => a.ref} onReorder={list => onChange(list.map(a => a.ref))}
+          render={(a, i) => (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', width: '100%', padding: '3px 0' }}>
+              <span className="drag-h">⠿</span>
+              <div data-tip="클릭하면 원본 보기" onClick={() => setLb(i)}
+                style={{ width: 56, aspectRatio: '3/4', borderRadius: 7, overflow: 'hidden', position: 'relative', flexShrink: 0, cursor: 'zoom-in' }}>
+                <TabArtThumb fileRef={a.ref} />
+              </div>
+              <span className="pill">추가 아트</span>
+              <span className="fx" style={{ marginLeft: 'auto' }}
+                onClick={() => onChange(arts.filter((_, idx) => idx !== i))}>✕</span>
+            </div>
+          )} />
+      )}
+      <input id="tabArtsF" type="file" accept="image/*" multiple style={{ display: 'none' }}
+        onChange={e => { add(e.target.files); e.target.value = ''; }} />
+      <button className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 11, justifySelf: 'start' }}
+        onClick={() => document.getElementById('tabArtsF')?.click()}
+        {...fileDrop(fl => add(fl))}>
+        ＋ ADD ART
+      </button>
+      {lb != null && arts[lb] != null && (
+        <Lightbox srcs={arts} index={lb} onClose={() => setLb(null)} />
+      )}
+    </div>
+  );
+}
+
+export function CharEditForm({ initial, onSave, onCancel, auMode, auKey, existingIds }: {
+  auKey?: string;                          // AU 전용 편집일 때 그 AU 키 — 관계란을 이 AU 몫으로 저장한다
   initial: Character | null;               // null = 신규 등록
   onSave: (c: Character) => void;
   onCancel: () => void;
@@ -49,21 +112,55 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
   // id는 그대로 두고 별명(slug)만 저장하므로 참조가 끊어지지 않고 옛 주소도 계속 열린다
   const [slug, setSlug] = useState(initial?.slug ?? '');
   const [sub, setSub] = useState(initial?.sub ?? '');
+  const [altName, setAltName] = useState(initial?.altName ?? '');   // 이름 다른 표기 (선택)
   const [color, setColor] = useState(initial?.color ?? '#5d636d');
   const [themeMode, setThemeMode] = useState<'default' | 'custom'>(initial?.themeMode ?? 'default');
+  const [themeTone, setThemeTone] = useState<'site' | 'auto' | 'dark' | 'light'>(initial?.themeTone ?? 'site');
   const [visibility, setVisibility] = useState<Visibility>(initial?.visibility ?? 'public');
   const [fontId, setFontId] = useState(initial?.fontId ?? 'serif');
   const [nameSize, setNameSize] = useState(initial?.nameSize ?? 38);   // 상세 큰 이름 크기 (v2.0)
   const [nameBold, setNameBold] = useState(initial?.nameBold ?? true); // 상세 이름 볼드 (v2.0 — 기본 켜짐)
   const [bodyFontId, setBodyFontId] = useState(initial?.bodyFontId ?? 'default');
+  // 상세 소개 본문 글자색 — 기본은 자동(배경 밝기를 보고 밝은/어두운 글자를 고른다)
+  const [bodyInk, setBodyInk] = useState<'auto' | 'light' | 'dark' | 'custom'>(initial?.bodyInk ?? 'auto');
+  const [deco, setDeco] = useState<'on' | 'off'>(initial?.deco ?? 'on');
+  const [decoScript, setDecoScript] = useState<DecoScript | null>(initial?.decoScript ?? null);
+  const [decoGhost, setDecoGhost] = useState<DecoGhost>(initial?.decoGhost ?? { ...DEFAULT_DECO_GHOST });
+  const [decoFontId, setDecoFontId] = useState(initial?.decoFontId ?? '');
+  const [decoBg, setDecoBg] = useState<'full' | 'band'>(initial?.decoBg ?? 'full');
+  const [artShadow, setArtShadow] = useState<'auto' | 'dark' | 'light' | 'none'>(initial?.artShadow ?? 'auto');
+  const [bodyInkColor, setBodyInkColor] = useState(initial?.bodyInkColor ?? '#ffffff');
   const [specs, setSpecs] = useState<SpecRow[]>(
-    (initial?.specs ?? [{ label: '성별', value: '' }, { label: '키', value: '' }]).map(s => ({ ...s, id: newId() })));
+    (initial?.specs ?? [{ label: '성별', value: '' }, { label: '키', value: '' }]).map(s => ({ ...s, id: s.key ?? newId() })));
+  // TRPG 룰 이름 (v2.1 — 자놀 캐릭터 기본 정보 항목 룰별 정보란). 미선택이면 기존처럼 자유 항목(specs) 그대로.
+  const [rule, setRule] = useState(initial?.rule ?? '');
+  const [sheetUrl, setSheetUrl] = useState(initial?.sheetUrl ?? '');
+  const handleRuleChange = (newRule: string, ruleSpecs: Spec[]) => {
+    setRule(newRule);
+    if (!newRule) {
+      // 자유 항목으로 되돌아갈 때, 룰 항목만 채워져 있던 상태였다면 기본 항목으로 초기화
+      setSpecs(l => (l.some(s => s.type) ? [{ id: newId(), label: '성별', value: '' }, { id: newId(), label: '키', value: '' }] : l));
+    } else {
+      setSpecs(ruleSpecs.map(s => ({ ...s, id: s.key ?? newId() })));
+    }
+  };
   const [colors, setColors] = useState<ColorRow[]>((initial?.colors ?? []).map(c => ({ ...c, id: newId() })));
   const [colorTipMode, setColorTipMode] = useState<'hex' | 'both' | 'label'>(initial?.colorTipMode ?? 'hex');
   // 색 점 테두리 (v2.0 사용자 요청) — 없음 / 1px(색 지정). 미지정이면 지금까지의 옅은 테두리
   const [colorBd, setColorBd] = useState<string | undefined>(initial?.colorBd);
   const [basicHtml, setBasicHtml] = useState(initial?.basicHtml ?? '');
   const [tabs, setTabs] = useState<CharTab[]>(initial?.tabs ?? []);
+  // 캐릭터 갤러리 (v2.5) — undefined면 갤러리 기능 자체를 안 씀, 배열이면(빈 배열 포함) 켜진 상태
+  // 사진 묶음(v3.4) — 예전에 사진만 쌓아 둔 갤러리는 사진 한 장 = 묶음 하나로 바꿔 불러온다
+  const [gallery, setGallery] = useState<GalleryPost[] | undefined>(initial && hasGallery(initial) ? galleryPostsOf(initial) : undefined);
+  // TRPG 참여 세션 탭 (v2.8) — 신규(아직 저장 전) 캐릭터는 안정된 id가 없어 플레이기록과
+  // 연동할 수 없으므로, 기존 캐릭터를 수정할 때만 켤 수 있다
+  const [trpgEnabled, setTrpgEnabled] = useState<boolean>(!!initial?.trpgEnabled);
+  const [trpgOrder, setTrpgOrder] = useState<string[]>(initial?.trpgOrder ?? []);
+  // 이미 플레이기록 게시판 쪽에서 이 캐릭터를 참여자로 연결해 둔 게 있으면,
+  // ADD TRPG를 따로 누르지 않아도 탭이 있는 것으로 본다 (v3.0 사용자 요청)
+  const [playRecordsForCheck] = useLocalList<PlayRecord>('ohome.playlog.v1', PLAYLOG_SEED);
+  const hasTrpgLinks = !!initial?.id && playRecordsForCheck.some(r => r.charIds?.includes(initial.id!));
   const [arts, setArts] = useState<ArtItem[]>(() => {
     const refs = initial?.arts ?? (initial?.artId ? [initial.artId] : initial?.thumbId ? [initial.thumbId] : []);
     return refs.map(r => ({ id: newId(), ref: r }));
@@ -74,6 +171,42 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
   const [lb, setLb] = useState<number | null>(null);   // 아트 썸네일 클릭 → 원본 보기
   // 화면 전환: 메인 폼 / 탭 전용 편집 화면
   const [view, setView] = useState<'main' | string>('main');
+  // 이 캐릭터 상세 페이지 전용 BGM (v5.9) — 곡이 없으면 저장 시 비운다(홈페이지 BGM 그대로)
+  const [bgm, setBgm] = useState<PageBgm | undefined>(initial?.bgm);
+  // REL(관계) 탭 (v6.8) — 켜면 상세 화면에 REL 버튼. 직접 지정한 관계만 여기서 정하고, 자관 관계는 자동으로 모인다
+  // 상세 화면 레이아웃 (v7.0) — 스테이지(기본) / 클래식
+  const [detailLayout, setDetailLayout] = useState<'stage' | 'classic'>(initial?.detailLayout === 'classic' ? 'classic' : 'stage');
+  const [relOn, setRelOn] = useState<boolean>(!!initial?.relEnabled || !!(auKey && initial?.auRel?.[auKey]));
+  // 관계란은 원본('')과 이 캐릭터의 AU 키마다 한 벌씩 — relTab이 지금 편집 중인 벌
+  const [relSets, setRelSets] = useState<Record<string, RelSet>>(() => ({
+    '': { notes: initial?.relNotes ?? {}, links: initial?.relLinks ?? [], relAu: initial?.relAu ?? {} },
+    ...Object.fromEntries(Object.entries(initial?.auRel ?? {}).map(([k, v]) => [k, { notes: v.notes ?? {}, links: v.links ?? [], relAu: v.relAu ?? {} }])),
+  }));
+  const [relTab, setRelTab] = useState(auMode && auKey ? auKey : '');
+  const curSet: RelSet = relSets[relTab] ?? {};
+  const relNotes = curSet.notes ?? {};
+  const relLinks = curSet.links ?? [];
+  const relAuMap = curSet.relAu ?? {};
+  const patchSet = (p: Partial<RelSet>) => setRelSets(m => ({ ...m, [relTab]: { ...(m[relTab] ?? {}), ...p } }));
+  const setRelNotes = (f: (n: Record<string, string>) => Record<string, string>) => patchSet({ notes: f(relNotes) });
+  const setRelLinks = (f: (l: RelLinkItem[]) => RelLinkItem[]) => patchSet({ links: f(relLinks) });
+  const [allChars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  // 자관 갤러리 연동 태그 (v6.3) — 이 캐릭터가 멤버인 자관 갤러리의 태그 중 이 캐릭터 갤러리에도 보일 것
+  const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  const [tagLinks, setTagLinks] = useState<string[]>(initial?.galleryTagLinks ?? []);
+  const tagOptions = relGalleryTagsForChar(initial?.id, rels);
+
+  // 상세 배경 이미지 (v5.8 사용자 요청) — 자관의 배경 이미지·환경설정의 배경 변경과 같은 방식(업로드 + 블러)
+  const initBgId = initial?.bgImgId;
+  const [bgFile, setBgFile] = useState<File | null>(null);
+  const [bgUrl, setBgUrl] = useState('');
+  const [bgRemoved, setBgRemoved] = useState(false);
+  const [bgBlur, setBgBlur] = useState(initial?.bgBlur ?? 16);
+  const pickBg = (f: File | undefined) => {
+    if (!f || !f.type.startsWith('image/')) return;
+    setBgFile(f); setBgUrl(URL.createObjectURL(f)); setBgRemoved(false);
+  };
+  const hasBg = !!bgUrl || (!bgRemoved && !!initBgId);
 
   const addArts = (list: FileList | null) => {
     if (!list || list.length === 0) return;
@@ -99,26 +232,76 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
       // 입력한 그대로 저장 — 예전에는 대문자로 바꿔 저장해서 소문자 이름을 쓸 수 없었다
       name: name.trim(),
       sub: sub.trim(),
+      // 비우면 저장하지 않는다 — 상세 화면에서도 표시하지 않음 (AU 저장 쪽은 '' 로 바꿔 원본을 물려받지 않게 한다)
+      altName: altName.trim() || undefined,
       color,
       themeMode,
+      themeTone: themeMode === 'custom' && themeTone !== 'site' ? themeTone : undefined,
       colors: colors.filter(x => x.hex).map(({ hex, label }) => ({ hex, label })),
       colorTipMode,
       colorBd,
-      specs: specs.filter(s => s.label.trim()).map(({ label, value }) => ({ label: label.trim(), value })),
+      specs: rule
+        // 룰 항목은 게이지/관계표 등 구조화된 값을 그대로 보존해야 하므로 label/value만 남기지 않는다
+        ? specs.map(({ id, ...rest }) => rest)
+        : specs.filter(s => s.label.trim()).map(({ label, value }) => ({ label: label.trim(), value })),
+      rule: rule || undefined,
+      sheetUrl: sheetUrl.trim() || undefined,
       tabs,   // 제목이 비어도 유지 — 필터로 사라지던 버그 수정 (v1.9 사용자 지적)
+      gallery: undefined,       // (구) 필드 — 묶음(galleryPosts)으로 옮겨 저장
+      galleryPosts: gallery,
+      trpgEnabled: trpgEnabled || undefined,
+      trpgOrder: trpgOrder.length ? trpgOrder : undefined,
       basicHtml,
       visibility,
       fontId,
       nameSize,
       nameBold,
       bodyFontId,
+      // 자동이면 저장하지 않는다(기본) — AU 저장은 edit/page.tsx가 'auto'로 명시해 원본 지정을 물려받지 않게 한다
+      artShadow: artShadow === 'auto' ? undefined : artShadow,
+      deco: deco === 'on' ? undefined : 'off',
+      decoBg: decoBg === 'full' ? undefined : 'band',
+      decoFontId: decoFontId || undefined,
+      decoGhost: decoGhost.x === DEFAULT_DECO_GHOST.x && decoGhost.y === DEFAULT_DECO_GHOST.y && decoGhost.scale === DEFAULT_DECO_GHOST.scale ? undefined : decoGhost,
+      decoScript: decoScript ? { ...decoScript, text: decoScript.text?.trim() || undefined, fontId: decoScript.fontId || undefined, color: decoScript.color || undefined } : undefined,
+      bodyInk: bodyInk === 'auto' ? undefined : bodyInk,
+      bodyInkColor: bodyInk === 'custom' ? bodyInkColor : undefined,
       thumbClass: initial?.thumbClass ?? '',
       arts: artIds,
       thumbId: artIds[0],       // 썸네일 = 첫 아트 + 크롭
       thumbCrop,
       artId: artIds[0],
+      bgImgId: bgFile ? await putBlob(bgFile) : (bgRemoved ? undefined : initBgId),
+      bgBlur: (bgFile || (!bgRemoved && initBgId)) ? bgBlur : undefined,
       own: initial?.own ?? true,
       grants: grants.length ? grants : undefined,
+      // AU 편집은 base 소관이라 건드리지 않는다 · 재생목록이 하나도 없으면 비움
+      bgm: auMode ? initial?.bgm : (bgm && bgm.playlists.length ? bgm : undefined),
+      galleryTagLinks: tagLinks.length ? tagLinks : undefined,   // AU 편집이면 이 AU의 서랍 연동 태그
+      detailLayout: auMode ? initial?.detailLayout : (detailLayout === 'classic' ? 'classic' : undefined),
+      // REL 탭 — AU 편집은 base 소관이라 건드리지 않는다
+      relEnabled: auMode ? (relOn ? true : initial?.relEnabled) : (relOn || undefined),
+      ...(() => {
+        const clean = (st: RelSet): RelSet | undefined => {
+          const notes = Object.fromEntries(Object.entries(st.notes ?? {}).filter(([, v]) => v.trim()));
+          const links = (st.links ?? []).filter(l => l.charId).map(l => (l.au ? l : { charId: l.charId, label: l.label }));
+          const relAu = Object.fromEntries(Object.entries(st.relAu ?? {}).filter(([, v]) => v));
+          return Object.keys(notes).length || links.length || Object.keys(relAu).length
+            ? { notes: Object.keys(notes).length ? notes : undefined, links: links.length ? links : undefined, relAu: Object.keys(relAu).length ? relAu : undefined }
+            : undefined;
+        };
+        // AU 편집 — 원본 관계란은 그대로 두고 이 AU 몫만 갱신한다
+        if (auMode) {
+          const rest = { ...(initial?.auRel ?? {}) };
+          const mine = auKey ? clean(relSets[auKey] ?? {}) : undefined;
+          if (auKey) { if (mine) rest[auKey] = mine; else delete rest[auKey]; }
+          return { relNotes: initial?.relNotes, relLinks: initial?.relLinks, relAu: initial?.relAu, auRel: Object.keys(rest).length ? rest : undefined };
+        }
+        if (!relOn) return { relNotes: undefined, relLinks: undefined, relAu: undefined, auRel: undefined };
+        const base = clean(relSets['']) ;
+        const auRel = Object.fromEntries(Object.entries(relSets).filter(([k]) => k).map(([k, v]) => [k, clean(v)]).filter(([, v]) => !!v)) as Record<string, RelSet>;
+        return { relNotes: base?.notes, relLinks: base?.links, relAu: base?.relAu, auRel: Object.keys(auRel).length ? auRel : undefined };
+      })(),
     });
   };
 
@@ -141,11 +324,156 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
     return <>
       <TabEditView
         tab={curTab}
+        themeColor={color}
         onChange={patch => setTabs(l => l.map(x => (x.id === curTab.id ? { ...x, ...patch } : x)))}
         onDelete={() => askDeleteTab(curTab.id, () => setView('main'))}
         onBack={() => setView('main')} />
       {del.element}
     </>;
+  }
+
+  /* ---------- REL(관계) 탭 전용 편집 화면 (v6.8) ---------- */
+  if (view === REL_VIEW && relOn) {
+    const others = allChars.filter(c => c.id !== initial?.id);
+    const myRels = initial?.id ? rels.filter(r => r.members.some(m => m.charId === initial.id)) : [];
+    const myAus = initial ? charAuList(initial, rels) : [];
+    const setNote = (k: string, v: string) => setRelNotes(n => ({ ...n, [k]: v }));
+    const patchLink = (i: number, p: Partial<RelLinkItem>) => setRelLinks(l => l.map((x, k) => (k === i ? { ...x, ...p } : x)));
+    return (
+      <div className="panel" style={{ padding: 24, display: 'grid', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-ghost" onClick={() => setView('main')}>‹ 돌아가기</button>
+          <b style={{ fontSize: 14 }}>RELATIONS 편집</b>
+          <span className="hint" style={{ margin: 0 }}>이 화면의 내용은 프로필 [SAVE] 시 함께 저장됩니다</span>
+          <button className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 11 }}
+            onClick={() => {
+              if (auMode) { patchSet({ notes: {}, links: [], relAu: {} }); setView('main'); return; }
+              setRelOn(false); setView('main');
+            }}>{auMode ? '이 AU 관계란 비우기' : 'RELATIONS 삭제'}</button>
+        </div>
+        <p className="hint" style={{ margin: 0 }}>
+          상세 화면 <b>RELATIONS</b> 버튼에서 관계 카드가 보입니다. 이 캐릭터가 멤버인 <b>자관(페어는 Pair · 다인관은 Group)</b>은 자동으로 모이고,
+          아래에서 <b>직접 지정하는 관계</b>를 더할 수 있습니다.
+        </p>
+
+        {/* 이 캐릭터의 AU별로 관계란을 따로 쓴다 — AU 관계란이 비어 있으면 그 AU 화면에서는 원본 관계가 그대로 보인다 */}
+        {auMode && (
+          <p className="hint" style={{ margin: 0 }}>이 AU 전용 관계란입니다 — 비워 두면 이 AU 화면에서도 원본 관계가 그대로 보입니다. 원본 관계란은 원본 프로필 편집에서 고칩니다.</p>
+        )}
+        {!auMode && myAus.length > 0 && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label className="k-label" style={{ margin: 0 }}>
+              편집 중인 AU <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 이 캐릭터의 AU마다 관계란을 따로 쓸 수 있습니다{relTab ? ' (비워 두면 원본 관계가 보입니다)' : ''}</span>
+            </label>
+            <div className="seg" style={{ flexWrap: 'wrap' }}>
+              <button type="button" className={relTab === '' ? 'on' : ''} onClick={() => setRelTab('')}>원본</button>
+              {myAus.map(a => (
+                <button key={a.key} type="button" className={relTab === a.key ? 'on' : ''} onClick={() => setRelTab(a.key)}>{a.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 자관 설명 박스 — 관계 카드 옆에 붙는 간단한 설명. 비워 두면 박스가 붙지 않는다 */}
+        <div style={{ display: 'grid', gap: 8 }}>
+          <label className="k-label" style={{ margin: 0 }}>
+            자관 설명 박스 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 카드 옆에 관계명·캐릭터 이름·CP/NCP와 함께 보입니다 (비우면 박스 없음)</span>
+          </label>
+          {myRels.length === 0 && <p className="hint" style={{ margin: 0 }}>이 캐릭터가 멤버인 자관이 아직 없습니다</p>}
+          {myRels.map(r => (
+            <div key={r.id} style={{ display: 'grid', gap: 5 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>{r.name} <small style={{ fontWeight: 400, color: 'var(--faint)' }}>{r.cp === 'cp' ? 'CP' : r.cp === 'ncp' ? 'NCP' : ''}</small></span>
+                {/* 이 자관에 AU가 있으면 카드에 어느 AU로 보일지 고른다 */}
+                {r.aus.some(a => a.id !== 'base') && (
+                  <KSelect minWidth={130} placeholder="원본" value={relAuMap[r.id] ?? ''}
+                    options={[{ value: '', label: '원본' }, ...r.aus.filter(a => a.id !== 'base').map(a => ({ value: a.id, label: a.label }))]}
+                    onChange={v => patchSet({ relAu: { ...relAuMap, [r.id]: v } })} />
+                )}
+              </span>
+              <KTextarea rows={2} placeholder="간단한 관계 설명" value={relNotes[`rel:${r.id}`] ?? ''}
+                onChange={e => setNote(`rel:${r.id}`, e.target.value)} />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gap: 8 }}>
+          <label className="k-label" style={{ margin: 0 }}>
+            직접 지정한 관계 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 상대 캐릭터와 꼬리표(카드 왼쪽 위에 표시, 예: 라이벌)</span>
+          </label>
+          {relLinks.length > 0 && (
+            <DragList items={relLinks.map((l, i) => ({ ...l, _k: i }))} keyOf={l => `${l.charId}:${l._k}`}
+              onReorder={list => setRelLinks(() => list.map(({ _k, ...l }) => l))}
+              render={(l, i) => (
+                <div className="upfile-row" style={{ width: '100%', flexWrap: 'wrap' }}>
+                  <span className="drag-h">⠿</span>
+                  <KSelect minWidth={170} placeholder="상대 캐릭터 선택" value={l.charId}
+                    options={others.map(c => ({ value: c.id, label: c.name }))}
+                    onChange={v => patchLink(i, { charId: v, au: undefined })} />
+                  <KInput placeholder="관계 꼬리표 (선택)" value={l.label ?? ''} style={{ flex: 1, minWidth: 120 }}
+                    onChange={e => patchLink(i, { label: e.target.value })} />
+                  {/* 상대 캐릭터에게 AU가 있으면 어느 AU로 보일지 고른다 */}
+                  {(() => {
+                    const oc = others.find(c => c.id === l.charId);
+                    const list = oc ? charAuList(oc, rels) : [];
+                    return list.length > 0 ? (
+                      <KSelect minWidth={150} placeholder="상대 원본" value={l.au ?? ''}
+                        options={[{ value: '', label: '원본' }, ...list.map(a => ({ value: a.key, label: a.label }))]}
+                        onChange={v => patchLink(i, { au: v || undefined })} />
+                    ) : null;
+                  })()}
+                  <span className="fx" data-tip="제거" onClick={() => setRelLinks(list => list.filter((_, k) => k !== i))}>✕</span>
+                  {l.charId && (
+                    <KTextarea rows={2} placeholder="간단한 관계 설명 (선택 — 카드 옆 박스)" style={{ flexBasis: '100%' }}
+                      value={relNotes[`link:${l.charId}${l.au ? `:${l.au}` : ''}`] ?? ''} onChange={e => setNote(`link:${l.charId}${l.au ? `:${l.au}` : ''}`, e.target.value)} />
+                  )}
+                </div>
+              )} />
+          )}
+          <button className="btn btn-ghost" style={{ justifySelf: 'start', padding: '6px 14px', fontSize: 11 }}
+            onClick={() => setRelLinks(l => [...l, { charId: '' }])}>＋ 관계 추가</button>
+        </div>
+        <button className="btn btn-dark" style={{ justifySelf: 'end' }} onClick={() => setView('main')}>완료 — 돌아가기</button>
+      </div>
+    );
+  }
+
+  /* ---------- 갤러리 전용 편집 화면 (v2.5) ---------- */
+  if (view === GALLERY_VIEW && gallery !== undefined) {
+    return <>
+      <GalleryEditView posts={gallery} onChange={setGallery}
+        extra={initial?.id ? (
+          <GalleryTagLinkPicker title="자관 갤러리 연동"
+            hint="이 캐릭터가 멤버인 자관 갤러리에서 보일 태그를 고르세요 (프로필 [SAVE] 시 저장)"
+            emptyHint="이 캐릭터가 멤버인 자관의 갤러리에 태그가 달린 사진 묶음이 아직 없습니다 — 자관 갤러리에서 묶음에 태그를 달면 여기에 나타납니다"
+            options={tagOptions} selected={tagLinks}
+            onToggle={t => setTagLinks(l => (l.includes(t) ? l.filter(x => x !== t) : [...l, t]))} />
+        ) : undefined}
+        onDelete={() => del.ask('갤러리를 삭제하시겠습니까?', () => { setGallery(undefined); setView('main'); },
+          '등록한 사진 묶음이 모두 함께 사라집니다. 저장(SAVE) 전까지는 CANCEL로 폼을 벗어나면 되돌릴 수 있습니다.')}
+        onBack={() => setView('main')} />
+      {del.element}
+    </>;
+  }
+
+  /* ---------- 페이지 BGM 전용 편집 화면 (v5.9) ---------- */
+  if (view === BGM_VIEW && !auMode) {
+    return (
+      <div className="panel" style={{ padding: 24, display: 'grid', gap: 14 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-ghost" onClick={() => setView('main')}>‹ 돌아가기</button>
+          <b style={{ fontSize: 14 }}>BGM 편집</b>
+          <span className="hint" style={{ margin: 0 }}>이 화면의 내용은 프로필 [SAVE] 시 함께 저장됩니다</span>
+        </div>
+        <PageBgmEditor value={bgm} onChange={setBgm} />
+        <button className="btn btn-dark" style={{ justifySelf: 'end' }} onClick={() => setView('main')}>완료 — 돌아가기</button>
+      </div>
+    );
+  }
+
+  /* ---------- TRPG 기록 연동 화면 (v2.8) — 플레이기록 게시판과 즉시 연동(저장 대기 없음) ---------- */
+  if (view === TRPG_VIEW && initial?.id) {
+    return <TrpgLinkEditView charId={initial.id} order={trpgOrder} onOrderChange={setTrpgOrder} onBack={() => setView('main')} />;
   }
 
   /* ---------- 메인 폼 ---------- */
@@ -190,25 +518,41 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
           ＋ ADD ART {arts.length === 0 && '(첫 장 등록 시 썸네일 크롭 지정)'}
         </button>
 
-        {/* 기본 정보 스펙 */}
+        {/* AU 캐릭터 추가 — 원본 편집에서만(신규 등록·AU 편집 중에는 숨김) */}
+        {!auMode && !isNew && initial && <AuAddBlock ch={initial} />}
+
+        {/* 기본 정보 스펙 — TRPG 룰을 선택하면 그 룰 전용 항목(게이지·관계표·기능표·STATUS 등)을
+            불러와 편집하고, 선택하지 않으면 기존과 같은 자유 항목(라벨/값) 그대로 편집한다 */}
         <label className="k-label" style={{ margin: 0 }}>기본 정보 항목</label>
-        <DragList items={specs} keyOf={s => s.id} onReorder={setSpecs}
-          render={s => (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%', padding: '2px 0' }}>
-              <span className="drag-h">⠿</span>
-              <KInput placeholder="항목" value={s.label} style={{ ...rowInp, width: 90 }}
-                onChange={e => setSpecs(l => l.map(x => x.id === s.id ? { ...x, label: e.target.value } : x))} />
-              <KInput placeholder="값" value={s.value} style={rowInp}
-                onChange={e => setSpecs(l => l.map(x => x.id === s.id ? { ...x, value: e.target.value } : x))} />
-              <span className="fx" onClick={() => {
-                const remove = () => setSpecs(l => l.filter(x => x.id !== s.id));
-                if (s.label.trim() || s.value.trim()) del.ask('이 항목을 삭제하시겠습니까?', remove, `${s.label} — ${s.value}`);
-                else remove();
-              }}>✕</span>
-            </div>
-          )} />
-        <button className="btn btn-ghost" style={addBtn}
-          onClick={() => setSpecs(l => [...l, { id: newId(), label: '', value: '' }])}>＋ ADD</button>
+        <RuleSelect rule={rule} onChange={handleRuleChange} />
+        {rule ? (
+          <RuleSpecsEditor rule={rule} specs={specs}
+            onChange={newSpecs => setSpecs(newSpecs.map(s => ({ ...s, id: s.key ?? newId() })))} />
+        ) : (
+          <>
+            <DragList items={specs} keyOf={s => s.id} onReorder={setSpecs}
+              render={s => (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%', padding: '2px 0' }}>
+                  <span className="drag-h">⠿</span>
+                  <KInput placeholder="항목" value={s.label} style={{ ...rowInp, width: 90 }}
+                    onChange={e => setSpecs(l => l.map(x => x.id === s.id ? { ...x, label: e.target.value } : x))} />
+                  <KInput placeholder="값" value={s.value} style={rowInp}
+                    onChange={e => setSpecs(l => l.map(x => x.id === s.id ? { ...x, value: e.target.value } : x))} />
+                  <span className="fx" onClick={() => {
+                    const remove = () => setSpecs(l => l.filter(x => x.id !== s.id));
+                    if (s.label.trim() || s.value.trim()) del.ask('이 항목을 삭제하시겠습니까?', remove, `${s.label} — ${s.value}`);
+                    else remove();
+                  }}>✕</span>
+                </div>
+              )} />
+            <button className="btn btn-ghost" style={addBtn}
+              onClick={() => setSpecs(l => [...l, { id: newId(), label: '', value: '' }])}>＋ ADD</button>
+          </>
+        )}
+
+        {/* CHARACTER SHEET 링크 — 룰 선택 여부와 무관하게 항상 편집 가능한 고정 필드 */}
+        <label className="k-label" style={{ margin: 0 }}>CHARACTER SHEET 링크</label>
+        <KInput placeholder="https://... (외부 캐릭터 시트 주소, 선택)" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} />
 
         {/* 테마 컬러 — 한 줄에 2개 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -242,11 +586,6 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
         <button className="btn btn-ghost" style={addBtn}
           onClick={() => setColors(l => [...l, { id: newId(), hex: '#888888', label: '' }])}>＋ ADD COLOR</button>
 
-        {/* 기본 소개 본문 — 리치 에디터 */}
-        <label className="k-label" style={{ margin: 0 }}>기본 정보 소개 본문</label>
-        <RichEditor value={basicHtml} onChange={setBasicHtml}
-          placeholder="캐릭터 소개를 작성하세요 — 이미지 삽입 가능 (스크립트 불허 6.3)" />
-
         {/* 추가 탭 — 목록만, 내용은 전용 화면에서 */}
         <label className="k-label" style={{ margin: 0 }}>추가 탭 — 내용은 [편집]을 눌러 전용 화면에서 작성</label>
         {tabs.map(t => (
@@ -266,6 +605,99 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
             setTabs(l => [...l, { id, icon: '✦', title: '', html: '' }]);
             setView(id); // 바로 전용 편집 화면으로
           }}>＋ ADD TAB</button>
+
+        {/* 갤러리 (v2.5) — 캐릭터당 하나, 상세 화면 GALLERY 버튼(EDIT·DELETE와 같은 자리·모양)으로
+            /chars/{id}/gallery 그리드+라이트박스 화면에서 보여준다. "이 탭의 아트"와 같은 방식으로
+            사진을 추가한다(GalleryArtEditor) */}
+        {gallery !== undefined ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1.5px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#eef0f2', display: 'grid', placeItems: 'center', fontSize: 14, flexShrink: 0 }}>🖼</span>
+            <b style={{ fontSize: 13 }}>갤러리</b>
+            <small style={{ color: 'var(--faint)', fontSize: 10.5 }}>{gallery.length > 0 ? `묶음 ${gallery.length}개 · 사진 ${gallery.reduce((n, g) => n + g.images.length, 0)}장` : '비어 있음'}</small>
+            <button className="btn btn-dark" style={{ marginLeft: 'auto', height: 27, padding: '0 12px', fontSize: 11 }}
+              onClick={() => setView(GALLERY_VIEW)}>편집 ›</button>
+          </div>
+        ) : (
+          <button className="btn btn-ghost" style={addBtn} onClick={() => { setGallery([]); setView(GALLERY_VIEW); }}>
+            ＋ ADD GALLERY
+          </button>
+        )}
+
+        {/* RELATIONS(관계) 탭 (v6.8) — GALLERY와 같은 방식: 추가하면 상세 화면에 RELATIONS 버튼이 생긴다. 신규 캐릭터도 가능(자관 연동은 저장 후 자동) */}
+        {(relOn ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1.5px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#eef0f2', display: 'grid', placeItems: 'center', fontSize: 14, flexShrink: 0 }}>♡</span>
+            <b style={{ fontSize: 13 }}>RELATIONS</b>
+            <small style={{ color: 'var(--faint)', fontSize: 10.5 }}>
+              {relLinks.some(l => l.charId) ? `직접 관계 ${relLinks.filter(l => l.charId).length}개` : '자관 관계 자동 표시'}
+            </small>
+            <button className="btn btn-dark" style={{ marginLeft: 'auto', height: 27, padding: '0 12px', fontSize: 11 }}
+              onClick={() => setView(REL_VIEW)}>편집 ›</button>
+          </div>
+        ) : (
+          <button className="btn btn-ghost" style={addBtn} onClick={() => { setRelOn(true); setView(REL_VIEW); }}>
+            ＋ ADD RELATIONS
+          </button>
+        ))}
+
+        {/* TRPG 참여 세션 (v2.8) — 상세 화면 TRPG 버튼(EDIT·DELETE·GALLERY와 같은 자리·모양)으로
+            보여주는 탭. 신규 캐릭터는 저장 전이라 안정된 id가 없어 연동을 켤 수 없다.
+            플레이기록 게시판 쪽에서 이미 이 캐릭터를 연결해 둔 게 있으면(hasTrpgLinks) ADD TRPG를
+            누르지 않아도 자동으로 탭이 생긴다 (v3.0 사용자 요청) */}
+        {initial?.id && (
+          (trpgEnabled || hasTrpgLinks) ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1.5px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: '#eef0f2', display: 'grid', placeItems: 'center', fontSize: 14, flexShrink: 0 }}>🎲</span>
+              <b style={{ fontSize: 13 }}>TRPG 기록</b>
+              <small style={{ color: 'var(--faint)', fontSize: 10.5 }}>
+                {hasTrpgLinks ? '연결된 세션이 있어 자동으로 표시됨' : '플레이기록 게시판과 연동'}
+              </small>
+              {/* 연결된 세션이 있으면 꺼도 자동으로 다시 켜져 의미가 없으므로, 연결이 하나도
+                  없을 때(수동으로 켠 경우)만 끌 수 있게 한다 */}
+              {!hasTrpgLinks && (
+                <button className="btn btn-ghost" style={{ marginLeft: 'auto', height: 27, padding: '0 10px', fontSize: 11 }}
+                  onClick={() => setTrpgEnabled(false)}>탭 끄기</button>
+              )}
+              <button className="btn btn-dark" style={{ height: 27, padding: '0 12px', fontSize: 11, ...(hasTrpgLinks ? { marginLeft: 'auto' } : {}) }}
+                onClick={() => setView(TRPG_VIEW)}>편집 ›</button>
+            </div>
+          ) : (
+            <button className="btn btn-ghost" style={addBtn} onClick={() => { setTrpgEnabled(true); setView(TRPG_VIEW); }}>
+              ＋ ADD TRPG
+            </button>
+          )
+        )}
+
+        {/* 상세 화면 레이아웃 (v7.0) — 스테이지: 등록한 그림을 배경으로 크게 + 좌 기본 정보 · 우 소개/항목 바로가기(누르면 창) / 클래식: 예전 구성 */}
+        {!auMode && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1.5px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+            <b style={{ fontSize: 13 }}>상세 레이아웃</b>
+            <div className="mini-seg" style={{ marginLeft: 'auto' }}>
+              <button type="button" className={detailLayout === 'stage' ? 'on' : ''} onClick={() => setDetailLayout('stage')}>스테이지</button>
+              <button type="button" className={detailLayout === 'classic' ? 'on' : ''} onClick={() => setDetailLayout('classic')}>클래식</button>
+            </div>
+          </div>
+        )}
+
+        {/* 이 캐릭터 페이지 전용 BGM (v5.9) — 환경설정 BGM과 같은 편집 화면. 들어오면 이 BGM, 나가면 홈페이지 BGM */}
+        {!auMode && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1.5px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#eef0f2', display: 'grid', placeItems: 'center', fontSize: 14, flexShrink: 0 }}>♪</span>
+            <b style={{ fontSize: 13 }}>BGM</b>
+            <small style={{ color: 'var(--faint)', fontSize: 10.5 }}>
+              {bgm && bgm.playlists.length
+                ? `재생목록 ${bgm.playlists.length}개 · ${bgm.playlists.reduce((n, p) => n + p.tracks.length, 0)}곡`
+                : '없음 — 홈페이지 BGM 사용'}
+            </small>
+            <button className="btn btn-dark" style={{ marginLeft: 'auto', height: 27, padding: '0 12px', fontSize: 11 }}
+              onClick={() => setView(BGM_VIEW)}>편집 ›</button>
+          </div>
+        )}
+
+        {/* 기본 소개 본문 — 리치 에디터 (추가 탭·갤러리·관계·TRPG·레이아웃·BGM 아래로 옮김) */}
+        <label className="k-label" style={{ margin: 0 }}>기본 정보 소개 본문</label>
+        <RichEditor value={basicHtml} onChange={setBasicHtml} themeColor={color}
+          placeholder="캐릭터 소개를 작성하세요 — 이미지 삽입 가능 (스크립트 불허 6.3)" />
 
         {/* 회원 권한 — 역극 플레이 / 편집까지 (3차 회원-캐릭터 연결, v1.9) — AU 편집에선 base 소관.
             **관리자만** (v2.0 사용자 확정) — 편집 권한을 받은 회원이 이 화면에 들어와도
@@ -306,6 +738,7 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
               </div>
             )}
             <KInput placeholder="한 줄 소개 (선택)" value={sub} onChange={e => setSub(e.target.value)} />
+            <KInput placeholder="캐릭터 이름 (다른 표기) (선택) — 비우면 표시하지 않음" value={altName} onChange={e => setAltName(e.target.value)} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span className="cp-lb">대표 테마색</span>
               <ColorField value={color} onChange={setColor} />
@@ -315,6 +748,20 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
               <button className={themeMode === 'default' ? 'on' : ''} onClick={() => setThemeMode('default')}>기존 테마 따르기</button>
               <button className={themeMode === 'custom' ? 'on' : ''} onClick={() => setThemeMode('custom')}>캐릭터 테마색</button>
             </div>
+            {/* 캐릭터 테마색일 때 — 대표 테마색으로 만들 팔레트를 밝게/어둡게 (자동은 색 밝기를 보고 고른다) */}
+            {themeMode === 'custom' && (
+              <>
+                <div className="mini-seg">
+                  <button className={themeTone === 'site' ? 'on' : ''} onClick={() => setThemeTone('site')}>기본</button>
+                  <button className={themeTone === 'auto' ? 'on' : ''} onClick={() => setThemeTone('auto')}>자동</button>
+                  <button className={themeTone === 'dark' ? 'on' : ''} onClick={() => setThemeTone('dark')}>어두운 테마</button>
+                  <button className={themeTone === 'light' ? 'on' : ''} onClick={() => setThemeTone('light')}>밝은 테마</button>
+                </div>
+                <p className="hint" style={{ margin: '-2px 0 0' }}>
+                  대표 테마색으로 만드는 홈페이지 팔레트의 밝기 — 기본은 홈페이지 설정 그대로, 자동은 대표 테마색이 밝으면 밝은 테마·어두우면 어두운 테마
+                </p>
+              </>
+            )}
             {/* 공개범위는 base 소관 — AU 편집에선 숨김 (v1.9) */}
             {!auMode && (
               <KSelect value={visibility} onChange={v => setVisibility(v as Visibility)}
@@ -344,6 +791,136 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
                 value: f.id,
                 label: <span style={{ fontFamily: deVarFamily(f.family) }}>{f.name}</span>,
               }))} />
+            {/* 소개 본문 글자색 — 캐릭터마다 배경이 달라서 하나로 정할 수 없다. 기본은 자동 */}
+            <p className="hint" style={{ margin: '2px 0 0' }}>
+              본문 글자색 — 상세 화면의 소개 본문에 적용. 「자동」은 배경 밝기를 보고 밝은/어두운 글자를 알아서 고릅니다
+              (직접 지정한 색은 모바일에도 그대로 적용)
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="mini-seg">
+                <button className={bodyInk === 'auto' ? 'on' : ''} onClick={() => setBodyInk('auto')}>자동 (기본)</button>
+                <button className={bodyInk === 'light' ? 'on' : ''} onClick={() => setBodyInk('light')}>밝은 글자</button>
+                <button className={bodyInk === 'dark' ? 'on' : ''} onClick={() => setBodyInk('dark')}>어두운 글자</button>
+                <button className={bodyInk === 'custom' ? 'on' : ''} onClick={() => setBodyInk('custom')}>직접 지정</button>
+              </div>
+              {bodyInk === 'custom' && <ColorField value={bodyInkColor} onChange={setBodyInkColor} />}
+            </div>
+            {/* 아트 그림자 — 상세 화면의 캐릭터 그림 둘레 그림자 색. 기본은 자동 */}
+            <p className="hint" style={{ margin: '2px 0 0' }}>
+              아트 그림자 — 「자동」은 배경이 밝으면 밝은 그림자, 어두우면 어두운 그림자로 알아서 맞춥니다
+            </p>
+            <div className="mini-seg">
+              <button className={artShadow === 'auto' ? 'on' : ''} onClick={() => setArtShadow('auto')}>자동 (기본)</button>
+              <button className={artShadow === 'light' ? 'on' : ''} onClick={() => setArtShadow('light')}>밝은 그림자</button>
+              <button className={artShadow === 'dark' ? 'on' : ''} onClick={() => setArtShadow('dark')}>어두운 그림자</button>
+              <button className={artShadow === 'none' ? 'on' : ''} onClick={() => setArtShadow('none')}>없음</button>
+            </div>
+
+            {/* 배경 장식 — 대각 띠·원·십자 표식 같은 얇은 디자인 요소. 포인트색이 반영되고 바탕은 밝은 테마=흰색 계열·어두운 테마=검은색 계열 */}
+            <p className="hint" style={{ margin: '2px 0 0' }}>
+              배경 장식 — 상세 배경에 얇은 선·눈금·라벨·반짝이 같은 장식을 깝니다. 「이름 다른 표기」를 입력했다면 그 글씨가 뒤에 크게 깔립니다. 색은 포인트 컬러, 바탕은 밝은 테마면 흰색 계열·어두운 테마면 검은색 계열
+            </p>
+            <div className="mini-seg">
+              <button className={deco === 'on' ? 'on' : ''} onClick={() => setDeco('on')}>켜기 (기본)</button>
+              <button className={deco === 'off' ? 'on' : ''} onClick={() => setDeco('off')}>끄기</button>
+            </div>
+            {deco === 'on' && (
+              <>
+                <p className="hint" style={{ margin: '2px 0 0' }}>
+                  장식 글씨 폰트 — 뒤에 크게 깔리는 「이름 다른 표기」에 적용 (비우면 이름 폰트와 같게)
+                </p>
+                <KSelect value={decoFontId} onChange={setDecoFontId}
+                  options={[{ value: '', label: '이름 폰트와 같게 (기본)' },
+                    ...fonts.map(f => ({ value: f.id, label: <span style={{ fontFamily: deVarFamily(f.family) }}>{f.name}</span> }))]} />
+              </>
+            )}
+            {deco === 'on' && (
+              <>
+                <KCheck label="필기체 글씨 겹치기 — 큰 이름 글씨 위에 다른 색·필기체로 한 번 더 쓰고, 처음 나타날 때 써 내려가는 효과로 등장"
+                  checked={!!decoScript} onChange={v => setDecoScript(v ? { ...DEFAULT_DECO_SCRIPT } : null)} />
+                {decoScript && (
+                  <>
+                    <KInput placeholder="필기체로 쓸 글씨 (비우면 「이름 다른 표기」)" value={decoScript.text ?? ''}
+                      onChange={e => setDecoScript({ ...decoScript, text: e.target.value })} />
+                    <KSelect value={decoScript.fontId ?? ''} onChange={v => setDecoScript({ ...decoScript, fontId: v })}
+                      options={[{ value: '', label: '이름 폰트와 같게 (필기체 폰트를 고르세요)' },
+                        ...fonts.map(f => ({ value: f.id, label: <span style={{ fontFamily: deVarFamily(f.family) }}>{f.name}</span> }))]} />
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className="cp-lb">색</span>
+                      <ColorField value={decoScript.color || '#ff6a00'} onChange={hex => setDecoScript({ ...decoScript, color: hex })} />
+                      <button type="button" className="btn btn-ghost" style={{ padding: '4px 9px', fontSize: 10, whiteSpace: 'nowrap' }}
+                        onClick={() => setDecoScript({ ...decoScript, color: undefined })}>포인트색</button>
+                      <span className="cp-lb">크기</span>
+                      <KStep value={decoScript.size} min={6} max={50} step={1} onChange={v => setDecoScript({ ...decoScript, size: v })} />
+                      <span className="cp-lb">기울기</span>
+                      <KStep value={decoScript.rot} min={-30} max={30} step={1} suffix="°" onChange={v => setDecoScript({ ...decoScript, rot: v })} />
+                    </div>
+                  </>
+                )}
+                {(altName.trim() || decoScript) && (
+                  <>
+                    {altName.trim() && (
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className="cp-lb">큰 이름 글씨 크기</span>
+                        <KStep value={decoGhost.scale} min={30} max={200} step={5} suffix="%" onChange={v => setDecoGhost({ ...decoGhost, scale: v })} />
+                        <button type="button" className="btn btn-ghost" style={{ padding: '4px 9px', fontSize: 10, whiteSpace: 'nowrap' }}
+                          onClick={() => setDecoGhost({ ...DEFAULT_DECO_GHOST })}>위치·크기 처음대로</button>
+                      </div>
+                    )}
+                    <ScriptPlacer script={decoScript} scriptText={decoScript?.text?.trim() || altName.trim()}
+                      scriptFont={decoScript?.fontId ? deVarFamily(familyOf(decoScript.fontId) ?? '') : deVarFamily(familyOf(fontId) ?? '')}
+                      ghost={altName.trim()} ghostPos={decoGhost} ghostFont={deVarFamily(familyOf(decoFontId || fontId) ?? '')}
+                      accent={color || '#6fae2f'}
+                      onMoveGhost={(x, y) => setDecoGhost({ ...decoGhost, x, y })}
+                      onMoveScript={(x, y) => decoScript && setDecoScript({ ...decoScript, x, y })} />
+                  </>
+                )}
+              </>
+            )}
+            {deco === 'on' && hasBg && (
+              <>
+                <p className="hint" style={{ margin: '2px 0 0' }}>
+                  배경 이미지를 등록했을 때 — 이미지를 어디에 쓸지 고릅니다
+                </p>
+                <div className="mini-seg">
+                  <button className={decoBg === 'full' ? 'on' : ''} onClick={() => setDecoBg('full')}>이미지 전체 배경 + 흰색/검은색 장식 (기본)</button>
+                  <button className={decoBg === 'band' ? 'on' : ''} onClick={() => setDecoBg('band')}>장식(뒤쪽 큰 반원) 안에 이미지 + 포인트색 장식</button>
+                </div>
+              </>
+            )}
+
+            {/* 배경 이미지 (v5.8 사용자 요청) — 자관 배경 이미지·환경설정의 배경 변경과 같은 방식.
+                업로드 + 블러 슬라이더, 상세 페이지 전체 배경으로 고정·cover로 깔림 (선택) */}
+            <label className="k-label" style={{ margin: '6px 0 0' }}>
+              배경 이미지 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 환경설정의 배경 변경과 같은 방식(업로드·블러). 상세 페이지 전체 배경으로 깔림 (선택)</span>
+            </label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ width: 200, aspectRatio: '3/1', borderRadius: 8, overflow: 'hidden', position: 'relative', border: '1.5px dashed var(--line)', cursor: 'var(--cur-pointer,pointer)' }}
+                onClick={() => document.getElementById('charBgF')?.click()}
+                {...fileDrop(fl => pickBg(fl[0]))}>
+                {bgUrl ? (
+                  <div style={{ position: 'absolute', inset: 0, filter: 'blur(2px)' }}>
+                    <CropImg src={bgUrl} />
+                  </div>
+                ) : (!bgRemoved && initBgId) ? (
+                  <BgPreview refId={initBgId} />
+                ) : (
+                  <div className="ph" style={{ width: '100%', height: '100%' }}><span style={{ fontSize: 10 }}>BACKGROUND</span></div>
+                )}
+              </div>
+              <input id="charBgF" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { pickBg(e.target.files?.[0]); e.target.value = ''; }} />
+              <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
+                onClick={() => document.getElementById('charBgF')?.click()}>
+                {hasBg ? 'CHANGE' : 'UPLOAD'}
+              </button>
+              {hasBg && (
+                <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
+                  onClick={() => { setBgFile(null); setBgUrl(''); setBgRemoved(true); }}>REMOVE</button>
+              )}
+              <span className="cp-lb">블러</span>
+              <KStep value={bgBlur} min={0} max={30} step={2} suffix="px" onChange={setBgBlur} />
+            </div>
           </div>
         </div>
         <div className="form-actions">
@@ -370,8 +947,98 @@ export function CharEditForm({ initial, onSave, onCancel, auMode, existingIds }:
 }
 
 /* ---------- 탭 전용 편집 화면 — 큰 에디터 + 실시간 미리보기 ---------- */
-function TabEditView({ tab, onChange, onDelete, onBack }: {
+function TrpgLinkEditView({ charId, order, onOrderChange, onBack }: {
+  charId: string; order: string[]; onOrderChange: (order: string[]) => void; onBack: () => void;
+}) {
+  const [records, setRecords] = useLocalList<PlayRecord>('ohome.playlog.v1', PLAYLOG_SEED);
+  const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const [q, setQ] = useState('');
+  const nameOf = (id: string) => chars.find(c => c.id === id)?.name ?? '';
+
+  const linkedAll = records.filter(r => r.charIds?.includes(charId));
+  // 저장해 둔 순서(order) 먼저, 새로 연결됐는데 아직 순서에 없는 건 뒤에 붙인다
+  const linked = [
+    ...order.map(id => linkedAll.find(r => r.id === id)).filter((r): r is PlayRecord => !!r),
+    ...linkedAll.filter(r => !order.includes(r.id)),
+  ];
+
+  const unlink = (recId: string) => {
+    setRecords(records.map(r => (r.id === recId ? { ...r, charIds: (r.charIds ?? []).filter(x => x !== charId) } : r)));
+    onOrderChange(order.filter(x => x !== recId));
+  };
+  const link = (rec: PlayRecord) => {
+    setRecords(records.map(r => (r.id === rec.id ? { ...r, charIds: [...(r.charIds ?? []), charId] } : r)));
+    onOrderChange([...order.filter(x => x !== rec.id), rec.id]);
+  };
+
+  const query = q.trim().toLowerCase();
+  const matches = records.filter(r =>
+    !r.charIds?.includes(charId)
+    && query
+    && (r.scenario.toLowerCase().includes(query) || (r.charIds ?? []).some(cid => nameOf(cid).toLowerCase().includes(query))));
+
+  return (
+    <div className="panel" style={{ padding: 24, display: 'grid', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost" onClick={onBack}>‹ 돌아가기</button>
+        <b style={{ fontSize: 14 }}>TRPG 기록 연동</b>
+        <span className="hint" style={{ margin: 0 }}>플레이기록 게시판과 바로 연동됩니다 — 여기서 링크/해제하면 그 화면에도 즉시 반영됩니다</span>
+      </div>
+
+      <label className="k-label" style={{ margin: 0 }}>
+        연결된 세션 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— ⠿ 드래그로 상세 화면에 보일 순서를 바꿀 수 있습니다</span>
+      </label>
+      {linked.length === 0 ? (
+        <p className="hint">아직 연결한 세션이 없습니다 — 아래에서 검색해 연결해 보세요</p>
+      ) : (
+        <DragList items={linked} keyOf={r => r.id} onReorder={list => onOrderChange(list.map(r => r.id))}
+          render={r => {
+            const withNames = (r.charIds ?? []).filter(id => id !== charId).map(nameOf).filter(Boolean).join(', ') || r.withText;
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 0' }}>
+                <span className="drag-h">⠿</span>
+                <div style={{ display: 'grid', gap: 2, flex: 1, minWidth: 0 }}>
+                  <b style={{ fontSize: 12.5 }}>{r.scenario}</b>
+                  <small style={{ color: 'var(--faint)' }}>{[r.date, withNames].filter(Boolean).join(' · ')}</small>
+                </div>
+                <span className="fx" onClick={() => unlink(r.id)}>✕</span>
+              </div>
+            );
+          }} />
+      )}
+
+      <label className="k-label" style={{ margin: 0 }}>
+        세션 찾기 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 제목이나 참여 캐릭터 이름으로 검색해 이 캐릭터를 연결하세요</span>
+      </label>
+      <KInput placeholder="세션 제목 또는 캐릭터 이름 검색" value={q} onChange={e => setQ(e.target.value)} />
+      {query && (
+        <div style={{ display: 'grid', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+          {matches.map(r => {
+            const withNames = (r.charIds ?? []).map(nameOf).filter(Boolean).join(', ') || r.withText;
+            return (
+              <div key={r.id} onClick={() => link(r)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', cursor: 'var(--cur-pointer,pointer)', border: '1.5px solid var(--line)', borderRadius: 8 }}>
+                <div style={{ display: 'grid', gap: 2 }}>
+                  <b style={{ fontSize: 12.5 }}>{r.scenario}</b>
+                  <small style={{ color: 'var(--faint)' }}>{[r.date, withNames].filter(Boolean).join(' · ')}</small>
+                </div>
+                <span style={{ marginLeft: 'auto', color: 'var(--faint)', fontSize: 11 }}>연결 +</span>
+              </div>
+            );
+          })}
+          {matches.length === 0 && <p className="hint">검색 결과가 없습니다</p>}
+        </div>
+      )}
+      {records.length === 0 && <p className="hint">등록된 플레이기록이 없습니다 — 플레이기록 게시판에서 먼저 작성해 주세요</p>}
+
+      <button className="btn btn-dark" style={{ justifySelf: 'end' }} onClick={onBack}>완료 — 목록으로</button>
+    </div>
+  );
+}
+
+function TabEditView({ tab, onChange, onDelete, onBack, themeColor }: {
   tab: CharTab;
+  themeColor?: string;
   onChange: (patch: Partial<CharTab>) => void;
   onDelete: () => void;
   onBack: () => void;
@@ -394,8 +1061,23 @@ function TabEditView({ tab, onChange, onDelete, onBack }: {
         <KInput placeholder="소제목 (선택)" value={tab.subtitle ?? ''}
           onChange={e => onChange({ subtitle: e.target.value })} />
       </div>
+      {/* 이 탭 전용 아트 (v2.4 ADD TAB 요청) — 채워두면 이 탭을 보는 동안 좌측 대표 아트 대신
+          여기 등록한 이미지를 보여준다. 목록 대표·썸네일은 여기서 바꿀 수 없고, 전부 "추가 아트"로만 관리 */}
+      <label className="k-label" style={{ margin: 0 }}>
+        이 탭의 아트 <span style={{ fontWeight: 400, color: 'var(--faint)' }}>— 넣으면 이 탭을 보는 동안 좌측 대표 아트 대신 표시됩니다 (대표·썸네일은 여기서 바꿀 수 없음)</span>
+      </label>
+      <TabArtEditor arts={tab.arts ?? []} onChange={arts => onChange({ arts })} />
+      {/* TRPG 룰 정보란 — 기본 정보 항목과 동일하게, 이 탭에도 룰을 선택하면
+          룰별 항목(게이지·관계표·기능표·STATUS 등)을 불러와 편집할 수 있다 (ADD TAB 요청) */}
+      <label className="k-label" style={{ margin: 0 }}>이 탭의 정보란 — 선택 시 아래 리치 본문 위에 표시됩니다</label>
+      <RuleSelect rule={tab.rule ?? ''}
+        onChange={(newRule, ruleSpecs) => onChange({ rule: newRule || undefined, specs: newRule ? ruleSpecs : [] })} />
+      {tab.rule && (
+        <RuleSpecsEditor rule={tab.rule} specs={tab.specs ?? []}
+          onChange={newSpecs => onChange({ specs: newSpecs })} />
+      )}
       {/* 리치 에디터 (TipTap) — 툴바로 서식·이미지 삽입, 출력은 HTML */}
-      <RichEditor value={tab.html} onChange={html => onChange({ html })}
+      <RichEditor value={tab.html} onChange={html => onChange({ html })} themeColor={themeColor}
         placeholder="탭 내용을 작성하세요 — 이미지 삽입 가능 (스크립트 불허 6.3)" />
       <button className="btn btn-dark" style={{ justifySelf: 'end' }} onClick={onBack}>완료 — 목록으로</button>
     </div>
@@ -417,3 +1099,13 @@ function FirstArtCrop({ open, item, crop, onClose, onApply }: {
   return <CropEditor open={open} src={src} aspect="3:4" initial={crop} onClose={onClose} onApply={onApply} />;
 }
 
+/** 저장된 배경 이미지 미리보기 (v5.8) — 자관 폼의 HeaderPreview와 같은 모습 */
+function BgPreview({ refId }: { refId: string }) {
+  const url = useBlobUrl(refId);
+  if (!url) return <div className="ph" style={{ width: '100%', height: '100%' }} />;
+  return (
+    <div style={{ position: 'absolute', inset: 0, filter: 'blur(2px)' }}>
+      <CropImg src={url} />
+    </div>
+  );
+}
