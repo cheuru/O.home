@@ -91,8 +91,9 @@ export const BASE_ITEMS: ClosetItem[] = [
 ];
 
 export const DEFAULT_TAB_LIST =
-  'bottom|하의\ntop|상의\nshoes|신발\ndress|원피스\nouter|외투\nacc|악세\nbg|배경';
+  'top|상의\nbottom|하의\ndress|원피스\nshoes|신발\nouter|외투\nacc|악세\nbg|배경';
 
+const PREV_TAB_LIST = 'bottom|하의\ntop|상의\nshoes|신발\ndress|원피스\nouter|외투\nacc|악세\nbg|배경';
 const OLD_TAB_LIST = 'bottom|👖 하의\ntop|👕 상의\nshoes|👟 신발\ndress|👗 원피스\nouter|🧥 외투\nacc|✨ 악세\nbg|🏞 배경';
 
 export function defaultCloset(): ClosetData {
@@ -136,7 +137,7 @@ export function normalizeCloset(raw: unknown): ClosetData {
   if (design.ribbonColor === '#7a9ba8') design.ribbonColor = '';
   if (design.pointColor === '#97c3d1') design.pointColor = '';
   if (design.titleColor === '#555555') design.titleColor = '';
-  if (design.tabList === OLD_TAB_LIST) design.tabList = DEFAULT_TAB_LIST;
+  if (design.tabList === OLD_TAB_LIST || design.tabList === PREV_TAB_LIST) design.tabList = DEFAULT_TAB_LIST;
   // 표정 5장 — 비었거나 모자라면 기본 그림으로
   design.char1Bodies = [0, 1, 2, 3, 4].map(n => design.char1Bodies?.[n] || d.design.char1Bodies[n]);
   design.char2Bodies = [0, 1, 2, 3, 4].map(n => design.char2Bodies?.[n] || d.design.char2Bodies[n]);

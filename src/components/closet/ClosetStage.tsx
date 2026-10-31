@@ -9,6 +9,7 @@ import { Modal, useConfirmDelete } from '@/components/ui/Modal';
 import { KInput, KSelect, KStep } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 import { CLOSET_CSS } from './closetCss';
+import { FloatPanel } from './FloatPanel';
 import { Cid, CharView, STACK_TYPES, emptyView, makeEngine, EngineApi } from './closetEngine';
 
 const SFX_SRC = { blop: '/closet/sfx/blop.mp3', magic: '/closet/sfx/magic.mp3', whoosh: '/closet/sfx/whoosh.mp3', pic: '/closet/sfx/pic.mp3' };
@@ -304,7 +305,7 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
         <div className="cl-main">
           <div className="dual-stage">{charCol(1)}{charCol(2)}</div>
 
-          <div className="wardrobe-sidebar">
+          <FloatPanel storageKey="ohome.closet.ward.v1" title="옷장">
             <div className="wardrobe-top-bar">
               <input type="text" className="search-box" placeholder="아이템 검색..." value={kw} onChange={e => setKw(e.target.value)} />
               <div className="dbl-bar">
@@ -367,11 +368,11 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
                 </div>
               </div>
             </div>
-            <div className="footer-credit">
-              <a href="https://uchoman.ivyro.net/" target="_blank" rel="noreferrer">우초맨만듦</a>
-              <span>✔ SFX: <a href="https://sellbuymusic.com/md/spjqcbb-efbfbct" target="_blank" rel="noreferrer">셀바이뮤직</a></span>
-            </div>
-          </div>
+          </FloatPanel>
+        </div>
+
+        <div className="cl-credit">
+          원본 제작 <a href="https://uchoman.ivyro.net/" target="_blank" rel="noreferrer">우초맨</a> · 효과음 <a href="https://sellbuymusic.com/md/spjqcbb-efbfbct" target="_blank" rel="noreferrer">셀바이뮤직</a>
         </div>
 
         {isAdmin && (
