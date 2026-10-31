@@ -5,14 +5,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { ClosetData, ClosetItem } from '@/lib/closetStore';
 import { tabInfo } from '@/lib/closetStore';
-import { Modal } from '@/components/ui/Modal';
-import { KInput } from '@/components/ui/Kit';
+import { Modal, useConfirmDelete } from '@/components/ui/Modal';
+import { KInput, KSelect, KStep } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 import { CLOSET_CSS } from './closetCss';
 import { Cid, CharView, STACK_TYPES, emptyView, makeEngine, EngineApi } from './closetEngine';
 
 const SFX_SRC = { blop: '/closet/sfx/blop.mp3', magic: '/closet/sfx/magic.mp3', whoosh: '/closet/sfx/whoosh.mp3', pic: '/closet/sfx/pic.mp3' };
-const GUIDE_KEY = 'ohome.closet.guidepos';
 
 /** 홍조 위치 "왼쪽,위,너비,높이" → 스타일 */
 function blushStyle(spec: string): React.CSSProperties {
@@ -61,66 +60,14 @@ function TypedTitle({ text }: { text: string }) {
   );
 }
 
-/** 사용법 상자 — 제목줄을 잡아 옮길 수 있고, 두 번 누르면 제자리로 */
-function Guide({ names, labels, onClose }: { names: [string, string]; labels: [string, string]; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const place = useCallback((l: number, t: number) => {
-    const g = ref.current; if (!g) return;
-    g.style.left = `${Math.max(0, Math.min(l, window.innerWidth - g.offsetWidth))}px`;
-    g.style.top = `${Math.max(0, Math.min(t, window.innerHeight - 44))}px`;
-  }, []);
-  useEffect(() => {
-    try { const s = JSON.parse(localStorage.getItem(GUIDE_KEY) || 'null'); if (s && typeof s.l === 'number') place(s.l, s.t); } catch { /* 기본 자리 */ }
-  }, [place]);
-  const down = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    const g = ref.current!; const r = g.getBoundingClientRect();
-    const ox = e.clientX - r.left, oy = e.clientY - r.top;
-    g.classList.add('is-dragging');
-    const mv = (ev: PointerEvent) => place(ev.clientX - ox, ev.clientY - oy);
-    const up = () => {
-      g.classList.remove('is-dragging');
-      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
-      try { localStorage.setItem(GUIDE_KEY, JSON.stringify({ l: parseFloat(g.style.left) || 0, t: parseFloat(g.style.top) || 0 })); } catch { /* 무시 */ }
-    };
-    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
-    e.preventDefault();
-  };
-  const home = () => {
-    const g = ref.current; if (!g) return;
-    g.style.left = '10px'; g.style.top = '130px';
-    try { localStorage.removeItem(GUIDE_KEY); } catch { /* 무시 */ }
-  };
-  const sz = [[labels[0], names[0]], [labels[1], names[1]]].sort((a, b) => a[0].localeCompare(b[0]));
-  return (
-    <div ref={ref} className="guide-box" style={{ top: 130, left: 10 }}>
-      <div className="guide-header" onPointerDown={down} onDoubleClick={home} title="이 줄을 끌어서 옮기세요 (두 번 누르면 제자리로)">
-        <span>📖 사용법</span><span className="guide-grip">⠿</span>
-        <button onClick={onClose} className="btn-close-guide">×</button>
-      </div>
-      <div className={`guide-details${open ? ' open' : ''}`}>
-        <ul className="guide-list">
-          <li><b>드래그&드롭</b>으로 옷 입히기</li>
-          <li><b>{sz[0][0]} 또는 {sz[1][0]}를 검색</b>하여 사이즈별 의상 보기</li>
-          <li>{sz[0][0]} {sz[0][1]} 사이즈 / {sz[1][0]} {sz[1][1]} 사이즈</li>
-          <li>착용 중 패널 <b>✕</b>로 개별 벗기기</li>
-          <li><b>▲▼</b>로 의상 앞뒤 조절</li>
-          <li><b>배경 탭</b> 클릭 → 배경 적용</li>
-          <li>📸 <b>찰칵!</b>으로 두 캐릭터 PNG 저장</li>
-          <li><b>다시 입히기</b>: 기본 코디로 복귀</li>
-          <li><b>전부 벗기!</b>: 해당 캐릭터 모두 벗기기</li>
-          <li><b>방치 모드</b>: 가만히 두면 혼잣말을 합니다.</li>
-          <li><b>부끄럼 모드</b>: 레어 모드?</li>
-        </ul>
-      </div>
-      <button onClick={() => setOpen(o => !o)} className="btn-toggle-detail">{open ? '닫기 ▲' : '자세히 ▼'}</button>
-    </div>
-  );
-}
-
-export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready: boolean; isAdmin: boolean }) {
+export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDeleteItem }: {
+  data: ClosetData; ready: boolean; isAdmin: boolean; roomId: string;
+  onEditItem?: (id: string, p: Partial<ClosetItem>) => void;
+  onDeleteItem?: (id: string) => void;
+}) {
   const toast = useToast();
+  const del = useConfirmDelete();
+  const [detail, setDetail] = useState(false);   // 아이템 자세히 보기(= 수정) 펼침
   const d = data.design;
   const tabs = useMemo(() => tabInfo(d), [d]);
   const [views, setViews] = useState<Record<Cid, CharView>>({ 1: emptyView(), 2: emptyView() });
@@ -130,7 +77,6 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
   const [bgPending, setBgPending] = useState<string | null>(null);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [ghost, setGhost] = useState<{ src: string; x: number; y: number } | null>(null);
-  const [guideOn, setGuideOn] = useState(true);
   const [saveAsk, setSaveAsk] = useState(false);
   const [saveName, setSaveName] = useState('');
   const zone = useRef<Record<Cid, HTMLDivElement | null>>({ 1: null, 2: null });
@@ -284,7 +230,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
 
   /* ── 그리기 ── */
   const cssVars = {
-    '--pc': d.pointColor, '--rm': d.ribbonColor, '--tc': d.titleColor,
+    '--pc': d.pointColor || 'var(--accent)', '--rm': d.ribbonColor || 'var(--ink)', '--tc': d.titleColor || 'var(--page-title)',
     '--mf': d.mainFont ? `'${d.mainFont}', var(--sans)` : 'var(--sans)',
     '--tf': d.titleFont ? `'${d.titleFont}', var(--sans)` : 'var(--sans)',
   } as React.CSSProperties;
@@ -323,7 +269,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
           </div>
         </div>
         <div className="worn-panel-wrap" style={{ width: w }}>
-          <div className="worn-panel-title">👕 착용 중 — ✕ 벗기 / ▲▼ 앞뒤 조절</div>
+          <div className="worn-panel-title">착용 중 · ✕ 벗기 / ▲▼ 앞뒤 조절</div>
           <div className="worn-panel">
             {!v.worn.length && <span className="worn-empty">없음</span>}
             {v.worn.map(x => (
@@ -351,8 +297,8 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
       <div className="dressup-container">
         <div className="ribbon-wrapper"><div className="ribbon-bg" /><TypedTitle text={d.gameTitle} /></div>
         <div className="title-save-btn">
-          <button type="button" className="btn_custom" style={{ height: 34, padding: '0 20px', fontSize: 14, background: 'var(--pc)' }}
-            onClick={() => { setSaveName(d.saveName || ''); setSaveAsk(true); }}>📸 찰칵!</button>
+          <button type="button" className="btn_custom" style={{ padding: '0 22px' }}
+            onClick={() => { setSaveName(d.saveName || ''); setSaveAsk(true); }}>찰칵! 이미지로 저장</button>
         </div>
 
         <div className="cl-main">
@@ -362,12 +308,18 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
             <div className="wardrobe-top-bar">
               <input type="text" className="search-box" placeholder="아이템 검색..." value={kw} onChange={e => setKw(e.target.value)} />
               <div className="dbl-bar">
-                <span className="dbl-hint">👆 더블클릭 → 입히기</span>
+                <span className="dbl-hint">더블클릭하면 입혀요</span>
                 <button type="button" className={`dbl-btn${dblTarget === 'auto' ? ' active' : ''}`} onClick={() => setDblTarget('auto')}
                   title={`아이템 이름 끝의 ${sizeLabel[0]}/${sizeLabel[1]} 를 보고 알아서 정합니다`}>자동</button>
                 <button type="button" className={`dbl-btn${dblTarget === 1 ? ' active' : ''}`} onClick={() => setDblTarget(1)}>{names[0]}</button>
                 <button type="button" className={`dbl-btn${dblTarget === 2 ? ' active' : ''}`} onClick={() => setDblTarget(2)}>{names[1]}</button>
               </div>
+            </div>
+            <div className="cl-detail-row">
+              <button type="button" className={`dbl-btn${detail ? ' active' : ''}`} onClick={() => setDetail(v => !v)}>
+                {detail ? '자세히 ▴' : '자세히 ▾'}
+              </button>
+              {detail && <span className="dbl-hint">{isAdmin ? '이름·탭·앞뒤 순서를 바로 고칠 수 있어요' : '아이템 이름과 종류를 볼 수 있어요'}</span>}
             </div>
             <div className="tab-nav">
               {tabs.order.map(t => (
@@ -377,7 +329,30 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
             <div className="wardrobe">
               {tabs.order.map(t => (
                 <div key={t} className={`tab-panel${t === curTab ? ' active' : ''}`}>
-                  {inTab(t).map(it => (
+                  {detail ? inTab(t).filter(shown).map(it => (
+                    <div key={it.id} className="item-detail">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={it.src} alt={it.desc} draggable={false} />
+                      {isAdmin && onEditItem ? (
+                        <div className="item-detail-form">
+                          <input className="k-input" defaultValue={it.desc} placeholder="이름" key={`${it.id}:${it.desc}`}
+                            onBlur={e => { const v = e.target.value; if (v !== it.desc) onEditItem(it.id, { desc: v }); }}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+                          <div className="item-detail-line">
+                            <KSelect value={it.type} minWidth={110} onChange={v => onEditItem(it.id, { type: v })}
+                              options={[...tabs.order, ...(tabs.order.includes(it.type) ? [] : [it.type])].map(k => ({ value: k, label: tabs.label[k] ?? k }))} />
+                            <KStep value={it.zi} min={-99} max={99} onChange={v => onEditItem(it.id, { zi: v })} />
+                            {onDeleteItem && <button type="button" className="dbl-btn" onClick={() => del.ask('이 아이템을 삭제할까요?', () => onDeleteItem(it.id))}>삭제</button>}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="item-detail-form">
+                          <div className="item-detail-name">{it.desc || '이름 없음'}</div>
+                          <div className="dbl-hint">{tabs.label[tabs.remap(it.type)] ?? it.type} · 순서 {it.zi}</div>
+                        </div>
+                      )}
+                    </div>
+                  )) : inTab(t).map(it => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img key={it.id} src={it.src} alt={it.desc} loading="lazy" decoding="async" draggable={false}
                       className={`clothes-item${hiddenSrcs.has(it.src) ? ' item-worn' : ''}${shown(it) ? '' : ' item-hidden'}`}
@@ -387,12 +362,12 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
                       onMouseMove={e => setTip(p => (p ? { ...p, x: e.clientX, y: e.clientY } : p))}
                       onMouseLeave={() => setTip(null)} />
                   ))}
-                  {t === 'bg' && ([1, 2] as Cid[]).map(cid => (
+                  {!detail && t === 'bg' && ([1, 2] as Cid[]).map(cid => (
                     <div key={cid} className="bg-remove-btn" onClick={() => removeBg(cid)}>
-                      <span style={{ fontSize: 15 }}>🚫</span><span>{names[cid - 1]}<br />배경제거</span>
+                      <span>{names[cid - 1]}<br />배경제거</span>
                     </div>
                   ))}
-                  {t === curTab && visibleCount === 0 && <div className="tab-empty">아이템이 없습니다.</div>}
+                  {t === curTab && (detail ? !inTab(t).filter(shown).length : visibleCount === 0) && <div className="tab-empty">아이템이 없습니다.</div>}
                 </div>
               ))}
             </div>
@@ -405,22 +380,20 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
 
         {isAdmin && (
           <div style={{ textAlign: 'center', margin: '30px auto 10px' }}>
-            <Link href="/closet/admin" className="cl-adminlink">👑 관리자 페이지로 이동</Link>
+            <Link href={`/closet/admin?room=${encodeURIComponent(roomId)}`} className="cl-adminlink">관리자 페이지</Link>
           </div>
         )}
       </div>
 
-      {guideOn && <Guide names={names} labels={sizeLabel} onClose={() => setGuideOn(false)} />}
-
       {bgPending && (
         <div className="bg-modal" onClick={e => { if (e.target === e.currentTarget) setBgPending(null); }}>
           <div className="bg-modal-box">
-            <div style={{ fontSize: 17, fontWeight: 'bold', marginBottom: 18, color: '#444' }}>어디에 배경을 적용할까요?</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="btn_custom" style={{ background: 'var(--pc)', fontSize: 14, height: 38 }} onClick={() => applyBg(1)}>🧍 {names[0]} 만</button>
-              <button className="btn_custom" style={{ background: 'var(--pc)', fontSize: 14, height: 38 }} onClick={() => applyBg(2)}>🧍 {names[1]} 만</button>
-              <button className="btn_custom" style={{ background: 'var(--rm)', fontSize: 14, height: 38 }} onClick={() => applyBg('both')}>👫 둘 다</button>
-              <button className="btn_custom" style={{ background: '#aaa', fontSize: 13, height: 34, marginTop: 4 }} onClick={() => setBgPending(null)}>취소</button>
+            <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 18, color: 'var(--ink)', letterSpacing: '.02em' }}>어디에 배경을 적용할까요?</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button className="btn_custom" onClick={() => applyBg(1)}>{names[0]} 만</button>
+              <button className="btn_custom" onClick={() => applyBg(2)}>{names[1]} 만</button>
+              <button className="btn_custom" onClick={() => applyBg('both')}>둘 다</button>
+              <button className="btn_custom ghost" onClick={() => setBgPending(null)}>취소</button>
             </div>
           </div>
         </div>
@@ -433,6 +406,7 @@ export function ClosetStage({ data, ready, isAdmin }: { data: ClosetData; ready:
           style={{ width: d.char1Width, height: d.char1Height, left: ghost.x - d.char1Width / 2, top: ghost.y - d.char1Width / 2 }} />
       )}
 
+      {del.element}
       <Modal open={saveAsk} small title="찰칵!" desc="저장 파일명을 입력해주세요"
         onClose={() => setSaveAsk(false)}
         actions={<>

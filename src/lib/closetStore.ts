@@ -33,6 +33,7 @@ export interface ClosetDesign {
   tabRemap: string;                          // 줄마다 "원래타입>보여줄탭"
   startTab: string;                          // auto 면 아이템이 든 첫 탭
   char1Default: string[]; char2Default: string[];   // 기본 코디 — 아이템 id
+  thumb: string;                             // 방 목록에 보일 그림 — 비우면 두 캐릭터 그림
 }
 
 export interface ClosetData {
@@ -90,7 +91,9 @@ export const BASE_ITEMS: ClosetItem[] = [
 ];
 
 export const DEFAULT_TAB_LIST =
-  'bottom|👖 하의\ntop|👕 상의\nshoes|👟 신발\ndress|👗 원피스\nouter|🧥 외투\nacc|✨ 악세\nbg|🏞 배경';
+  'bottom|하의\ntop|상의\nshoes|신발\ndress|원피스\nouter|외투\nacc|악세\nbg|배경';
+
+const OLD_TAB_LIST = 'bottom|👖 하의\ntop|👕 상의\nshoes|👟 신발\ndress|👗 원피스\nouter|🧥 외투\nacc|✨ 악세\nbg|🏞 배경';
 
 export function defaultCloset(): ClosetData {
   return {
@@ -98,7 +101,7 @@ export function defaultCloset(): ClosetData {
     dialogue1: placeholderDialogue('A'),
     dialogue2: placeholderDialogue('B'),
     design: {
-      ribbonColor: '#7a9ba8', pointColor: '#97c3d1', titleColor: '#555555',
+      ribbonColor: '', pointColor: '', titleColor: '',   // 비우면 사이트 색을 따른다
       gameTitle: '페어명의 옷장', saveName: '페어명의 옷장',
       titleFont: '', mainFont: '',
       char1Name: '캐릭터A', char2Name: '캐릭터B', char1Label: 'A', char2Label: 'B',
@@ -107,6 +110,7 @@ export function defaultCloset(): ClosetData {
       blush1: '100,92,100,56', blush2: '100,92,100,56',
       tabList: DEFAULT_TAB_LIST, tabRemap: 'acc2>acc\nhair>acc', startTab: 'auto',
       char1Default: ['base-wear0', 'base-ace1'], char2Default: ['base-wear1', 'base-ace2'],
+      thumb: '',
     },
   };
 }
@@ -128,6 +132,11 @@ export function normalizeCloset(raw: unknown): ClosetData {
       }))
     : d.items;
   const design = { ...d.design, ...(r.design ?? {}) };
+  // 예전 기본값(파란 리본·이모지 탭)은 「사이트 톤 따르기」로 옮긴다 — 직접 고른 값은 건드리지 않는다
+  if (design.ribbonColor === '#7a9ba8') design.ribbonColor = '';
+  if (design.pointColor === '#97c3d1') design.pointColor = '';
+  if (design.titleColor === '#555555') design.titleColor = '';
+  if (design.tabList === OLD_TAB_LIST) design.tabList = DEFAULT_TAB_LIST;
   // 표정 5장 — 비었거나 모자라면 기본 그림으로
   design.char1Bodies = [0, 1, 2, 3, 4].map(n => design.char1Bodies?.[n] || d.design.char1Bodies[n]);
   design.char2Bodies = [0, 1, 2, 3, 4].map(n => design.char2Bodies?.[n] || d.design.char2Bodies[n]);
@@ -164,17 +173,47 @@ export function tabInfo(d: ClosetDesign): TabInfo {
   return { order, label, remap: (t: string) => map[t] ?? t };
 }
 
-/** 옷장 데이터 — 읽기는 누구나, 저장은 관리자 (서버 규칙이 막는다) */
-export function useCloset(): [ClosetData, (next: ClosetData) => void, boolean] {
-  const [data, setData] = useState<ClosetData>(() => defaultCloset());
+/* ── 방(여러 옷장) ──
+   옷장 하나가 방 하나. 모든 방을 설정 한 칸(ohome.closet.v1)에 담아 사이트 백업에 그대로 따라오게 한다.
+   방이 생기기 전 단일 옷장 형태({ items, design … })로 저장된 값은 첫 번째 방(main)으로 이어받는다. */
+export interface ClosetRoom extends ClosetData { id: string; created: number }
+export interface ClosetBook { rooms: ClosetRoom[] }
+
+export function newRoom(id: string, name: string): ClosetRoom {
+  const d = defaultCloset();
+  d.design.gameTitle = name; d.design.saveName = name;
+  return { ...d, id, created: Date.now() };
+}
+
+export function normalizeBook(raw: unknown): ClosetBook {
+  if (!raw || typeof raw !== 'object') return { rooms: [] };
+  const r = raw as { rooms?: unknown; items?: unknown };
+  if (Array.isArray(r.rooms)) {
+    return {
+      rooms: r.rooms
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+        .map((x, n) => ({
+          ...normalizeCloset(x),
+          id: typeof x.id === 'string' && x.id ? x.id : `room-${n}`,
+          created: Number(x.created) || 0,
+        })),
+    };
+  }
+  if (Array.isArray(r.items)) return { rooms: [{ ...normalizeCloset(raw), id: 'main', created: 0 }] };   // 예전 단일 옷장
+  return { rooms: [] };
+}
+
+/** 방 목록 — 읽기는 누구나, 저장은 관리자 (서버 규칙이 막는다) */
+export function useClosetBook(): [ClosetBook, (next: ClosetBook) => void, boolean] {
+  const [book, setBook] = useState<ClosetBook>({ rooms: [] });
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    const load = () => setData(normalizeCloset(getSetting<unknown>(CLOSET_KEY, null)));
+    const load = () => setBook(normalizeBook(getSetting<unknown>(CLOSET_KEY, null)));
     load(); setLoaded(true);
     return onSettingChange(k => { if (k === CLOSET_KEY) load(); });
   }, []);
-  const save = useCallback((next: ClosetData) => { setData(next); setSetting(CLOSET_KEY, next); }, []);
-  return [data, save, loaded];
+  const save = useCallback((next: ClosetBook) => { setBook(next); setSetting(CLOSET_KEY, next); }, []);
+  return [book, save, loaded];
 }
 
 /* ── 화면에 그릴 주소 ──

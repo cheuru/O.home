@@ -139,7 +139,12 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
   const num = (label: string, k: 'char1Width' | 'char1Height' | 'char2Width' | 'char2Height') => field(label,
     <KStep value={d[k]} min={50} max={1200} step={10} onChange={v => setDesign({ [k]: v })} />, 120);
   const color = (label: string, k: 'ribbonColor' | 'pointColor' | 'titleColor') => field(label,
-    <ColorField value={d[k]} onChange={v => setDesign({ [k]: v })} />, 140);
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <ColorField value={d[k] || '#888888'} onChange={v => setDesign({ [k]: v })} />
+      {d[k]
+        ? <button type="button" className="btn btn-ghost" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => setDesign({ [k]: '' })}>사이트 색으로</button>
+        : <span style={{ fontSize: 11, color: 'var(--faint)' }}>사이트 색 따르는 중</span>}
+    </span>, 220);
 
   return (
     <div>
@@ -222,9 +227,16 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
 
       {sec === 'design' && (
         <div className="panel">
-          {row(<>{text('제목 (상단 리본)', 'gameTitle', 260)}{text('저장 파일명 기본값', 'saveName', 220)}</>)}
+          {row(<>{text('옷장 이름 (제목·목록에 표시)', 'gameTitle', 260)}{text('저장 파일명 기본값', 'saveName', 220)}</>)}
+          {row(<>
+            <PickImage value={d.thumb || d.char1Bodies[0]} size={84} label="목록 썸네일" fallback={d.char1Bodies[0]}
+              onChange={u => setDesign({ thumb: u === d.char1Bodies[0] ? '' : u })} />
+            <span style={{ fontSize: 11.5, color: 'var(--sub)', maxWidth: 360, lineHeight: 1.7 }}>
+              옷장 목록에 보일 그림이에요. 바꾸지 않으면 두 캐릭터의 기본 그림이 나란히 보여요.
+            </span>
+          </>)}
           {row(<>{text('캐릭터 1 이름', 'char1Name')}{text('캐릭터 2 이름', 'char2Name')}{text('캐릭터 1 사이즈 표시', 'char1Label', 120)}{text('캐릭터 2 사이즈 표시', 'char2Label', 120)}</>)}
-          {row(<>{color('리본 색', 'ribbonColor')}{color('포인트 색', 'pointColor')}{color('제목 글자 색', 'titleColor')}</>)}
+          {row(<>{color('보조 색 (현재 거의 안 씀)', 'ribbonColor')}{color('강조 색', 'pointColor')}{color('제목 글자 색', 'titleColor')}</>)}
           {row(<>{text('본문 글꼴 (비우면 사이트 글꼴)', 'mainFont', 240)}{text('제목 글꼴', 'titleFont', 240)}</>)}
           {row(<>{num('캐릭터 1 너비', 'char1Width')}{num('캐릭터 1 높이', 'char1Height')}{num('캐릭터 2 너비', 'char2Width')}{num('캐릭터 2 높이', 'char2Height')}</>)}
           {row(<>{text('홍조 1 위치 (왼쪽,위,너비,높이)', 'blush1', 260)}{text('홍조 2 위치', 'blush2', 260)}</>)}
