@@ -212,8 +212,10 @@ export const CLOSET_CSS = String.raw`
 .cl-root .item-detail-name{font-size:13px;color:var(--ink);font-family:var(--sans);}
 .cl-root .item-detail .k-input{height:32px;font-size:12.5px;}
 .cl-root .btn-toggle-detail{display:block;margin:8px auto 0;background:none;border:none;cursor:pointer;font-size:12px;font-family:var(--sans);text-decoration:none;}
-.cl-root .cl-detail{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .3s ease,opacity .25s ease;}
-.cl-root .cl-detail.open{grid-template-rows:1fr;opacity:1;}
-.cl-root .cl-detail-inner{overflow:hidden;min-height:0;display:flex;flex-direction:column;gap:6px;}
-.cl-root .cl-detail.open .cl-detail-inner{margin-top:8px;max-height:320px;overflow-y:auto;padding-right:2px;}
+.cl-root .cl-fold{display:grid;grid-template-rows:0fr;opacity:0;visibility:hidden;transition:grid-template-rows .3s ease,opacity .25s ease,visibility 0s .3s;}
+.cl-root .cl-fold.open{grid-template-rows:1fr;opacity:1;visibility:visible;transition:grid-template-rows .3s ease,opacity .25s ease,visibility 0s;}
+.cl-root .cl-fold-inner{overflow:hidden;min-height:0;}
+.cl-root .cl-fold.open .cl-fold-inner{margin-top:8px;}
+.cl-root .item-edit-head{width:100%;margin:10px 0 2px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint);font-family:var(--sans);}
+.cl-root .btn-toggle-detail{margin-top:2px;text-decoration:none!important;}
 `;

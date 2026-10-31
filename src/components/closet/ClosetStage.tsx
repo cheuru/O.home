@@ -315,64 +315,56 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
                 <button type="button" className={`dbl-btn${dblTarget === 2 ? ' active' : ''}`} onClick={() => setDblTarget(2)}>{names[1]}</button>
               </div>
             </div>
-            <div className="tab-nav">
-              {tabs.order.map(t => (
-                <button key={t} className={`tab-btn${t === curTab ? ' active' : ''}`} onClick={() => setCurTab(t)}>{tabs.label[t]}</button>
-              ))}
-            </div>
-            <div className="wardrobe">
-              {tabs.order.map(t => (
-                <div key={t} className={`tab-panel${t === curTab ? ' active' : ''}`}>
-                  {inTab(t).map(it => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={it.id} src={it.src} alt={it.desc} loading="lazy" decoding="async" draggable={false}
-                      className={`clothes-item${hiddenSrcs.has(it.src) ? ' item-worn' : ''}${shown(it) ? '' : ' item-hidden'}`}
-                      data-type={it.type}
-                      onPointerDown={e => onItemDown(e, it)} onClick={() => onItemClick(it)}
-                      onMouseEnter={e => it.desc && setTip({ text: it.desc, x: e.clientX, y: e.clientY })}
-                      onMouseMove={e => setTip(p => (p ? { ...p, x: e.clientX, y: e.clientY } : p))}
-                      onMouseLeave={() => setTip(null)} />
-                  ))}
-                  {t === 'bg' && ([1, 2] as Cid[]).map(cid => (
-                    <div key={cid} className="bg-remove-btn" onClick={() => removeBg(cid)}>
-                      <span>{names[cid - 1]}<br />배경제거</span>
-                    </div>
-                  ))}
-                  {t === curTab && visibleCount === 0 && <div className="tab-empty">아이템이 없습니다.</div>}
-                </div>
-              ))}
-            </div>
             <button type="button" className="btn-toggle-detail" onClick={() => setDetail(v => !v)}>{detail ? '닫기 ▲' : '자세히 ▼'}</button>
-            <div className={`cl-detail${detail ? ' open' : ''}`}>
-              <div className="cl-detail-inner">
-                <div className="dbl-hint" style={{ marginBottom: 6 }}>
-                  {isAdmin ? `${tabs.label[curTab] ?? ''} 탭의 아이템 — 이름·탭·앞뒤 순서를 바로 고칠 수 있어요` : `${tabs.label[curTab] ?? ''} 탭의 아이템`}
+            <div className={`cl-fold${detail ? ' open' : ''}`}>
+              <div className="cl-fold-inner">
+                <div className="tab-nav">
+                  {tabs.order.map(t => (
+                    <button key={t} className={`tab-btn${t === curTab ? ' active' : ''}`} onClick={() => setCurTab(t)}>{tabs.label[t]}</button>
+                  ))}
                 </div>
-                {inTab(curTab).filter(shown).map(it => (
-                    <div key={it.id} className="item-detail">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={it.src} alt={it.desc} draggable={false} />
-                      {isAdmin && onEditItem ? (
-                        <div className="item-detail-form">
-                          <input className="k-input" defaultValue={it.desc} placeholder="이름" key={`${it.id}:${it.desc}`}
-                            onBlur={e => { const v = e.target.value; if (v !== it.desc) onEditItem(it.id, { desc: v }); }}
-                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
-                          <div className="item-detail-line">
-                            <KSelect value={it.type} minWidth={110} onChange={v => onEditItem(it.id, { type: v })}
-                              options={[...tabs.order, ...(tabs.order.includes(it.type) ? [] : [it.type])].map(k => ({ value: k, label: tabs.label[k] ?? k }))} />
-                            <KStep value={it.zi} min={-99} max={99} onChange={v => onEditItem(it.id, { zi: v })} />
-                            {onDeleteItem && <button type="button" className="dbl-btn" onClick={() => del.ask('이 아이템을 삭제할까요?', () => onDeleteItem(it.id))}>삭제</button>}
+                <div className="wardrobe">
+                  {tabs.order.map(t => (
+                    <div key={t} className={`tab-panel${t === curTab ? ' active' : ''}`}>
+                      {inTab(t).map(it => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={it.id} src={it.src} alt={it.desc} loading="lazy" decoding="async" draggable={false}
+                          className={`clothes-item${hiddenSrcs.has(it.src) ? ' item-worn' : ''}${shown(it) ? '' : ' item-hidden'}`}
+                          data-type={it.type}
+                          onPointerDown={e => onItemDown(e, it)} onClick={() => onItemClick(it)}
+                          onMouseEnter={e => it.desc && setTip({ text: it.desc, x: e.clientX, y: e.clientY })}
+                          onMouseMove={e => setTip(p => (p ? { ...p, x: e.clientX, y: e.clientY } : p))}
+                          onMouseLeave={() => setTip(null)} />
+                      ))}
+                      {t === 'bg' && ([1, 2] as Cid[]).map(cid => (
+                        <div key={cid} className="bg-remove-btn" onClick={() => removeBg(cid)}>
+                          <span>{names[cid - 1]}<br />배경제거</span>
+                        </div>
+                      ))}
+                      {t === curTab && visibleCount === 0 && <div className="tab-empty">아이템이 없습니다.</div>}
+                      {isAdmin && onEditItem && inTab(t).filter(shown).length > 0 && (
+                        <div className="item-edit-head">수정 — 이름·탭·앞뒤 순서를 바로 고칠 수 있어요</div>
+                      )}
+                      {isAdmin && onEditItem && inTab(t).filter(shown).map(it => (
+                        <div key={`e${it.id}`} className="item-detail">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={it.src} alt={it.desc} draggable={false} />
+                          <div className="item-detail-form">
+                            <input className="k-input" defaultValue={it.desc} placeholder="이름" key={`${it.id}:${it.desc}`}
+                              onBlur={e => { const v = e.target.value; if (v !== it.desc) onEditItem(it.id, { desc: v }); }}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+                            <div className="item-detail-line">
+                              <KSelect value={it.type} minWidth={110} onChange={v => onEditItem(it.id, { type: v })}
+                                options={[...tabs.order, ...(tabs.order.includes(it.type) ? [] : [it.type])].map(k => ({ value: k, label: tabs.label[k] ?? k }))} />
+                              <KStep value={it.zi} min={-99} max={99} onChange={v => onEditItem(it.id, { zi: v })} />
+                              {onDeleteItem && <button type="button" className="dbl-btn" onClick={() => del.ask('이 아이템을 삭제할까요?', () => onDeleteItem(it.id))}>삭제</button>}
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="item-detail-form">
-                          <div className="item-detail-name">{it.desc || '이름 없음'}</div>
-                          <div className="dbl-hint">{tabs.label[tabs.remap(it.type)] ?? it.type} · 순서 {it.zi}</div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                ))}
-                {!inTab(curTab).filter(shown).length && <div className="tab-empty">아이템이 없습니다.</div>}
+                  ))}
+                </div>
               </div>
             </div>
             <div className="footer-credit">
