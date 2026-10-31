@@ -2,30 +2,42 @@
 // 자관 상세 (4.5) — 2인: 헤더 블러 + 대형 타이틀 + 좌우 카드 + 중앙 일러(전신/일러 토글) + AU
 // 하단: TIMELINE / QUESTIONS 탭 (v1.8) + 역극·로그 연동 리스트 · 다인(3인+): 멤버 리스트형
 // 관리자: 멤버 추가(내/상대 캐릭터) · 타임라인 항목 추가 · 질문 추가
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
+
+// 테마·배경은 화면이 그려지기 전에 적용 — 효과로 두면 이전 테마로 한 번 그려졌다가 바뀌며 번쩍인다
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+import { usePageBgm } from '@/lib/bgmStore';
+import { FadeImg } from '@/components/ui/FadeImg';
+import { DragList } from '@/components/ui/DragList';
+import { RelGalleryMini } from '@/components/rels/RelGalleryMini';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/ThemeProvider';
-import { useLocalList, newId } from '@/lib/postStore';
+import { useLocalList, newId, Post, BOARD_SEED } from '@/lib/postStore';
 import {
   Relation, REL_SEED, Character, CHAR_SEED, RelMember, QaEntry, QaAnswer, TlItem, findChar, Visibility, CharGrant,
   auMember, auStyle, fullShadow, hasRelGrant,
-  RelAu, RelCpTag, charWithAu, charGrant,
+  RelAu, RelCpTag, charWithAu, auProfileOf, charGrant,
   QaAnswerRow, QA_KEY, QA_SEED, MergedAnswer, answersFor,
-  findByKey, charPath,
+  findByKey, charPath, relGalleryPosts,
+  HeroSticker, heroOrder, heroZ, heroFullId, heroStickerId, HERO_UI_ID,
 } from '@/lib/charStore';
+import { isPlainSpec } from '@/lib/charRuleConfig';
 import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
 import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
-import { TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
+import { useBgInk } from '@/lib/useBgInk';
+import { RelStage, RelStageMobile } from '@/components/rels/RelStage';
+import { StageWindow, type StageWindowItem } from '@/components/chars/StageWindow';
+import { GalleryPanel } from '@/components/gallery/GalleryPostsView';
+import { TrpgLog, TRPG_SEED, PlayRecord, PLAYLOG_SEED, recordRelIds } from '@/lib/galleryStore';
 import { RpRoom, RP_SEED } from '@/lib/rpStore';
 import { useFonts } from '@/lib/fontStore';
 import { Tip, KInput, KTextarea, KSelect, KRadio, KCheck } from '@/components/ui/Kit';
 import { Modal, ConfirmModal, useConfirmDelete } from '@/components/ui/Modal';
 import { ColorField } from '@/components/ui/ColorField';
 import { withAlpha } from '@/lib/color';
-import { DragList } from '@/components/ui/DragList';
 import { BlobImg, useBlobUrl } from '@/lib/blobStore';
 import { CroppedBlobImg, CropEditor, type CropValue } from '@/components/ui/CropEditor';
 import { Lightbox } from '@/components/ui/Lightbox';
@@ -38,12 +50,23 @@ function FullImg({ refId, scale, offX = 0, offY = 0, shadow }: { refId: string; 
   const url = useBlobUrl(refId);
   if (!url) return null;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="" draggable={false} style={{
+    <FadeImg src={url} alt="" draggable={false} style={{
       position: 'absolute', bottom: `${offY}%`, left: `calc(50% + ${offX}%)`, transform: 'translateX(-50%)',
       height: `${scale}%`, maxWidth: 'none',
       filter: shadow,
     }} />
+  );
+}
+
+/** 히어로 스티커 (v5.6) — 자관 수정 미리보기에서 놓은 자리·크기 그대로.
+ *  좌표는 히어로 영역 대비 %, 중심 기준. 클릭은 아래로 통과시킨다 */
+function HeroStickerImg({ s, z }: { s: HeroSticker; z: number }) {
+  const url = useBlobUrl(s.ref);
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img className="hero-sticker" src={url} alt="" draggable={false}
+      style={{ left: `${s.x}%`, top: `${s.y}%`, width: `${s.w}%`, zIndex: z }} />
   );
 }
 
@@ -150,7 +173,12 @@ function MiniProf({ member, char, isAdmin, onGo, onRemove, auUnregistered, side,
           {/* 이름 폰트는 캐릭터 프로필에서 지정한 것을 그대로 쓰고,
               크기는 이 자관에서 정한 값 (자관 수정의 「이름 크기」 — 기본 17px, v2.0) */}
           <b style={{
-            fontFamily: familyOf(char.fontId), fontSize: member.nameSize ?? undefined,
+            fontFamily: familyOf(char.fontId),
+            // 이름 크기 — 자관 수정의 「캐릭터 이름 크기」(heroNameSize) 그대로 따른다.
+            // 예전엔 이 멤버 카드만 별도 필드(nameSize)를 봐서, 그 항목을 조정해도 여기(모바일
+            // 카드)엔 반영되지 않았다(v2.0 이후 방치된 사용자 제보) — 이제 한 항목으로 합친다.
+            // 옛 데이터 호환을 위해 nameSize도 다음 순위로 본다.
+            fontSize: (member.heroNameSize ?? member.nameSize) ?? undefined,
             // 굵기는 끌 수 있다 (v2.0 사용자 요청) — 기본은 지금처럼 굵게(<b>)
             fontWeight: (member.nameBold ?? true) ? undefined : 400,
           }}>
@@ -160,7 +188,7 @@ function MiniProf({ member, char, isAdmin, onGo, onRemove, auUnregistered, side,
         </div>
       </div>
       <div className="specs">
-        {char.specs.map(s => <div key={s.label}><b>{s.label}</b> {s.value}</div>)}
+        {char.specs.filter(isPlainSpec).map(s => <div key={s.label}><b>{s.label}</b> {s.value}</div>)}
       </div>
       {/* 캐릭터의 지금 색 팔레트를 그대로 읽는다 (v2.0 사용자 발견).
           예전엔 멤버를 추가할 때 복사해 둔 member.palette 스냅샷을 보여 줘서, 캐릭터 쪽에서 색을
@@ -222,6 +250,19 @@ function MiniProf({ member, char, isAdmin, onGo, onRemove, auUnregistered, side,
 }
 
 /** 페어에서 멤버가 비었을 때 자리 카드 */
+/** 모바일 뷰 판정 (v5.5) — main 브랜치가 자관 세부를 세로 스택으로 바꾸는 폭(960px)과 같다 */
+function useMobileRelView() {
+  const [mob, setMob] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 960px)');
+    const on = () => setMob(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return mob;
+}
+
 function EmptyCard({ isAdmin, onAdd }: { isAdmin: boolean; onAdd: () => void }) {
   return (
     <div className="panel mini-prof" style={{
@@ -238,12 +279,23 @@ function EmptyCard({ isAdmin, onAdd }: { isAdmin: boolean; onAdd: () => void }) 
 export default function RelDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  // 맨 위에서는 메뉴 줄 뒤까지 그림이 이어지도록 앱 영역을 끌어올린다 (globals.css body.rel-hero-top)
+  useEffect(() => {
+    const m = document.getElementById('appMain'); if (!m) return;
+    const sync = () => document.body.classList.toggle('rel-hero-top', m.scrollTop < 58);
+    sync(); m.addEventListener('scroll', sync, { passive: true });
+    return () => { m.removeEventListener('scroll', sync); document.body.classList.remove('rel-hero-top'); };
+  }, []);
+
   const { user, isAdmin } = useAuth();
   const toast = useToast();
   const { familyOf } = useFonts();
   const [rels, setRels, loaded] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [chars, setChars, charsLoaded] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [logs] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
+  // 세션 게시판 연동 — 플레이 기록(PlayRecord.relId)과 그 기록에 붙은 세션 글
+  const [records] = useLocalList<PlayRecord>('ohome.playlog.v1', PLAYLOG_SEED);
+  const [sessionPosts] = useLocalList<Post>('ohome.board.v1', BOARD_SEED);
   const [rooms] = useLocalList<RpRoom>('ohome.rp.v1', RP_SEED);
   const [tab, setTab] = useState<'tl' | 'qa'>('tl');
   const [auId, setAuId] = useState('base');
@@ -327,6 +379,8 @@ export default function RelDetailPage() {
      리스트 썸네일 좌표만 잡을 수 있고 상세는 못 잡던 것 — 여러 장이면 보고 있는 장을 잡는다.
      표시 영역은 화면 높이에 따라 달라지므로 고정 비율이 아니라 **실제 상자 비율**로 연다. */
   const [artCtx, setArtCtx] = useState<{ x: number; y: number; ref: string } | null>(null);
+  // 전신 위 이름 우클릭 — 흰 카드가 없어져 「멤버 제거」를 여기로 옮겨 둠 (v4.2)
+  const [fbCtx, setFbCtx] = useState<{ x: number; y: number; cid: string } | null>(null);
   const [artCropOpen, setArtCropOpen] = useState<{ ref: string; ratio: number } | null>(null);
   const artBoxRef = useRef<HTMLDivElement>(null);
   const artBoxRatio = () => {
@@ -341,6 +395,14 @@ export default function RelDetailPage() {
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', key); };
   }, [artCtx]);
+  useEffect(() => {
+    if (!fbCtx) return;
+    const close = () => setFbCtx(null);
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setFbCtx(null); };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', key); };
+  }, [fbCtx]);
   const [qOpen, setQOpen] = useState(false);
   const [qText, setQText] = useState('');
   const [auOpen, setAuOpen] = useState(false);
@@ -359,16 +421,21 @@ export default function RelDetailPage() {
   // 별명 주소로도 열린다 (v2.0 사용자 요청 — 주소를 나중에 바꿔도 옛 주소가 살아 있게)
   const rel = findByKey(rels, id);
 
+  // 이 자관 전용 BGM — 들어오면 플레이어가 이 BGM으로, 나가면 홈페이지 BGM으로 (열람 권한이 없으면 걸지 않는다)
+  const bgmAllowed = !!rel && !(rel.visibility === 'private' && !isAdmin) && !(rel.visibility === 'member' && !user);
+  usePageBgm(bgmAllowed ? `rel:${rel!.id}` : undefined, bgmAllowed ? rel!.bgm : undefined);
+
   // 자관별 페이지 테마 (4.18 방식) — 별도 테마컬러면 홈 전체 팔레트를 임시 전환, 벗어나면 원복.
   // AU별 (v1.9): AU에 테마를 지정했으면 그것, 미지정이면 base(원본) 테마 따라가기
-  const { setPageTheme, setPageBg } = useTheme();
+  const { setPageTheme, setPageBg, setPageBgImage } = useTheme();
+  const isMob = useMobileRelView();   // 모바일 뷰는 main 브랜치 화면 (v5.5)
   const themeAu = rel?.aus.find(a => a.id === auId);
   const auTheme = themeAu && themeAu.id !== 'base' ? themeAu.theme : undefined;
   const effThemeMode = auTheme?.mode ?? rel?.themeMode;
   const effThemeColor = auTheme ? auTheme.color : rel?.themeColor;
   const pageColor = effThemeMode === 'custom' && effThemeColor ? effThemeColor : null;
   const pageTone = auTheme ? auTheme.tone : rel?.themeTone;
-  useEffect(() => {
+  useIsoLayoutEffect(() => {
     setPageTheme(pageColor, pageTone);
     return () => setPageTheme(null);
   }, [pageColor, pageTone, setPageTheme]);
@@ -379,16 +446,33 @@ export default function RelDetailPage() {
   const bgG1 = themeAuStyle?.pageBgG1;
   const bgG2 = themeAuStyle?.pageBgG2;
   const bgAngle = themeAuStyle?.pageBgAngle;
-  useEffect(() => {
+  useIsoLayoutEffect(() => {
     if (!bgG1 && !bgG2) return;
     setPageBg({ g1: bgG1 ?? '#2b3038', g2: bgG2 ?? '#121418', angle: bgAngle ?? 180 });
     return () => setPageBg(null);
   }, [bgG1, bgG2, bgAngle, setPageBg]);
 
+  // 멤버 캐릭터의 이름 사본 갱신 (관리자만) — 나만보기 캐릭터도 비회원에게 이름이 보이게 자관에 함께 저장
+  useEffect(() => {
+    if (!loaded || !charsLoaded || !rel || !isAdmin) return;
+    let changed = false;
+    const members = rel.members.map(m => {
+      const c = chars.find(x => x.id === m.charId);
+      if (!c) return m;
+      const snap = { name: c.name, sub: c.sub || undefined, fontId: c.fontId, color: c.color, thumbClass: c.thumbClass || undefined, colors: c.colors?.length ? c.colors.map(({ hex, label }) => ({ hex, label })) : undefined };
+      if (JSON.stringify(snap) === JSON.stringify(m.snap)) return m;
+      changed = true;
+      return { ...m, snap };
+    });
+    if (changed) setRels(rels.map(r => (r.id === rel.id ? { ...r, members } : r)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, charsLoaded, isAdmin, rel?.id, chars]);
+
   // 삭제된 캐릭터를 가리키는 멤버 자동 정리 — 카드도 안 뜨고 [＋ 멤버 추가]도
   // 안 나오는 유령 슬롯이 남지 않게 (캐릭터 삭제 기능 도입에 따른 정합성 보정)
   useEffect(() => {
-    if (!loaded || !charsLoaded || !rel) return;
+    // 관리자만 정리한다 — 비회원·일반 회원에게는 나만보기/멤버공개 캐릭터가 목록에서 빠져 있어, 이들이 방문해도 멤버가 지워진 걸로 오해해 저장을 시도(→ 보안 규칙에 막혀 오류 문구가 뜨고 화면이 깜빡임)하던 것을 막는다
+    if (!loaded || !charsLoaded || !rel || !isAdmin) return;
     const alive = rel.members.filter(m => chars.some(c => c.id === m.charId));
     if (alive.length !== rel.members.length) {
       setRels(rels.map(r => (r.id === rel.id ? { ...r, members: alive } : r)));
@@ -397,13 +481,34 @@ export default function RelDetailPage() {
   }, [loaded, charsLoaded, rel?.id, rel?.members.length, chars.length]);
 
   const isDuo = rel ? (rel.kind ? rel.kind === 'pair' : rel.members.length === 2) : false;
+  // PC의 2인 전신 히어로(v4.x)는 PC에서만 — 모바일은 main의 카드형 구성 (v5.5)
+  const heroDuo = isDuo && !isMob;
+  // 상세 화면 구성 — 기본은 스테이지(스크롤 인터랙티브 히어로), 자관 수정에서 클래식으로 되돌릴 수 있다
+  const stageOn = !!rel && rel.detailLayout !== 'classic';
   const au = rel?.aus.find(a => a.id === auId) ?? rel?.aus[0];
   // AU별 프로필 데이터 (v1.9) — base(원본)는 Relation 최상위, 그 외 AU는 aus 항목에 저장
   const isBaseAu = (au?.id ?? 'base') === 'base';
+
+  // 자관 배경 이미지 (v5.1 사용자 요청) — 환경설정의 배경 변경과 똑같이 페이지 전체 배경으로
+  // (고정·cover·블러) 깐다. 예전처럼 상단에 배너를 따로 깔고 아래로 페이드아웃하지 않는다 —
+  // 상단 바 뒤·배너 아래 경계가 생기던 끊김이 없어지고, 화면 전체가 한 장으로 이어진다.
+  const hdrIdForBg = (isBaseAu ? rel?.headerImgId : au?.headerImgId) ?? undefined;
+  const hdrBlurForBg = (isBaseAu ? rel?.headerBlur : au?.headerBlur) ?? 16;
+  const hdrBgUrl = useBlobUrl(hdrIdForBg);
+  // 「장식 안에 이미지」를 고르면 이미지는 스테이지의 큰 도형 안에만 쓰고 페이지 전체 배경은 깔지 않는다
+  const decoBand = stageOn && rel?.deco !== 'off' && rel?.decoBg === 'band' && !!hdrBgUrl;
+  useEffect(() => {
+    setPageBgImage(decoBand ? null : (hdrBgUrl ?? null), hdrBlurForBg);
+    return () => setPageBgImage(null);
+  }, [hdrBgUrl, hdrBlurForBg, decoBand, setPageBgImage]);
+
   const auArts = (isBaseAu ? rel?.arts : au?.arts) ?? [];
   // AU별 이름/본문 폰트·전신 앞뒤 (v2.0 사용자 제보 — 분리가 안 되던 것) — 미지정이면 자관 기본
   const auFont = (isBaseAu ? undefined : au?.fontId) ?? rel?.fontId;
   const auBodyFont = (isBaseAu ? undefined : au?.bodyFontId) ?? rel?.bodyFontId;
+  // 자관 이름(제목) 크기 — AU에 정해 둔 값 우선, 없으면 자관 기본, 그것도 없으면 CSS 기본
+  const auTitleSize = (isBaseAu ? undefined : au?.titleSize) ?? rel?.titleSize;
+  const titleFs = auTitleSize ? `calc(${auTitleSize}px*var(--fs,1))` : undefined;
   const auFullFront = (isBaseAu ? undefined : au?.fullFront) ?? rel?.fullFront;
   const auTimeline = (isBaseAu ? rel?.timeline : au?.timeline) ?? [];
   const auQuestions = (isBaseAu ? rel?.questions : au?.questions) ?? [];
@@ -457,20 +562,38 @@ export default function RelDetailPage() {
   const fullRefOf = (cid: string) =>
     (isBaseAu ? rel?.members.find(x => x.charId === cid)?.fullImgId : au?.fulls?.[cid]);
   const hasFull = !!rel?.members.some(m => fullRefOf(m.charId));
-  const single = hasFull ? (oneMode ?? rel?.illustMode === 'one') : true;
+  // 일러스트 모드는 대표(=리스트 썸네일 원본) 아트 말고 추가 일러스트가 더 있을 때만 (v5.4 사용자 요청) —
+  // 대표 썸네일 아트 한 장만 등록돼 있으면 상세에서 일러스트 모드를 보여 주지도, 고르게 하지도 않는다
+  const hasIllust = auArts.length > 1;
+  const single = hasIllust && (hasFull ? (oneMode ?? rel?.illustMode === 'one') : true);
 
   // 멤버 캐릭터 — AU 선택 시 그 캐릭터의 AU 프로필(이름·사진 등)로 합성해 표시 (v1.9)
   const auCharKey = rel && !isBaseAu && au ? `${rel.id}:${au.id}` : null;
-  const charOf = (cid: string) => {
+  const charOf = (cid: string): Character | undefined => {
     const c = findChar(chars, cid);
-    return c && auCharKey ? charWithAu(c, auCharKey) : c;
+    if (c) return auCharKey ? charWithAu(c, auCharKey) : c;
+    // 열람 권한이 없어 목록에서 빠진 캐릭터 — 자관에 저장해 둔 이름 사본으로 표시만 한다 (프로필 이동은 막힘)
+    const s = rel?.members.find(x => x.charId === cid)?.snap;
+    return s ? ({ id: cid, name: s.name, sub: s.sub ?? '', fontId: s.fontId, color: s.color ?? '#888888', colors: s.colors ?? [], specs: [], tabs: [],
+      arts: [], thumbClass: s.thumbClass ?? '', visibility: 'private', own: false, basicHtml: '' } as unknown as Character) : undefined;
   };
   // AU 선택 중 그 캐릭터의 AU 프로필 미등록 여부 + 캐릭터 페이지 링크(au 유지) (v1.9)
-  const auUnregOf = (cid: string) => !!auCharKey && !findChar(chars, cid)?.auProfiles?.[auCharKey];
+  const auUnregOf = (cid: string) => !!auCharKey && !!findChar(chars, cid) && !(() => { const c = findChar(chars, cid); return c ? auProfileOf(c, auCharKey) : undefined; })();
   // 캐릭터 별명 주소 우선 (v2.0) — 없으면 id 그대로
   const charHref = (cid: string) => {
     const base = charPath(charOf(cid) ?? { id: cid });
     return auCharKey ? `${base}?au=${encodeURIComponent(auCharKey)}` : base;
+  };
+  // AU가 갤러리 태그를 골라 뒀으면 그 태그의 사진만 서랍에 (멤버는 그 AU의 캐릭터 프로필 기준)
+  const auGalleryOpt = !isBaseAu && au?.galleryTags?.length ? { tags: au.galleryTags, charAuKey: auCharKey } : undefined;
+  // 열람할 수 없는 캐릭터(나만보기·멤버공개)는 자관 페이지에는 그대로 보이되 프로필로는 들어가지 못한다
+  const profileBlocked = (cid: string) => {
+    const c = findChar(chars, cid);
+    return !c ? !isAdmin : (c.visibility === 'private' && !isAdmin) || (c.visibility === 'member' && !user);
+  };
+  const goChar = (href: string, cid?: string) => {
+    if (cid && profileBlocked(cid)) { toast('공개되지 않은 캐릭터라 프로필로 이동할 수 없습니다'); return; }
+    router.push(href);
   };
   const sideOf = (cid: string) => (isDuo && rel?.members[1]?.charId === cid ? 'r' : 'l');
 
@@ -482,11 +605,44 @@ export default function RelDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rel, auId, qaQuery],
   );
-  const relLogs = useMemo(() => logs.filter(l => l.relId === rel?.id), [logs, rel]);
+  // 날짜(YYYY-MM-DD, ISO)순 정렬 — 등록 순서가 아니라 「세션/로그에 기입된 날짜」 기준으로 보여야 한다.
+  // 날짜를 안 적은 항목은 맨 뒤로 보낸다(기존엔 정렬을 안 해서 등록 순서대로 섞여 나왔다 — 사용자 제보)
+  const byDate = <T extends { date?: string }>(a: T, b: T) => (a.date || '9999') < (b.date || '9999') ? -1 : (a.date || '9999') > (b.date || '9999') ? 1 : 0;
+  const relLogs = useMemo(() => logs.filter(l => l.relId === rel?.id).sort(byDate), [logs, rel]);
+  // 연동된 세션 — 세션 글이 붙어 있으면 비밀글은 관리자·작성자에게만 (제목이 새지 않게),
+  // 글 없이 기록만 있는 세션은 플레이기록 표로 안내
+  const relSessions = useMemo(() => records
+    .filter(r => !!rel && recordRelIds(r).includes(rel.id))
+    .filter(r => {
+      if (!r.postId) return true;
+      const p = sessionPosts.find(x => x.id === r.postId);
+      if (!p) return isAdmin;
+      return !p.secret || isAdmin || (!!p.authorId && p.authorId === user?.id);
+    })
+    .sort(byDate), [records, sessionPosts, rel, isAdmin, user]);
   // 역극 연동 (4.9) — 내가 참여한 방 + 공개 전환된 완결 방만 (비참여 방은 존재 자체 비노출)
   const relRooms = useMemo(() => rooms.filter(rm => rm.relId === rel?.id
     && ((user && rm.memberIds.includes(user.id)) || (rm.status === 'done' && rm.isPublic))),
     [rooms, rel, user]);
+
+  // 서랍 — 로그 백업 · 세션 게시판 · 갤러리 · 역극 (캐릭터 상세의 서랍과 같은 창). AU마다 숨길 수 있다
+  const [win, setWin] = useState<string | null>(null);
+  const bgInk = useBgInk();   // 배경이 밝으면 스테이지도 밝게 (캐릭터 상세와 같은 규칙)
+  // 서랍 항목을 고르면 타임라인/문답 탭도 같이 바뀐다
+  const selTab = (t: 'tl' | 'qa') => { setTab(t); if (win === 'timeline' || win === 'qa') setWin(t === 'tl' ? 'timeline' : 'qa'); };
+  const pickWin = (k: string | null) => { if (k === 'timeline') setTab('tl'); else if (k === 'qa') setTab('qa'); setWin(k); };
+  const drawerItems: (StageWindowItem & { count: string; n: number })[] = rel ? [
+    { key: 'timeline', title: 'Timeline', sub: '타임라인', n: auTimeline.length || (isAdmin ? 1 : 0), count: auTimeline.length ? `기록 ${auTimeline.length}개` : '아직 없음' },
+    ...(qaOn ? [{ key: 'qa', title: 'Questions', sub: '문답', n: auQuestions.length || (isAdmin ? 1 : 0), count: `질문 ${auQuestions.length}개` }] : []),
+    ...(!au?.hideLog ? [
+      { key: 'log', title: 'Log Backup', sub: '세션 로그', n: relLogs.length, count: relLogs.length ? `로그 ${relLogs.length}개` : '아직 없음' },
+      { key: 'session', title: 'Session Board', sub: '세션 기록', n: relSessions.length, count: relSessions.length ? `세션 ${relSessions.length}개` : '아직 없음' },
+    ] : []),
+    ...(!au?.hideRp ? [
+      { key: 'gallery', title: 'Gallery', sub: '갤러리', ...(() => { const n = relGalleryPosts(rel, chars, { isAdmin, loggedIn: !!user }, auGalleryOpt).length; return { n, count: n ? `사진 묶음 ${n}개` : '아직 없음' }; })() },
+      { key: 'rp', title: 'Role Play', sub: '역극', n: relRooms.length, count: relRooms.length ? `역극 ${relRooms.length}개` : '아직 없음' },
+    ] : []),
+  ].filter(d => d.n > 0) : [];   // 아직 넣지 않은 항목은 목록에서 뺀다 (관리자는 타임라인·문답만 남겨 추가할 수 있게)
 
   if (!loaded) return <section className="page" />;
   if (!rel || (rel.visibility === 'private' && !isAdmin) || (rel.visibility === 'member' && !user)) {
@@ -756,6 +912,45 @@ export default function RelDetailPage() {
       : [asAu(rel.members[0] ?? null), asAu(rel.members[1] ?? null)])
     : [];
 
+  // 스테이지에 서는 사람 — 2인 자관은 좌우 슬롯 그대로, 다인 자관은 등록한 전원
+  const stageSlots: RelMember[] = (isDuo ? pairSlots : rel.members).filter((x): x is RelMember => !!x);
+
+  /* 히어로 레이어·배치 (v5.6) — AU는 자기 것만(자관 것을 물려받지 않음). 레이어 순서가 없으면
+     예전처럼 앞 캐릭터가 위, 글자가 맨 위 */
+  const heroLayout = isBaseAu ? rel.heroLayout : au?.heroLayout;
+  const layerOrder = heroOrder(heroLayout,
+    (isDuo ? pairSlots : rel.members).map(sl => sl?.charId).filter((c): c is string => !!c), auFullFront);
+  const uiZ = heroZ(layerOrder, HERO_UI_ID);
+  /* 글자 묶음을 기본 자리에서 옮긴 거리 — 값은 히어로 영역 대비 %. 히어로는 폭 100vw × 높이 100vh−58px.
+     transform과 겹치지 않게 독립 속성 translate로 준다 */
+  const shiftOf = (o?: { x: number; y: number }): React.CSSProperties | undefined =>
+    o && (o.x || o.y) ? { translate: `${o.x}vw calc((100vh - 58px) * ${o.y / 100})` } : undefined;
+
+  /* AU 리스트 (v5.9 사용자 요청) — 2인 전신 히어로에서는 제목(.pair-name) 안에 넣어, 제목을 끌어 옮기면
+     AU 줄도 같이 따라간다. 예전엔 제목과 따로 화면 아래에 고정이라 제목만 움직이면 서로 멀어졌다.
+     그 외(모바일·다인)는 예전 자리 그대로. AU 네모에 대표 이미지를 넣는다 (v2.0): 원본은 자관 썸네일(잡아 둔
+     크롭 그대로), 그 외 AU는 그 AU의 첫 아트 = 대표 이미지. 이미지가 없으면 색 플레이스홀더 */
+  const showAuList = rel.aus.length > 1 || isAdmin;
+  const auListEl = (inHero: boolean) => (
+    <div className={`au-list ${inHero ? 'au-list-in-title' : heroDuo ? 'au-list-hero' : ''}`}>
+          {rel.aus.map((a, i) => {
+            const isBase = a.id === 'base';
+            const thumb = isBase ? (rel.thumbId ?? rel.arts?.[0]) : a.arts?.[0];
+            return (
+              <div key={a.id} className={`au-item ${auId === a.id ? 'on' : ''}`}
+                onClick={() => { setAuId(a.id); setArtIdx(0); setQaNo(null); }}>
+                <CroppedBlobImg fileRef={thumb} crop={isBase ? rel.thumbCrop : undefined}
+                  ph={['cool', 'pale', 'red'][i % 3]} />
+                <small>{a.label}</small>
+              </div>
+            );
+          })}
+          {isAdmin && (
+            <div className="au-item add" data-tip="AU 추가/관리" onClick={() => setAuOpen(true)}>＋</div>
+          )}
+    </div>
+  );
+
   /** 이 멤버를 반대쪽 자리로 (좌 ↔ 우).
    *  오른쪽을 왼쪽으로 옮길 때는 **반대쪽 캐릭터를 오른쪽으로 지정**한다 (v2.0 사용자 제보) —
    *  예전에는 지정을 지우기만 해서, 등록 순서상 원래 오른쪽이던 캐릭터(보통 두 번째로 넣은
@@ -782,291 +977,12 @@ export default function RelDetailPage() {
     setFaceEdit(null);
   };
 
-  return (
-    <section className="page page-rel-detail">
-      {/* 헤더 이미지 (v1.5) — 풀폭 블러 + 아래로 페이드아웃.
-          AU별 완전 분리 (v1.9 사용자 확정): AU는 자기 헤더만 — base 것을 물려받지 않음.
-          이미지가 없으면 아무것도 안 그리는 게 기본(v2.0) — 다만 자관 수정에서 배경 그라데이션을
-          직접 지정해 뒀으면(base 소관, AU 무관) 그걸로 대신한다 */}
-      {(() => {
-        const hdrId = isBaseAu ? rel.headerImgId : (au?.headerImgId ?? undefined);
-        const hdrCrop = isBaseAu ? rel.headerCrop : au?.headerCrop;
-        if (hdrId) {
-          return (
-            <div className="rel-backdrop">
-              <div className="img custom">
-                <CroppedBlobImg fileRef={hdrId} crop={hdrCrop} ph="" />
-              </div>
-            </div>
-          );
-        }
-        if (!auSt.headerBgG1 && !auSt.headerBgG2) return null;
-        return (
-          <div className="rel-backdrop">
-            <div className="img custom" style={{
-              background: `linear-gradient(${auSt.headerBgAngle ?? 180}deg, ${auSt.headerBgG1 ?? '#3a4150'}, ${auSt.headerBgG2 ?? '#1a1d22'})`,
-            }} />
-          </div>
-        );
-      })()}
-
-      {(rel.aus.length > 1 || isAdmin) && (
-        <div className="au-list">
-          {/* AU 네모에 대표 이미지를 넣는다 (v2.0 사용자 요청 — 색만 들어가 있어 밋밋했다).
-              원본은 자관 썸네일(잡아 둔 크롭 그대로), 그 외 AU는 그 AU의 첫 아트 = 대표 이미지.
-              등록된 이미지가 없으면 예전처럼 색 플레이스홀더가 그대로 나온다 */}
-          {rel.aus.map((a, i) => {
-            const isBase = a.id === 'base';
-            const thumb = isBase ? (rel.thumbId ?? rel.arts?.[0]) : a.arts?.[0];
-            return (
-              <div key={a.id} className={`au-item ${auId === a.id ? 'on' : ''}`}
-                onClick={() => { setAuId(a.id); setArtIdx(0); setQaNo(null); }}>
-                <CroppedBlobImg fileRef={thumb} crop={isBase ? rel.thumbCrop : undefined}
-                  ph={['cool', 'pale', 'red'][i % 3]} />
-                <small>{a.label}</small>
-              </div>
-            );
-          })}
-          {isAdmin && (
-            <div className="au-item add" data-tip="AU 추가/관리" onClick={() => setAuOpen(true)}>＋</div>
-          )}
-        </div>
-      )}
-
-      {/* 관리자 액션 (좌상단) */}
-      {isAdmin && (
-        <div className="rel-admin-actions">
-          {/* AU 선택 중이면 그 AU의 일러·캐치프레이즈를 편집 (v1.9) */}
-          <button className="btn btn-dark" style={{ height: 30, padding: '0 13px', fontSize: 11 }}
-            onClick={() => router.push(`/rels/${rel.id}/edit${isBaseAu ? '' : `?au=${au!.id}`}`)}>
-            {isBaseAu ? 'EDIT' : `EDIT ${au!.label}`}
-          </button>
-          {/* AU를 보는 중이면 지워지는 것도 그 AU다 (v2.0 사용자 발견 — 자관이 통째로 지워졌다).
-              EDIT은 AU를 따라가는데 DELETE만 안 따라가서, AU 화면에서 누르면 자관 전체가 날아갔다.
-              버튼 글씨에도 무엇이 지워지는지 그대로 쓴다 */}
-          <button className="btn btn-dark" style={{ height: 30, padding: '0 13px', fontSize: 11 }}
-            onClick={() => (isBaseAu ? setDelAsk(true) : setAuDelAsk(au!.id))}>
-            {isBaseAu ? 'DELETE' : `DELETE ${au!.label}`}
-          </button>
-        </div>
-      )}
-
-      {/* AU 하나만 삭제 (v2.0 사용자 발견) — 자관 삭제와 확실히 구분되게 무엇이 남는지까지 적는다 */}
-      <ConfirmModal open={auDelAsk !== null}
-        title={`AU 「${rel.aus.find(a => a.id === auDelAsk)?.label ?? ''}」를 삭제하시겠습니까?`}
-        body="이 AU의 일러·타임라인·문답이 함께 삭제되며 복구할 수 없습니다. 자관과 다른 AU는 그대로 남습니다."
-        onClose={() => setAuDelAsk(null)}
-        buttons={[
-          { label: 'DELETE', kind: 'accent', onClick: () => {
-            const gone = auDelAsk!;
-            updateRel({ aus: rel.aus.filter(a => a.id !== gone) });
-            // 이 AU에 달렸던 문답 답변도 함께 (주인 없는 줄이 남지 않게)
-            setQaRows(qaRows.filter(r => !(r.relId === rel.id && r.auId === gone)));
-            if (auId === gone) setAuId('base');
-            setAuDelAsk(null);
-          } },
-          { label: 'CANCEL', kind: 'ghost', onClick: () => setAuDelAsk(null) },
-        ]} />
-
-      <ConfirmModal open={delAsk} title="자관을 삭제하시겠습니까?"
-        body={`「${rel.name}」 자관 전체가 삭제됩니다 — 타임라인·문답·AU ${rel.aus.length}개가 모두 함께 사라지며 복구할 수 없습니다. 연동된 캐릭터 자체는 삭제되지 않습니다.`}
-        onClose={() => setDelAsk(false)}
-        buttons={[
-          { label: 'DELETE', kind: 'accent', onClick: () => {
-            setRels(rels.filter(r => r.id !== rel.id));
-            // 자관에 달렸던 문답 답변도 함께 (v2.0 — 따로 저장이라 남기면 주인 없는 줄이 된다)
-            setQaRows(qaRows.filter(r => r.relId !== rel.id));
-            router.push('/rels');
-          } },
-          { label: 'CANCEL', kind: 'ghost', onClick: () => setDelAsk(false) },
-        ]} />
-
-      <div className="rel-hero">
-        {isDuo && pairSlots[0] && (
-          <div className="quote l" style={{
-            color: pairSlots[0].quoteColor,
-            ['--q-mark' as string]: pairSlots[0].quoteMarkColor,
-          } as React.CSSProperties}>{pairSlots[0].quote}</div>
-        )}
-        {/* CP/NCP 뱃지 — 자관명 위 가운데 (v2.0 사용자 요청) · 색은 자관 수정에서 */}
-        {auCpTag && (
-          <div className="cp-top">
-            <span className="pill" style={auSt.cpTagBg || auSt.cpTagFg
-              ? { background: auSt.cpTagBg, color: auSt.cpTagFg, borderColor: auSt.cpTagBg }
-              : undefined}>{CP_LABEL[auCpTag]}</span>
-          </div>
-        )}
-        {/* 자관명·캐치프레이즈 글씨색 — 직접 지정 시 (v1.9 사용자 요청, 미지정: 테마) */}
-        {/* 이름 그림자 — 색·강도 직접 지정 (v2.0 사용자 요청, 미지정: 검정 60% · 기존과 동일) */}
-        {/* 이름 자체는 AU마다 다르게 붙일 수 있다 (v2.0 사용자 요청) — 안 정했으면 자관 이름 그대로 */}
-        <h1 style={{
-          fontFamily: familyOf(auFont), color: auSt.nameColor,
-          textShadow: `0 4px 30px ${withAlpha(auSt.nameShadowColor ?? '#000000', 0.6 * ((auSt.nameShadow ?? 100) / 100))}`,
-        }}>{(!isBaseAu && au?.name?.trim()) || rel.name}</h1>
-        <div className="catch" style={{ color: auSt.cpColor }}>
-          {au?.catchphrase || rel.catchphrase}
-        </div>
-        {isDuo && pairSlots[1] && (
-          <div className="quote r" style={{
-            color: pairSlots[1].quoteColor,
-            ['--q-mark' as string]: pairSlots[1].quoteMarkColor,
-          } as React.CSSProperties}>{pairSlots[1].quote}</div>
-        )}
-      </div>
-
-      {isDuo ? (
-        <div className="rel-body" style={{ fontFamily: familyOf(auBodyFont) }}>
-          {pairSlots[0]
-            ? <MiniProf member={pairSlots[0]} char={charOf(pairSlots[0].charId)} isAdmin={isAdmin}
-                auUnregistered={auUnregOf(pairSlots[0].charId)}
-                side="l" onMoveSide={() => moveSide(pairSlots[0]!.charId)}
-                onFaceCrop={ref => setFaceEdit({ charId: pairSlots[0]!.charId, ref, crop: pairSlots[0]!.faceCrop })}
-                onGo={() => router.push(charHref(pairSlots[0]!.charId))}
-                onRemove={() => removeMember(pairSlots[0]!.charId)} />
-            : <EmptyCard isAdmin={isAdmin} onAdd={() => setMemberOpen(true)} />}
-          <div className={`rel-center ${single ? 'one-mode' : ''}`}
-            style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--line-dark)' }}>
-            {/* 전신 — 등록 이미지(AU별 우선) + 크기/앞뒤는 자관 수정의 미리보기에서 (v1.9) */}
-            {pairSlots.map((sl, i) => {
-              const cid = sl?.charId ?? '';
-              // 전신 위치·크기도 AU 값 우선 (v2.0) — sl이 이미 AU 값으로 갈아 끼운 멤버다
-              const m = sl ?? rel.members.find(x => x.charId === cid);
-              // AU는 자기 전신만 — base 전신을 물려받지 않음 (v1.9 사용자 확정)
-              const fullRef = isBaseAu ? m?.fullImgId : au?.fulls?.[cid];
-              if (!fullRef) return null;   // 등록 안 된 전신은 자리도 만들지 않는다
-              const front = (auFullFront ?? pairSlots[1]?.charId) === cid;
-              return (
-                <div key={i} className={`fb fb-${i === 0 ? 'l' : 'r'}`}
-                  style={{ background: 'transparent', zIndex: front ? 3 : 2 }}>
-                  <FullImg refId={fullRef} scale={m?.fullScale ?? 90} offX={m?.fullOffX ?? 0} offY={m?.fullOffY ?? 0}
-                    shadow={fullShadow(auSt.nameShadowColor, auSt.nameShadow)} />
-                </div>
-              );
-            })}
-            <div className="single" ref={artBoxRef} style={{ cursor: auArts.length > 1 ? 'pointer' : undefined }}
-              onClick={() => { const n = auArts.length; if (n > 1) setArtIdx(i => (i + 1) % n); }}
-              onContextMenu={e => {
-                if (!isAdmin || !curArt) return;
-                e.preventDefault();
-                setArtCtx({ x: e.clientX, y: e.clientY, ref: curArt });
-              }}>
-              {auArts.length > 0 ? (
-                <>
-                  {/* 잡아 둔 위치가 있으면 그대로 (v2.0) — 없으면 예전처럼 통째로 */}
-                  <CroppedBlobImg fileRef={auArts[Math.min(artIdx, auArts.length - 1)]} crop={rel.artCrops?.[curArt]} ph="" label="MAIN ILLUST" />
-                  {auArts.length > 1 && (
-                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 44, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
-                      {auArts.map((_, i) => (
-                        <i key={i} style={{ width: i === Math.min(artIdx, auArts.length - 1) ? 16 : 6, height: 6, borderRadius: 4, background: i === Math.min(artIdx, auArts.length - 1) ? '#fff' : 'rgba(255,255,255,.45)', transition: '.2s' }} />
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="ph" style={{ position: 'absolute', inset: 0 }}><span>MAIN ILLUST</span></div>
-              )}
-            </div>
-            {/* 스위치 색 — 자관별 지정(EDIT) 없으면 테마·포인트색 (v1.9).
-                전신이 하나도 없으면 고를 것이 없으므로 스위치 자체를 숨긴다 */}
-            {hasFull && (
-              <div className="illu-toggle seg" style={{
-                ['--illu-bg' as string]: auSt.illuBg,
-                ['--illu-on' as string]: auSt.illuOn,
-              } as React.CSSProperties}>
-                <button className={!single ? 'on' : ''} onClick={() => setOneMode(false)}>전신</button>
-                <button className={single ? 'on' : ''} onClick={() => setOneMode(true)}>일러스트</button>
-              </div>
-            )}
-          </div>
-          {pairSlots[1]
-            ? <MiniProf member={pairSlots[1]} char={charOf(pairSlots[1].charId)} isAdmin={isAdmin}
-                auUnregistered={auUnregOf(pairSlots[1].charId)}
-                side="r" onMoveSide={() => moveSide(pairSlots[1]!.charId)}
-                onFaceCrop={ref => setFaceEdit({ charId: pairSlots[1]!.charId, ref, crop: pairSlots[1]!.faceCrop })}
-                onGo={() => router.push(charHref(pairSlots[1]!.charId))}
-                onRemove={() => removeMember(pairSlots[1]!.charId)} />
-            : <EmptyCard isAdmin={isAdmin} onAdd={() => setMemberOpen(true)} />}
-        </div>
-      ) : (
-        /* 다인 자관 — 프로토타입 multi-body: 좌 멤버 리스트(430px) + 우 그룹 일러 */
-        <div className="multi-body" style={{ fontFamily: familyOf(auBodyFont) }}>
-          <div className="panel flush" style={{ padding: '6px 0' }}>
-            {rel.members.map(m => {
-              const c = charOf(m.charId);
-              if (!c) return null;
-              const unreg = auUnregOf(m.charId);
-              return (
-                <div key={m.charId} className="mrow" style={{ ['--cc' as string]: rgbTriple(c.color) }}
-                  onClick={() => router.push(charHref(m.charId))}>
-                  <div className={`face ph ${c.thumbClass}`}>
-                    {!unreg && (c.arts?.[0] ?? c.thumbId) && (
-                      <CroppedBlobImg fileRef={c.arts?.[0] ?? c.thumbId} crop={c.thumbCrop} ph={c.thumbClass} />
-                    )}
-                  </div>
-                  <div className="nm">
-                    {unreg ? (
-                      /* AU 프로필 미등록 (v1.9) — 원본 프로필 대신 등록 안내 */
-                      <>
-                        <b style={{ fontFamily: familyOf(findChar(chars, m.charId)?.fontId) }}>{findChar(chars, m.charId)?.name}</b>
-                        <small>이 AU의 프로필 미등록 — 눌러서 등록</small>
-                      </>
-                    ) : (
-                      <>
-                        <b style={{ fontFamily: familyOf(c.fontId) }}>{c.name}</b><i>{c.sub}</i>
-                        <small>{c.specs.slice(0, 3).map(s => s.value).join(' · ')}</small>
-                        {(m.quote || noteOf(m) || m.keywords[0]) && (
-                          <span className="ext">{m.quote || noteOf(m) || m.keywords[0]}</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="gem-mini">
-                    {(c.colors ?? []).slice(0, 3).map(p => <i key={p.hex + p.label} style={{ background: p.hex }} />)}
-                  </div>
-                  {isAdmin && (
-                    <span className="rm" onClick={e => { e.stopPropagation(); removeMember(m.charId); }}>제거</span>
-                  )}
-                </div>
-              );
-            })}
-            {isAdmin && rel.members.length < 6 && (
-              <div className="mrow add" onClick={() => setMemberOpen(true)}>＋ ADD MEMBER (최대 6인)</div>
-            )}
-          </div>
-
-          {/* 우: 그룹 일러 — 여러 장이면 클릭 넘김 + 도트 */}
-          <div className="multi-illust" ref={artBoxRef}
-            style={{ cursor: auArts.length > 1 ? 'pointer' : undefined }}
-            onClick={() => { const n = auArts.length; if (n > 1) setArtIdx(i => (i + 1) % n); }}
-            onContextMenu={e => {
-              if (!isAdmin || !curArt) return;
-              e.preventDefault();
-              setArtCtx({ x: e.clientX, y: e.clientY, ref: curArt });
-            }}>
-            {auArts.length > 0 ? (
-              <>
-                <CroppedBlobImg fileRef={auArts[Math.min(artIdx, auArts.length - 1)]} crop={rel.artCrops?.[curArt]} ph="" label="GROUP ILLUST" />
-                {auArts.length > 1 && (
-                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 14, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
-                    {auArts.map((_, i) => (
-                      <i key={i} style={{ width: i === Math.min(artIdx, auArts.length - 1) ? 16 : 6, height: 6, borderRadius: 4, background: i === Math.min(artIdx, auArts.length - 1) ? '#fff' : 'rgba(255,255,255,.45)', transition: '.2s' }} />
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="ph" style={{ position: 'absolute', inset: 0 }}><span>GROUP ILLUST</span></div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 타임라인 / 페어 문답 탭 (v1.8) */}
+  const timelinePanel = (
       <div className={`panel timeline ${!isDuo ? 'multi' : ''}`} style={{ fontFamily: familyOf(auBodyFont) }}>
         <div className="rel-tabs">
-          <button className={tab === 'tl' ? 'on' : ''} onClick={() => setTab('tl')}><span className="lb-pc">TIMELINE</span><span className="lb-m">T</span></button>
+          <button className={tab === 'tl' ? 'on' : ''} onClick={() => selTab('tl')}><span className="lb-pc">TIMELINE</span><span className="lb-m">T</span></button>
           {/* QUESTIONS 섹션은 ＋로 추가해야 생김 (v1.9) — 처음에는 타임라인만 */}
-          {qaOn && <button className={tab === 'qa' ? 'on' : ''} onClick={() => setTab('qa')}><span className="lb-pc">QUESTIONS</span><span className="lb-m">Q</span></button>}
+          {qaOn && <button className={tab === 'qa' ? 'on' : ''} onClick={() => selTab('qa')}><span className="lb-pc">QUESTIONS</span><span className="lb-m">Q</span></button>}
           {isAdmin && !qaOn && (
             <button data-tip="QUESTIONS 섹션 추가" style={{ color: 'var(--faint)', fontSize: 14, padding: '0 6px' }}
               onClick={() => setQsetOpen(true)}>＋</button>
@@ -1266,39 +1182,527 @@ export default function RelDetailPage() {
           </div>
         )}
       </div>
+  );
 
-      {/* 역극 · 로그 연동 리스트 (4.5) — 역극: 내 참여 방 + 공개 전환된 완결 방.
-          AU마다 숨길 수 있다 (v2.0 사용자 요청 — AU 관리의 체크박스). 둘 다 숨기면 칸 자체가 없다 */}
-      {!(au?.hideRp && au?.hideLog) && (
-      <div className="g2" style={{ marginTop: 16 }}>
-        {!au?.hideRp && (
-        <div className="panel widget" style={{ margin: 0, ...(au?.hideLog ? { gridColumn: '1/-1' } : null) }}>
-          <h4>역극 <span className="more" onClick={() => router.push('/rp')}>더보기 ›</span></h4>
-          {relRooms.length > 0 ? relRooms.map(rm => (
-            <div key={rm.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push('/rp')}>
-              <span>{rm.title}</span>
-              <b style={{ fontSize: 11, color: 'var(--faint)' }}>
-                {rm.status === 'done' ? (rm.isPublic ? '완결 · 공개' : '완결') : '진행중'}
-              </b>
-            </div>
-          )) : (
-            <p className="hint" style={{ margin: 0 }}>이 자관 기반으로 진행된 역극이 여기에 표시됩니다</p>
-          )}
+  return (
+    <section className={`page page-rel-detail${stageOn ? ' rs-on' : ''}`}>
+      {/* 배경 이미지는 위(useEffect)에서 페이지 전체 배경으로 깐다 (v5.1) — 여기엔 배너가 없다.
+          AU별 완전 분리 (v1.9 사용자 확정): AU는 자기 배경만 — base 것을 물려받지 않음.
+          이미지가 없으면 아무것도 안 그리는 게 기본(v2.0) — 다만 자관 수정에서 배경 그라데이션을
+          직접 지정해 뒀으면(base 소관, AU 무관) 그걸로 대신한다 */}
+      {(() => {
+        const hdrId = isBaseAu ? rel.headerImgId : (au?.headerImgId ?? undefined);
+        if (hdrId) return null;
+        if (!auSt.headerBgG1 && !auSt.headerBgG2) return null;
+        return (
+          <div className="rel-backdrop">
+            <div className="img custom" style={{
+              background: `linear-gradient(${auSt.headerBgAngle ?? 180}deg, ${auSt.headerBgG1 ?? '#3a4150'}, ${auSt.headerBgG2 ?? '#1a1d22'})`,
+            }} />
+          </div>
+        );
+      })()}
+
+      {showAuList && !heroDuo && !stageOn && auListEl(false)}
+
+      {/* 관리자 액션 — 기본은 좌상단, 2인 전신 히어로에서는 BGM 플레이어 위 우하단으로 (v4.6 사용자 요청) */}
+      {isAdmin && !stageOn && (
+        <div className={`rel-admin-actions ${heroDuo && !stageOn ? 'rel-admin-hero' : ''}`}>
+          {/* AU 선택 중이면 그 AU의 일러·캐치프레이즈를 편집 (v1.9) */}
+          <button className="btn btn-dark" style={{ height: 30, padding: '0 13px', fontSize: 11 }}
+            onClick={() => router.push(`/rels/${rel.id}/edit${isBaseAu ? '' : `?au=${au!.id}`}`)}>
+            {isBaseAu ? 'EDIT' : `EDIT ${au!.label}`}
+          </button>
+          {/* AU를 보는 중이면 지워지는 것도 그 AU다 (v2.0 사용자 발견 — 자관이 통째로 지워졌다).
+              EDIT은 AU를 따라가는데 DELETE만 안 따라가서, AU 화면에서 누르면 자관 전체가 날아갔다.
+              버튼 글씨에도 무엇이 지워지는지 그대로 쓴다 */}
+          <button className="btn btn-dark" style={{ height: 30, padding: '0 13px', fontSize: 11 }}
+            onClick={() => (isBaseAu ? setDelAsk(true) : setAuDelAsk(au!.id))}>
+            {isBaseAu ? 'DELETE' : `DELETE ${au!.label}`}
+          </button>
         </div>
+      )}
+
+      {/* AU 하나만 삭제 (v2.0 사용자 발견) — 자관 삭제와 확실히 구분되게 무엇이 남는지까지 적는다 */}
+      <ConfirmModal open={auDelAsk !== null}
+        title={`AU 「${rel.aus.find(a => a.id === auDelAsk)?.label ?? ''}」를 삭제하시겠습니까?`}
+        body="이 AU의 일러·타임라인·문답이 함께 삭제되며 복구할 수 없습니다. 자관과 다른 AU는 그대로 남습니다."
+        onClose={() => setAuDelAsk(null)}
+        buttons={[
+          { label: 'DELETE', kind: 'accent', onClick: () => {
+            const gone = auDelAsk!;
+            updateRel({ aus: rel.aus.filter(a => a.id !== gone) });
+            // 이 AU에 달렸던 문답 답변도 함께 (주인 없는 줄이 남지 않게)
+            setQaRows(qaRows.filter(r => !(r.relId === rel.id && r.auId === gone)));
+            if (auId === gone) setAuId('base');
+            setAuDelAsk(null);
+          } },
+          { label: 'CANCEL', kind: 'ghost', onClick: () => setAuDelAsk(null) },
+        ]} />
+
+      <ConfirmModal open={delAsk} title="자관을 삭제하시겠습니까?"
+        body={`「${rel.name}」 자관 전체가 삭제됩니다 — 타임라인·문답·AU ${rel.aus.length}개가 모두 함께 사라지며 복구할 수 없습니다. 연동된 캐릭터 자체는 삭제되지 않습니다.`}
+        onClose={() => setDelAsk(false)}
+        buttons={[
+          { label: 'DELETE', kind: 'accent', onClick: () => {
+            setRels(rels.filter(r => r.id !== rel.id));
+            // 자관에 달렸던 문답 답변도 함께 (v2.0 — 따로 저장이라 남기면 주인 없는 줄이 된다)
+            setQaRows(qaRows.filter(r => r.relId !== rel.id));
+            router.push('/rels');
+          } },
+          { label: 'CANCEL', kind: 'ghost', onClick: () => setDelAsk(false) },
+        ]} />
+
+      {/* 스테이지 — 큰 자관명 뒤 전신 → 스크롤하면 필름 띠·숫자 → 흰 패널(멤버·AU). 이어서 아래 기존 상세 내용 */}
+      {stageOn && isMob && (
+        <RelStageMobile
+          name={(!isBaseAu && au?.name?.trim()) || rel.name}
+          fontFamily={familyOf(auFont)}
+          catchphrase={au?.catchphrase || rel.catchphrase}
+          cpLabel={auCpTag ? CP_LABEL[auCpTag] : undefined}
+          members={stageSlots.map(m => ({ id: m.charId, name: charOf(m.charId)?.name ?? '—', href: charHref(m.charId) }))}
+          thumb={isBaseAu ? { ref: rel.thumbId ?? rel.arts?.[0], crop: rel.thumbCrop, ph: rel.thumbClass } : { ref: au?.arts?.[0], ph: rel.thumbClass }}
+          ink={bgInk === 'dark' ? 'dark' : 'light'}
+          tc={effThemeColor || 'var(--accent,#7fd6d0)'}
+          onBack={() => router.push('/rels')}
+          onGo={href => { const m = stageSlots.find(x => charHref(x.charId) === href); goChar(href, m?.charId); }}
+          auSlot={showAuList ? auListEl(false) : undefined}
+          links={drawerItems.map(d => ({ key: d.key, title: d.title, sub: d.count, onClick: () => pickWin(d.key) }))}
+          admin={isAdmin ? {
+            editLabel: isBaseAu ? 'EDIT' : `EDIT ${au!.label}`,
+            onEdit: () => router.push(`/rels/${rel.id}/edit${isBaseAu ? '' : `?au=${au!.id}`}`),
+            deleteLabel: isBaseAu ? 'DELETE' : `DELETE ${au!.label}`,
+            onDelete: () => (isBaseAu ? setDelAsk(true) : setAuDelAsk(au!.id)),
+          } : undefined}
+        />
+      )}
+      {stageOn && !isMob && (
+        <RelStage
+          name={(!isBaseAu && au?.name?.trim()) || rel.name}
+          fontFamily={familyOf(auFont)}
+          catchphrase={au?.catchphrase || rel.catchphrase}
+          cpLabel={auCpTag ? CP_LABEL[auCpTag] : undefined}
+          members={stageSlots.map(m => ({ id: m.charId, name: charOf(m.charId)?.name ?? '—', href: charHref(m.charId) }))}
+          light={bgInk === 'dark'}
+          onBack={() => router.push('/rels')}
+          hero={{
+            uiZ,
+            count: stageSlots.length,
+            info: heroLayout?.info ?? { x: 0, y: 0 },
+            hidden: heroLayout?.hidden ?? [],
+            badges: heroLayout?.badgeOff !== true,
+            fulls: stageSlots.map((m, i) => {
+              const ref = isBaseAu ? m.fullImgId : au?.fulls?.[m.charId];
+              return ref ? { i, id: m.charId, ref, scale: m.fullScale ?? 90, offX: m.fullOffX ?? 0, offY: m.fullOffY ?? 0,
+                z: heroZ(layerOrder, heroFullId(m.charId)), shadow: fullShadow(auSt.nameShadowColor, auSt.nameShadow) } : null;
+            }).filter((x): x is NonNullable<typeof x> => !!x),
+            stickers: (heroLayout?.stickers ?? []).map(st => ({ id: st.id, ref: st.ref, x: st.x, y: st.y, w: st.w, z: heroZ(layerOrder, heroStickerId(st.id)) })),
+            names: stageSlots.map(m => {
+              const c = charOf(m.charId);
+              if (!c) return null;
+              return {
+                id: m.charId, name: c.name, sub: c.sub || undefined, font: familyOf(c.fontId), fs: m.heroNameSize, bold: m.nameBold ?? true,
+                href: charHref(m.charId),
+                align: (m.badgeAlign ?? 'top') as 'top' | 'mid' | 'bottom',
+                ta: ((m.badgeTextAlign ?? (stageSlots.length > 2 || stageSlots[0] === m ? 'left' : 'right')) as 'left' | 'center' | 'right'),
+                o: heroLayout?.names?.[m.charId] ?? { x: 0, y: 0 },
+                kws: m.keywords ?? [],
+                specs: (c.specs ?? []).filter(isPlainSpec).map(sp => ({ label: sp.label, value: sp.value })),
+                gems: (c.colors ?? m.palette ?? []).map(g => ({ hex: g.hex, label: g.label })),
+              };
+            }).filter((x): x is NonNullable<typeof x> => !!x),
+          }}
+          tc={effThemeColor || 'var(--accent,#7fd6d0)'}
+          onGo={href => { const m = stageSlots.find(x => charHref(x.charId) === href); goChar(href, m?.charId); }}
+          auSlot={showAuList ? auListEl(false) : undefined}
+          links={drawerItems.map(d => ({ key: d.key, title: d.title, sub: d.count, onClick: () => pickWin(d.key) }))}
+          deco={{
+            off: rel.deco === 'off',
+            image: hdrBgUrl ?? undefined, band: rel.decoBg === 'band', blur: hdrBlurForBg,
+            titleFont: rel.decoFontId ? familyOf(rel.decoFontId) : undefined,
+            ghostPos: rel.decoGhost,
+            script: rel.decoScript
+              ? { ...rel.decoScript, text: rel.decoScript.text?.trim() || ((!isBaseAu && au?.name?.trim()) || rel.name), font: familyOf(rel.decoScript.fontId) ?? undefined }
+              : undefined,
+          }}
+          admin={isAdmin ? {
+            editLabel: isBaseAu ? 'EDIT' : `EDIT ${au!.label}`,
+            onEdit: () => router.push(`/rels/${rel.id}/edit${isBaseAu ? '' : `?au=${au!.id}`}`),
+            deleteLabel: isBaseAu ? 'DELETE' : `DELETE ${au!.label}`,
+            onDelete: () => (isBaseAu ? setDelAsk(true) : setAuDelAsk(au!.id)),
+          } : undefined}
+        />
+      )}
+
+      <div className={`rel-hero ${heroDuo ? 'rel-hero-flat' : ''}`}>
+        {isDuo && pairSlots[0] && (
+          <div className="quote l" style={{
+            color: pairSlots[0].quoteColor,
+            ['--q-mark' as string]: pairSlots[0].quoteMarkColor,
+          } as React.CSSProperties}>{pairSlots[0].quote}</div>
         )}
-        {!au?.hideLog && (
-        <div className="panel widget" style={{ margin: 0, ...(au?.hideRp ? { gridColumn: '1/-1' } : null) }}>
-          <h4>로그 <span className="more" onClick={() => router.push('/trpg')}>더보기 ›</span></h4>
-          {relLogs.length > 0 ? relLogs.map(l => (
-            <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(`/trpg/${l.id}`)}>
-              {/* 번호 없이 제목만 — 연동 리스트에서는 순번이 의미가 없다 (사용자 확정) */}
-              <span>{l.title}</span>
-              <b style={{ fontSize: 11, color: 'var(--faint)' }}>{l.date?.replace(/-/g, '.') ?? ''}</b>
-            </div>
-          )) : <p className="hint" style={{ margin: 0 }}>연동된 로그가 없습니다 — 로그 등록 시 자관을 선택하면 여기에 표시</p>}
-        </div>
+        {/* CP/NCP 뱃지 — 자관명 위 가운데 (v2.0 사용자 요청) · 색은 자관 수정에서.
+            2인 전신 히어로에서는 자관명을 AU 배지 줄 위(.pair-name)로 옮겨 뒀으므로
+            여기서 또 보이면 중복이라 숨긴다 (v4.5 사용자 확인 — 화살표로 옮기라고 표시함) */}
+        {auCpTag && !heroDuo && (
+          <div className="cp-top">
+            <span className="pill" style={auSt.cpTagBg || auSt.cpTagFg
+              ? { background: auSt.cpTagBg, color: auSt.cpTagFg, borderColor: auSt.cpTagBg }
+              : undefined}>{CP_LABEL[auCpTag]}</span>
+          </div>
+        )}
+        {/* 자관명·캐치프레이즈 글씨색 — 직접 지정 시 (v1.9 사용자 요청, 미지정: 테마) */}
+        {/* 이름 그림자 — 색·강도 직접 지정 (v2.0 사용자 요청, 미지정: 검정 60% · 기존과 동일) */}
+{!heroDuo && (
+  <h1 style={{
+    fontFamily: familyOf(auFont), color: auSt.nameColor, fontSize: titleFs,
+    textShadow: `0 4px 30px ${withAlpha(auSt.nameShadowColor ?? '#000000', 0.6 * ((auSt.nameShadow ?? 100) / 100))}`,
+  }}>{(!isBaseAu && au?.name?.trim()) || rel.name}</h1>
+)}
+{!heroDuo && (
+  <div className="catch" style={{ color: auSt.cpColor }}>
+    {au?.catchphrase || rel.catchphrase}
+  </div>
+)}
+        {isDuo && pairSlots[1] && (
+          <div className="quote r" style={{
+            color: pairSlots[1].quoteColor,
+            ['--q-mark' as string]: pairSlots[1].quoteMarkColor,
+          } as React.CSSProperties}>{pairSlots[1].quote}</div>
         )}
       </div>
+
+
+      {stageOn ? null : heroDuo ? (
+        <div className={`rel-center rel-center-full ${single ? 'one-mode' : ''}`}
+          style={{ fontFamily: familyOf(rel.bodyFontId) }}>
+          {/* 전신 — 등록 이미지(AU별 우선) + 크기/앞뒤는 자관 수정의 미리보기에서 (v1.9).
+              화면 양 끝까지 가득 채우는 전면 개편(v4.0 사용자 확정) — 카드 경계 없는 히어로 섹션 */}
+          {pairSlots.map((sl, i) => {
+            const cid = sl?.charId ?? '';
+            // 전신 위치·크기도 AU 값 우선 (v2.0) — sl이 이미 AU 값으로 갈아 끼운 멤버다
+            const m = sl ?? rel.members.find(x => x.charId === cid);
+            // AU는 자기 전신만 — base 전신을 물려받지 않음 (v1.9 사용자 확정)
+            const fullRef = isBaseAu ? m?.fullImgId : au?.fulls?.[cid];
+            if (!fullRef) return null;   // 등록 안 된 전신은 자리도 만들지 않는다
+            return (
+              <div key={i} className={`fb fb-${i === 0 ? 'l' : 'r'}`}
+                style={{ background: 'transparent', zIndex: heroZ(layerOrder, heroFullId(cid)) }}>
+                <FullImg refId={fullRef} scale={m?.fullScale ?? 90} offX={m?.fullOffX ?? 0} offY={m?.fullOffY ?? 0}
+                  shadow={fullShadow(auSt.nameShadowColor, auSt.nameShadow)} />
+              </div>
+            );
+          })}
+          {/* 글자 묶음(제목 · 이름 · 배지) — 레이어 목록의 「UI」 한 칸 (v5.6). 예전엔 이름이 전신 칸 안에
+              들어 있어 앞뒤를 따로 못 바꿨다 — 전신 칸과 같은 자리(.fb-ui)로 빼서 한 레이어로 묶는다 */}
+          <div className="hero-ui-layer" style={{ zIndex: uiZ }}>
+            {heroDuo && (
+              <div className="pair-name" style={shiftOf(heroLayout?.title)}>
+                {auCpTag && (
+                  <span className="pill" style={{ marginBottom: 6, ...(auSt.cpTagBg || auSt.cpTagFg
+                    ? { background: auSt.cpTagBg, color: auSt.cpTagFg, borderColor: auSt.cpTagBg }
+                    : {}) }}>{CP_LABEL[auCpTag]}</span>
+                )}
+                <div style={{ fontFamily: familyOf(rel.fontId), fontSize: titleFs }}>{(!isBaseAu && au?.name?.trim()) || rel.name}</div>
+                {showAuList && auListEl(true)}
+              </div>
+            )}
+            {pairSlots.map((sl, i) => {
+              const cid = sl?.charId ?? '';
+              const m = sl ?? rel.members.find(x => x.charId === cid);
+              const fullRef = isBaseAu ? m?.fullImgId : au?.fulls?.[cid];
+              if (!fullRef) return null;
+              return (
+              <div key={i} className={`fb-ui fb-ui-${i === 0 ? 'l' : 'r'}`}>
+                {/* 전신 위 캐릭터 이름·부제·키워드 (v4.1 사용자 요청 — 참고 사이트의 이름 밑
+                    「예시」 태그 3개 자리에 이 캐릭터의 키워드를 놓고, 우하단 흰 정보 카드는
+                    없앴다). 이름을 누르면 예전 카드처럼 캐릭터 페이지로 이동한다.
+                    흰 카드에만 있던 스펙(이름/키·몸무게 등)·테마색 팔레트도 없애지 말고
+                    키워드와 같은 자리에 넣어 달라고 해서 함께 붙임 (v4.2) */}
+                {(() => {
+                  const nc = charOf(cid);
+                  if (!nc) return null;
+                  return (
+                    <div className={`fb-name fb-name-${i === 0 ? 'l' : 'r'}${m?.badgeAlign === 'mid' ? ' fb-name-mid' : m?.badgeAlign === 'bottom' ? ' fb-name-bottom' : ''}${m?.badgeTextAlign ? ` fb-ta-${m.badgeTextAlign[0]}` : ''}`}
+                      style={{ fontFamily: familyOf(nc.fontId), cursor: 'var(--cur-pointer,pointer)', ...shiftOf(heroLayout?.names?.[cid]) }}
+                      onClick={() => goChar(charHref(cid), cid)}
+                      onContextMenu={e => {
+                        if (!isAdmin) return;
+                        e.preventDefault(); e.stopPropagation();
+                        setFbCtx({ x: e.clientX, y: e.clientY, cid });
+                      }}>
+                      {/* 이름 크기·굵기는 자관 수정의 「캐릭터 이름 크기」 — 안 정했으면 창 폭에 맞춘 기본 크기 */}
+                      <b style={{
+                        fontSize: m?.heroNameSize ? `${m.heroNameSize}px` : undefined,
+                        fontWeight: (m?.nameBold ?? true) ? undefined : 400,
+                      }}>{nc.name}</b>
+                      {nc.sub && <small>{nc.sub}</small>}
+                      {((m && m.keywords.length > 0) || nc.specs.some(isPlainSpec) || (nc.colors ?? m?.palette ?? []).length > 0) && (
+                        <div className="fb-kw-row">
+                          {m?.keywords.map(k => <span key={k} className="pill">{k}</span>)}
+                          {nc.specs.filter(isPlainSpec).map(s => <span key={s.label} className="pill">{s.label} {s.value}</span>)}
+                          {(nc.colors ?? m?.palette ?? []).map(p => (
+                            <span key={p.hex + p.label} className="fb-gem" data-tip={p.label} style={{ background: p.hex }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              );
+            })}
+          </div>
+          {/* 스티커 (v5.6) — 자관 수정 미리보기에서 놓은 자리 그대로. 앞뒤는 레이어 순서 */}
+          {(heroLayout?.stickers ?? []).map(st => (
+            <HeroStickerImg key={st.id} s={st} z={heroZ(layerOrder, heroStickerId(st.id))} />
+          ))}
+          <div className="single" ref={artBoxRef} style={{ cursor: auArts.length > 1 ? 'pointer' : undefined }}
+            onClick={() => { const n = auArts.length; if (n > 1) setArtIdx(i => (i + 1) % n); }}
+            onContextMenu={e => {
+              if (!isAdmin || !curArt) return;
+              e.preventDefault();
+              setArtCtx({ x: e.clientX, y: e.clientY, ref: curArt });
+            }}>
+            {auArts.length > 0 ? (
+              <>
+                {/* 잡아 둔 위치가 있으면 그대로 (v2.0) — 없으면 예전처럼 통째로 */}
+                <CroppedBlobImg fileRef={auArts[Math.min(artIdx, auArts.length - 1)]} crop={rel.artCrops?.[curArt]} ph="" label="MAIN ILLUST" />
+                {auArts.length > 1 && (
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 44, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
+                    {auArts.map((_, i) => (
+                      <i key={i} style={{ width: i === Math.min(artIdx, auArts.length - 1) ? 16 : 6, height: 6, borderRadius: 4, background: i === Math.min(artIdx, auArts.length - 1) ? '#fff' : 'rgba(255,255,255,.45)', transition: '.2s' }} />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="ph" style={{ position: 'absolute', inset: 0 }}><span>MAIN ILLUST</span></div>
+            )}
+          </div>
+          {/* 스위치 색 — 자관별 지정(EDIT) 없으면 테마·포인트색 (v1.9).
+              전신이 하나도 없으면 고를 것이 없으므로 스위치 자체를 숨긴다 */}
+          {hasFull && hasIllust && (
+            <div className="illu-toggle seg" style={{
+              ['--illu-bg' as string]: auSt.illuBg,
+              ['--illu-on' as string]: auSt.illuOn,
+            } as React.CSSProperties}>
+              <button className={!single ? 'on' : ''} onClick={() => setOneMode(false)}>전신</button>
+              <button className={single ? 'on' : ''} onClick={() => setOneMode(true)}>일러스트</button>
+            </div>
+          )}
+          {/* 빈 자리(멤버 미정)만 관리자에게 추가 버튼으로 안내 — 흰 정보 카드는 없앴으므로
+              여기서만 최소한으로 보여준다 (v4.1) */}
+          {isAdmin && !pairSlots[0] && (
+            <button className="fb-add fb-add-l" onClick={() => setMemberOpen(true)}>＋ 멤버 추가</button>
+          )}
+          {isAdmin && !pairSlots[1] && (
+            <button className="fb-add fb-add-r" onClick={() => setMemberOpen(true)}>＋ 멤버 추가</button>
+          )}
+          {/* 전신 이름 우클릭 메뉴 — 관리자만, 멤버 제거 (v4.2, 흰 카드에 있던 기능 복구) */}
+          {fbCtx && createPortal(
+            <div className="ctx-menu on" style={{ left: fbCtx.x, top: fbCtx.y }} onClick={e => e.stopPropagation()}>
+              <div className="ctx-ttl">{charOf(fbCtx.cid)?.name}</div>
+              <button className="danger" onClick={() => { removeMember(fbCtx.cid); setFbCtx(null); }}>멤버 제거</button>
+            </div>,
+            document.body,
+          )}
+        </div>
+      ) : isDuo ? (
+      /* 모바일 뷰(960px 이하)는 main 브랜치의 자관 상세 화면 그대로 (v5.5 사용자 요청) —
+         제목이 위에, 가운데 일러/전신 카드, 좌우 미니 프로필이 세로로 쌓이는 예전 구성 */
+        <div className="rel-body" style={{ fontFamily: familyOf(auBodyFont) }}>
+          {pairSlots[0]
+            ? <MiniProf member={pairSlots[0]} char={charOf(pairSlots[0].charId)} isAdmin={isAdmin}
+                auUnregistered={auUnregOf(pairSlots[0].charId)}
+                side="l" onMoveSide={() => moveSide(pairSlots[0]!.charId)}
+                onFaceCrop={ref => setFaceEdit({ charId: pairSlots[0]!.charId, ref, crop: pairSlots[0]!.faceCrop })}
+                onGo={() => goChar(charHref(pairSlots[0]!.charId), pairSlots[0]!.charId)}
+                onRemove={() => removeMember(pairSlots[0]!.charId)} />
+            : <EmptyCard isAdmin={isAdmin} onAdd={() => setMemberOpen(true)} />}
+          <div className={`rel-center rel-center-m ${single ? 'one-mode' : ''}`}
+            style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--line-dark)' }}>
+            {/* 전신 — 등록 이미지(AU별 우선) + 크기/앞뒤는 자관 수정의 미리보기에서 (v1.9) */}
+            {pairSlots.map((sl, i) => {
+              const cid = sl?.charId ?? '';
+              // 전신 위치·크기도 AU 값 우선 (v2.0) — sl이 이미 AU 값으로 갈아 끼운 멤버다
+              const m = sl ?? rel.members.find(x => x.charId === cid);
+              // AU는 자기 전신만 — base 전신을 물려받지 않음 (v1.9 사용자 확정)
+              const fullRef = isBaseAu ? m?.fullImgId : au?.fulls?.[cid];
+              if (!fullRef) return null;   // 등록 안 된 전신은 자리도 만들지 않는다
+              const front = (auFullFront ?? pairSlots[1]?.charId) === cid;
+              return (
+                <div key={i} className={`fb fb-${i === 0 ? 'l' : 'r'}`}
+                  style={{ background: 'transparent', zIndex: front ? 3 : 2 }}>
+                  <FullImg refId={fullRef} scale={m?.fullScale ?? 90} offX={m?.fullOffX ?? 0} offY={m?.fullOffY ?? 0}
+                    shadow={fullShadow(auSt.nameShadowColor, auSt.nameShadow)} />
+                </div>
+              );
+            })}
+            <div className="single" ref={artBoxRef} style={{ cursor: auArts.length > 1 ? 'pointer' : undefined }}
+              onClick={() => { const n = auArts.length; if (n > 1) setArtIdx(i => (i + 1) % n); }}
+              onContextMenu={e => {
+                if (!isAdmin || !curArt) return;
+                e.preventDefault();
+                setArtCtx({ x: e.clientX, y: e.clientY, ref: curArt });
+              }}>
+              {auArts.length > 0 ? (
+                <>
+                  {/* 잡아 둔 위치가 있으면 그대로 (v2.0) — 없으면 예전처럼 통째로 */}
+                  <CroppedBlobImg fileRef={auArts[Math.min(artIdx, auArts.length - 1)]} crop={rel.artCrops?.[curArt]} ph="" label="MAIN ILLUST" />
+                  {auArts.length > 1 && (
+                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 44, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
+                      {auArts.map((_, i) => (
+                        <i key={i} style={{ width: i === Math.min(artIdx, auArts.length - 1) ? 16 : 6, height: 6, borderRadius: 4, background: i === Math.min(artIdx, auArts.length - 1) ? '#fff' : 'rgba(255,255,255,.45)', transition: '.2s' }} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="ph" style={{ position: 'absolute', inset: 0 }}><span>MAIN ILLUST</span></div>
+              )}
+            </div>
+            {/* 스위치 색 — 자관별 지정(EDIT) 없으면 테마·포인트색 (v1.9).
+                전신이 하나도 없으면 고를 것이 없으므로 스위치 자체를 숨긴다 */}
+            {hasFull && hasIllust && (
+              <div className="illu-toggle seg" style={{
+                ['--illu-bg' as string]: auSt.illuBg,
+                ['--illu-on' as string]: auSt.illuOn,
+              } as React.CSSProperties}>
+                <button className={!single ? 'on' : ''} onClick={() => setOneMode(false)}>전신</button>
+                <button className={single ? 'on' : ''} onClick={() => setOneMode(true)}>일러스트</button>
+              </div>
+            )}
+          </div>
+          {pairSlots[1]
+            ? <MiniProf member={pairSlots[1]} char={charOf(pairSlots[1].charId)} isAdmin={isAdmin}
+                auUnregistered={auUnregOf(pairSlots[1].charId)}
+                side="r" onMoveSide={() => moveSide(pairSlots[1]!.charId)}
+                onFaceCrop={ref => setFaceEdit({ charId: pairSlots[1]!.charId, ref, crop: pairSlots[1]!.faceCrop })}
+                onGo={() => goChar(charHref(pairSlots[1]!.charId), pairSlots[1]!.charId)}
+                onRemove={() => removeMember(pairSlots[1]!.charId)} />
+            : <EmptyCard isAdmin={isAdmin} onAdd={() => setMemberOpen(true)} />}
+        </div>
+      ) : (
+        /* 다인 자관 — 프로토타입 multi-body: 좌 멤버 리스트(430px) + 우 그룹 일러 */
+        <div className="multi-body" style={{ fontFamily: familyOf(auBodyFont) }}>
+          <div className="panel flush" style={{ padding: '6px 0' }}>
+            {rel.members.map(m => {
+              const c = charOf(m.charId);
+              if (!c) return null;
+              const unreg = auUnregOf(m.charId);
+              return (
+                <div key={m.charId} className="mrow" style={{ ['--cc' as string]: rgbTriple(c.color) }}
+                  onClick={() => goChar(charHref(m.charId), m.charId)}>
+                  <div className={`face ph ${c.thumbClass}`}>
+                    {!unreg && (c.arts?.[0] ?? c.thumbId) && (
+                      <CroppedBlobImg fileRef={c.arts?.[0] ?? c.thumbId} crop={c.thumbCrop} ph={c.thumbClass} />
+                    )}
+                  </div>
+                  <div className="nm">
+                    {unreg ? (
+                      /* AU 프로필 미등록 (v1.9) — 원본 프로필 대신 등록 안내 */
+                      <>
+                        <b style={{ fontFamily: familyOf(findChar(chars, m.charId)?.fontId) }}>{findChar(chars, m.charId)?.name}</b>
+                        <small>이 AU의 프로필 미등록 — 눌러서 등록</small>
+                      </>
+                    ) : (
+                      <>
+                        <b style={{ fontFamily: familyOf(c.fontId) }}>{c.name}</b><i>{c.sub}</i>
+                        <small>{c.specs.filter(isPlainSpec).slice(0, 3).map(s => s.value).join(' · ')}</small>
+                        {(m.quote || noteOf(m) || m.keywords[0]) && (
+                          <span className="ext">{m.quote || noteOf(m) || m.keywords[0]}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="gem-mini">
+                    {(c.colors ?? []).slice(0, 3).map(p => <i key={p.hex + p.label} style={{ background: p.hex }} />)}
+                  </div>
+                  {isAdmin && (
+                    <span className="rm" onClick={e => { e.stopPropagation(); removeMember(m.charId); }}>제거</span>
+                  )}
+                </div>
+              );
+            })}
+            {isAdmin && rel.members.length < 6 && (
+              <div className="mrow add" onClick={() => setMemberOpen(true)}>＋ ADD MEMBER (최대 6인)</div>
+            )}
+          </div>
+
+          {/* 우: 그룹 일러 — 여러 장이면 클릭 넘김 + 도트 */}
+          <div className="multi-illust" ref={artBoxRef}
+            style={{ cursor: auArts.length > 1 ? 'pointer' : undefined }}
+            onClick={() => { const n = auArts.length; if (n > 1) setArtIdx(i => (i + 1) % n); }}
+            onContextMenu={e => {
+              if (!isAdmin || !curArt) return;
+              e.preventDefault();
+              setArtCtx({ x: e.clientX, y: e.clientY, ref: curArt });
+            }}>
+            {auArts.length > 0 ? (
+              <>
+                <CroppedBlobImg fileRef={auArts[Math.min(artIdx, auArts.length - 1)]} crop={rel.artCrops?.[curArt]} ph="" label="GROUP ILLUST" />
+                {auArts.length > 1 && (
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 14, display: 'flex', justifyContent: 'center', gap: 5, zIndex: 3 }}>
+                    {auArts.map((_, i) => (
+                      <i key={i} style={{ width: i === Math.min(artIdx, auArts.length - 1) ? 16 : 6, height: 6, borderRadius: 4, background: i === Math.min(artIdx, auArts.length - 1) ? '#fff' : 'rgba(255,255,255,.45)', transition: '.2s' }} />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="ph" style={{ position: 'absolute', inset: 0 }}><span>GROUP ILLUST</span></div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 타임라인 / 페어 문답 — 스테이지에서는 서랍 안에, 클래식에서는 아래에 */}
+      {!stageOn && timelinePanel}
+
+      {/* 서랍 — 로그 백업 · 세션 게시판 · 갤러리 · 역극. 스테이지에서는 우측 바로가기로, 클래식에서는 아래 목록으로 연다 */}
+      {!stageOn && drawerItems.length > 0 && (
+        <div className="panel widget" style={{ marginTop: 16 }}>
+          <div className="cs-links" style={{ marginTop: 0 }}>
+            {drawerItems.map(d => (
+              <button key={d.key} type="button" className="cs-link" onClick={() => pickWin(d.key)}>
+                <span className="cs-link-k">{d.title}</span><span className="cs-link-s">{d.count}</span><span className="cs-link-a">→</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {win && drawerItems.some(d => d.key === win) && (
+        <StageWindow title={drawerItems.find(d => d.key === win)?.title ?? ''} name={(!isBaseAu && au?.name?.trim()) || rel.name}
+          items={drawerItems} current={win} onSelect={pickWin} onClose={() => setWin(null)}>
+          {win === 'timeline' || win === 'qa' ? timelinePanel : win === 'gallery' ? (
+            <>
+              <GalleryPanel ph={rel.thumbClass} loggedIn={!!user} posts={relGalleryPosts(rel, chars, { isAdmin, loggedIn: !!user }, auGalleryOpt)} canSeePrivate={isAdmin} accent={effThemeColor || undefined} />
+            </>
+          ) : win === 'rp' ? (
+            relRooms.length > 0 ? relRooms.map(rm => (
+              <div key={rm.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push('/rp')}>
+                <span>{rm.title}</span>
+                <b style={{ fontSize: 11, color: 'var(--faint)' }}>{rm.status === 'done' ? (rm.isPublic ? '완결 · 공개' : '완결') : '진행중'}</b>
+              </div>
+            )) : <p className="hint">이 자관 기반으로 진행된 역극이 여기에 표시됩니다</p>
+          ) : win === 'session' ? (
+            relSessions.length > 0 ? relSessions.map(sv => (
+              <div key={sv.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }}
+                onClick={() => router.push(sv.postId ? `/board/${sv.postId}` : '/playlog')}>
+                <span>{sv.scenario}</span>
+                <b style={{ fontSize: 11, color: 'var(--faint)' }}>{sv.date?.replace(/-/g, '.') ?? ''}</b>
+              </div>
+            )) : <p className="hint">연동된 세션이 없습니다 — 세션 등록 시 자관을 선택하면 여기에 표시</p>
+          ) : (
+            relLogs.length > 0 ? relLogs.map(l => (
+              <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(`/trpg/${l.id}`)}>
+                <span>{l.title}</span>
+                <b style={{ fontSize: 11, color: 'var(--faint)' }}>{l.date?.replace(/-/g, '.') ?? ''}</b>
+              </div>
+            )) : <p className="hint">연동된 로그가 없습니다 — 로그 등록 시 자관을 선택하면 여기에 표시</p>
+          )}
+        </StageWindow>
       )}
 
       {/* ---------- 멤버 추가 모달 ---------- */}
@@ -1460,9 +1864,9 @@ export default function RelDetailPage() {
               </div>
               {/* 상세 하단의 연동 리스트 숨김 (v2.0 사용자 요청) — 이 AU를 보는 동안만 적용 */}
               <div style={{ display: 'flex', gap: 16 }}>
-                <KCheck label={<span style={{ fontSize: 11.5 }}>역극 리스트 숨김</span>} checked={!!a.hideRp}
+                <KCheck label={<span style={{ fontSize: 11.5 }}>갤러리·역극 숨김</span>} checked={!!a.hideRp}
                   onChange={v => updateRel({ aus: rel.aus.map(x => (x.id === a.id ? { ...x, hideRp: v || undefined } : x)) })} />
-                <KCheck label={<span style={{ fontSize: 11.5 }}>로그 리스트 숨김</span>} checked={!!a.hideLog}
+                <KCheck label={<span style={{ fontSize: 11.5 }}>로그·세션 숨김</span>} checked={!!a.hideLog}
                   onChange={v => updateRel({ aus: rel.aus.map(x => (x.id === a.id ? { ...x, hideLog: v || undefined } : x)) })} />
               </div>
             </div>
