@@ -525,15 +525,12 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
               <button type="button" className={`mr-os-nav${navActive === 'room' ? ' selected' : ''}`} onClick={showSavedRoom}>⌂ <span>룸</span></button>
               {canEdit && <button type="button" className={`mr-os-nav${navActive === 'library' ? ' selected' : ''}`} onClick={() => togglePanel('deco')}>▦ <span>가구 도감</span></button>}
               {canEdit && <button type="button" className={`mr-os-nav${navActive === 'settings' ? ' selected' : ''}`} onClick={() => togglePanel('settings')}>⚙ <span>룸 설정</span></button>}
+              <Link href="/myroom" className="mr-os-nav">← <span>목록</span></Link>
             </div>
             <div className="mr-os-sidebar-detail"><div className="mr-os-room-icon">▱</div><small>ROOM ID</small><strong>{room.id.slice(0, 8).toUpperCase()}</strong><span>{canEdit ? '개인 거주실 · 편집 가능' : '개인 거주실 · 방문자 모드'}</span></div>
             <div className="mr-os-sidebar-foot"><span className="mr-os-dot"/> SYSTEM ONLINE<br/><small>PERSONAL ARCHIVE / CONNECTED</small></div>
           </aside>
           <div className="mr-os-main">
-            <div className="mr-topbar">
-              <div className="mr-lab-identity"><span className="mr-lab-kicker">ROOM TERMINAL / PERSONAL SPACE</span><div className="mr-topbar-title" id="room-title-display">{titleShown}</div></div>
-              <div className="mr-lab-top-actions"><span className="mr-lab-status"><i /> {editing ? 'EDIT MODE' : 'VIEW MODE'}</span>{canEdit && (editing ? <button type="button" className="mr-os-primary-action" onClick={save}>✓ 저장</button> : <button type="button" className="mr-os-primary-action" onClick={enterEdit}>✎ 꾸미기</button>)}<Link href="/myroom" className="mr-back-to-list">← 목록</Link></div>
-            </div>
         <div className="mr-layout" ref={layoutRef}>
           <div className="mr-room" ref={roomElRef} style={{ maxWidth: cw }}>
             <div className="mr-canvas-outer" ref={outerRef}>
