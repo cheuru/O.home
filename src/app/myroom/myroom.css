@@ -775,3 +775,6 @@
 .mr-lab-room .mr-catmanage-row button.mr-catmanage-del{color:#ff9fb0;border-color:#aa5066}
 .mr-lab-room .mr-catmanage-row button.mr-catmanage-del:hover{background:#642c48}
 .mr-lab-room .mr-remote-hint{background:rgba(243,167,214,.08);color:#caa9c2}
+
+/* 윗줄(ROOM VIEWPORT / LIVE ROOM CANVAS)을 없애서, 방 영역이 위쪽도 둥글게 닫히도록 */
+.mr-lab-room .mr-layout{border-radius:12px;border-top:1px solid var(--os-line)}

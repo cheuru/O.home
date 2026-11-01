@@ -534,8 +534,6 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
               <div className="mr-lab-identity"><span className="mr-lab-kicker">ROOM TERMINAL / PERSONAL SPACE</span><div className="mr-topbar-title" id="room-title-display">{titleShown}</div></div>
               <div className="mr-lab-top-actions"><span className="mr-lab-status"><i /> {editing ? 'EDIT MODE' : 'VIEW MODE'}</span>{canEdit && (editing ? <button type="button" className="mr-os-primary-action" onClick={save}>✓ 저장</button> : <button type="button" className="mr-os-primary-action" onClick={enterEdit}>✎ 꾸미기</button>)}<Link href="/myroom" className="mr-back-to-list">← 목록</Link></div>
             </div>
-            <div className="mr-lab-sectionbar"><span>◈ ROOM VIEWPORT</span><span>{cw} × {chh} PX</span><span>{zoomPct}% ZOOM</span></div>
-            <div className="mr-os-stage-caption"><span>LIVE ROOM CANVAS</span><span>{editing ? '오브젝트를 선택해 위치를 편집할 수 있습니다' : '방을 탐색하거나 꾸미기 모드를 시작하세요'}</span></div>
         <div className="mr-layout" ref={layoutRef}>
           <div className="mr-room" ref={roomElRef} style={{ maxWidth: cw }}>
             <div className="mr-canvas-outer" ref={outerRef}>
