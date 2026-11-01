@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 
 type Ring = { x: number; y: number; t: number };
-const LIFE = 1.1;           // 링 하나가 사라지기까지(초)
+const LIFE = 0.8;           // 링 하나가 사라지기까지(초)
 const SOUND_KEY = 'ohome-click-sound';
 
 function accentRgb(): [number, number, number] {
@@ -78,21 +78,16 @@ export function ClickFx() {
         const p = rings[i]; p.t += dt;
         if (p.t > LIFE) { rings.splice(i, 1); continue; }
         const k = p.t / LIFE, e = 1 - Math.pow(1 - k, 3), a = 1 - k;   // 처음엔 빠르게, 끝에서 천천히
-        const R1 = 10 + e * 96, R2 = 5 + e * 58;
-        // 바깥 링 — 밝은 바탕에서도 보이도록 어두운 밑줄을 한 겹 깔고 포인트색을 얹는다
-        ctx.lineWidth = 3.4; ctx.strokeStyle = `rgba(10,10,30,${a * 0.28})`;
+        const R1 = 6 + e * 46;
+        // 링 하나 — 밝은 바탕에서도 보이도록 어두운 밑줄을 한 겹 깔고 포인트색을 얹는다
+        ctx.lineWidth = 3; ctx.strokeStyle = `rgba(10,10,30,${a * 0.25})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, R1, 0, 6.2832); ctx.stroke();
-        ctx.lineWidth = 2; ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a * 0.95})`;
+        ctx.lineWidth = 1.8; ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a * 0.95})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, R1, 0, 6.2832); ctx.stroke();
-        // 안쪽 링 — 흰색(어두운 바탕에서 반짝) + 얇은 어두운 밑줄(밝은 바탕)
-        ctx.lineWidth = 2.6; ctx.strokeStyle = `rgba(10,10,30,${a * 0.2})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, R2, 0, 6.2832); ctx.stroke();
-        ctx.lineWidth = 1.4; ctx.strokeStyle = `rgba(255,255,255,${a * 0.9})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, R2, 0, 6.2832); ctx.stroke();
         // 클릭한 자리 — 작은 점이 잠깐 번쩍
         if (k < 0.35) {
           ctx.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(1 - k / 0.35) * 0.9})`;
-          ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 6.2832); ctx.fill();
+          ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, 6.2832); ctx.fill();
         }
       }
       raf = rings.length ? requestAnimationFrame(frame) : 0;
