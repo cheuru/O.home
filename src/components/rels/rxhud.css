@@ -11,7 +11,7 @@
 @keyframes rxHudScan{0%{top:-90px;opacity:0}8%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
 
 /* ── 레이더 ── */
-.rx-hud-radar{position:absolute;right:3%;top:96px;width:clamp(170px,19vw,290px);aspect-ratio:1;opacity:.55}
+.rx-hud-radar{position:absolute;right:2%;top:56%;height:max(88%,340px);width:auto;aspect-ratio:1;transform:translateY(-50%);opacity:.6}
 .rx-hud-radar svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .hr-spin{transform-box:view-box;transform-origin:50% 50%}
 .hr-spin.a{animation:rxSpin 60s linear infinite}
@@ -28,8 +28,8 @@
 @keyframes rxBlip{0%{opacity:1;transform:scale(1.8)}8%{opacity:1}35%{opacity:.12;transform:scale(1)}100%{opacity:.12}}
 .hr-blip{transform-box:fill-box;transform-origin:center}
 .rx-hud-lab{position:absolute;font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.22em;white-space:nowrap}
-.rx-hud-lab.t{left:50%;top:-16px;transform:translateX(-50%)}
-.rx-hud-lab.b{left:50%;bottom:-16px;transform:translateX(-50%)}
+.rx-hud-lab.t{right:100%;top:14%;margin-right:6px;text-align:right}
+.rx-hud-lab.b{right:100%;bottom:14%;margin-right:6px;text-align:right}
 
 /* ── 좌표 조준 (십자선이 돌아다니다 잠긴다) ── */
 .rx-hud-lock{position:absolute;inset:0;opacity:.5}
