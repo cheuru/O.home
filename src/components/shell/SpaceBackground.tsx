@@ -103,79 +103,77 @@ export function SpaceBackground() {
     }
 
     // ---- 행성(왼쪽 아래) · 달(오른쪽 위) · 인공위성 — 데스크톱 첫 화면(<html data-desktop>)에서만
-    let planet: { tex: HTMLCanvasElement; r: number } | null = null;
+    let planet: { r: number } | null = null;
     let sat: { x: number; y: number; vx: number; vy: number } | null = null;
     let nextSat = rnd(12, 25);
     const isDesk = () => root.hasAttribute('data-desktop');
 
     function buildPlanet() {
       const r = Math.round(Math.min(H * 0.36, W * 0.2));
-      if (r < 60) { planet = null; return; }
-      const D = r * 2, TW = D * 2;
-      const tex = document.createElement('canvas');
-      tex.width = TW; tex.height = D;
-      const g = tex.getContext('2d')!;
-      const bg = g.createLinearGradient(0, 0, 0, D);
-      bg.addColorStop(0, '#2b2a86'); bg.addColorStop(0.5, '#4a2f9a'); bg.addColorStop(1, '#232a80');
-      g.fillStyle = bg; g.fillRect(0, 0, TW, D);
-      // 가로 줄무늬 구름대 — 가로로 한 바퀴(TW)가 이음매 없이 이어지도록 주기 함수로 굽힌다
-      for (let b = 0; b < 16; b++) {
-        const y0 = (b / 16) * D, h = (D / 16) * rnd(0.5, 1.3);
-        const k = 1 + ((Math.random() * 3) | 0), ph = rnd(0, 6.28), A = rnd(2, 10);
-        g.fillStyle = `hsla(${rnd(225, 325)},65%,${rnd(38, 68)}%,${rnd(0.12, 0.32)})`;
-        for (let x = 0; x < TW; x += 3) g.fillRect(x, y0 + A * Math.sin((2 * Math.PI * k * x) / TW + ph), 3.5, h);
-      }
-      // 핑크빛 폭풍 몇 개
-      for (let i = 0; i < 6; i++) {
-        const x = rnd(0, TW), y = rnd(D * 0.2, D * 0.8), rx = rnd(18, 60);
-        for (const dx of [-TW, 0, TW]) {
-          const gr = g.createRadialGradient(x + dx, y, 0, x + dx, y, rx);
-          gr.addColorStop(0, `hsla(${hh(0)},85%,75%,.4)`); gr.addColorStop(1, `hsla(${hh(0)},85%,75%,0)`);
-          g.fillStyle = gr; g.save(); g.translate(0, y); g.scale(1, 0.4); g.translate(0, -y); g.fillRect(x + dx - rx, y - rx, rx * 2, rx * 2); g.restore();
+      planet = r < 60 ? null : { r };
+    }
+
+    // 미니멀 궤도도 — 가운데 점 하나 + 가는 동심 궤도 · 끊어진 호 · 길게 기운 타원 · 궤도 위의 작은 점 · 점선 십자축
+    function ell(x: number, y: number, rx: number, ry: number, rot = 0, a0 = 0, a1 = 6.2832) {
+      ctx!.beginPath(); ctx!.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, a0, a1); ctx!.stroke();
+    }
+    const TAU = 6.2832;
+    function drawSystem(cx: number, cy: number, R: number, t: number, k: number, big: boolean) {
+      const line = (a: number) => `hsla(${hh(0)},75%,90%,${a})`;
+      const glow = `hsla(${hh(-6)},100%,82%,.9)`;
+      const dot = (x: number, y: number, rad: number) => {
+        ctx!.fillStyle = `hsla(${hh(-6)},100%,95%,.96)`; ctx!.shadowColor = glow; ctx!.shadowBlur = rad * 3;
+        ctx!.beginPath(); ctx!.arc(x, y, rad, 0, TAU); ctx!.fill(); ctx!.shadowBlur = 0;
+      };
+      const onEll = (rx: number, ry: number, rot: number, ang: number): [number, number] => {
+        const ex = Math.cos(ang) * rx, ey = Math.sin(ang) * ry;
+        return [cx + ex * Math.cos(rot) - ey * Math.sin(rot), cy + ex * Math.sin(rot) + ey * Math.cos(rot)];
+      };
+      ctx!.lineCap = 'round';
+      // 점선 십자축
+      ctx!.lineWidth = 0.8; ctx!.strokeStyle = line(0.2); ctx!.setLineDash([3, 6]);
+      ctx!.beginPath(); ctx!.moveTo(cx - R * 2.3, cy); ctx!.lineTo(cx + R * 2.3, cy); ctx!.moveTo(cx, cy - R * 2.3); ctx!.lineTo(cx, cy + R * 2.3); ctx!.stroke();
+      ctx!.setLineDash([]);
+      // 동심 궤도 (실선)
+      ctx!.lineWidth = 1.1;
+      const rings = big ? [0.3, 0.58, 0.9] : [0.9, 1.6];
+      rings.forEach((f, i) => {
+        ctx!.strokeStyle = line(0.5 - i * 0.07); ell(cx, cy, R * f, R * f);
+        const [px, py] = onEll(R * f, R * f, 0, t * (0.3 - i * 0.07) * k + i * 2.1);
+        dot(px, py, big ? 3.4 - i * 0.2 : 2.6);
+      });
+      // 끊어진 호 — 끝에 점 하나 (천천히 회전)
+      if (big) {
+        const arcs: [number, number, number][] = [[1.2, 3.6, 0.018], [1.5, 2.6, -0.014]];
+        for (const [f, span, sp] of arcs) {
+          const a0 = t * sp + f * 2, a1 = a0 + span;
+          ctx!.lineWidth = 1; ctx!.strokeStyle = line(0.38); ell(cx, cy, R * f, R * f, 0, a0, a1);
+          dot(cx + Math.cos(a1) * R * f, cy + Math.sin(a1) * R * f, 3);
         }
+        // 점으로 이어진 바깥 궤도
+        ctx!.lineWidth = 1; ctx!.strokeStyle = line(0.26); ctx!.setLineDash([1, 7]); ell(cx, cy, R * 1.8, R * 1.8); ctx!.setLineDash([]);
       }
-      planet = { tex, r };
+      // 길게 기운 타원 궤도 + 도는 점
+      const er = big ? -0.27 : -0.72;
+      ctx!.lineWidth = 1.1; ctx!.strokeStyle = line(0.5);
+      ell(cx, cy, R * (big ? 1.75 : 3.2), R * (big ? 0.27 : 0.62), er);
+      const [ex, ey] = onEll(R * (big ? 1.75 : 3.2), R * (big ? 0.27 : 0.62), er, t * 0.2 * k + 0.6);
+      dot(ex, ey, big ? 4 : 3);
+      if (!big) { // 달: 교차하는 가는 타원 하나 더 + 별 모양 십자 선
+        ctx!.lineWidth = 0.9; ctx!.strokeStyle = line(0.3); ell(cx, cy, R * 2.4, R * 0.4, 0.72);
+        const [fx, fy] = onEll(R * 2.4, R * 0.4, 0.72, -t * 0.28 * k);
+        dot(fx, fy, 2.2);
+      }
+      // 가운데 점
+      dot(cx, cy, big ? R * 0.07 : R * 0.28);
     }
 
     function drawPlanet(t: number) {
       if (!planet) return;
-      const { tex, r } = planet;
-      const cx = r * 0.62 - m.sx * 12, cy = H - r * 0.34 - m.sy * 8;
-      // 대기 빛 번짐
-      const at = ctx!.createRadialGradient(cx, cy, r * 0.96, cx, cy, r * 1.22);
-      at.addColorStop(0, `hsla(${hh(-30)},85%,72%,.38)`); at.addColorStop(1, `hsla(${hh(-30)},85%,72%,0)`);
-      ctx!.fillStyle = at; ctx!.fillRect(cx - r * 1.3, cy - r * 1.3, r * 2.6, r * 2.6);
-      ctx!.save();
-      ctx!.beginPath(); ctx!.arc(cx, cy, r, 0, 6.2832); ctx!.clip();
-      const off = (t * 5) % (r * 4);
-      ctx!.drawImage(tex, cx - r - off, cy - r);
-      ctx!.drawImage(tex, cx - r - off + r * 4, cy - r);
-      // 구 모양 음영: 오른쪽 위에서 빛, 왼쪽 아래는 어둡게
-      const sh = ctx!.createRadialGradient(cx + r * 0.5, cy - r * 0.45, r * 0.05, cx + r * 0.5, cy - r * 0.45, r * 1.75);
-      sh.addColorStop(0, 'rgba(255,225,242,.26)'); sh.addColorStop(0.4, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(2,3,22,.92)');
-      ctx!.fillStyle = sh; ctx!.fillRect(cx - r, cy - r, r * 2, r * 2);
-      const lm = ctx!.createRadialGradient(cx, cy, r * 0.72, cx, cy, r);
-      lm.addColorStop(0, 'rgba(2,2,20,0)'); lm.addColorStop(1, 'rgba(2,2,20,.5)');
-      ctx!.fillStyle = lm; ctx!.fillRect(cx - r, cy - r, r * 2, r * 2);
-      ctx!.restore();
-      // 달
-      const mr = Math.max(14, Math.min(W, H) * 0.045);
-      const mx = W * 0.88 - m.sx * 18 + Math.sin(t * 0.04) * 10, my = H * 0.2 - m.sy * 12 + Math.cos(t * 0.05) * 6;
-      const mg = ctx!.createRadialGradient(mx - mr * 0.45, my - mr * 0.4, mr * 0.1, mx, my, mr * 1.05);
-      mg.addColorStop(0, '#fff3f8'); mg.addColorStop(0.55, '#c9bde8'); mg.addColorStop(1, '#4a4290');
-      const halo = ctx!.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 2.6);
-      halo.addColorStop(0, `hsla(${hh(0)},80%,85%,.18)`); halo.addColorStop(1, `hsla(${hh(0)},80%,85%,0)`);
-      ctx!.fillStyle = halo; ctx!.fillRect(mx - mr * 2.7, my - mr * 2.7, mr * 5.4, mr * 5.4);
-      ctx!.fillStyle = mg; ctx!.beginPath(); ctx!.arc(mx, my, mr, 0, 6.2832); ctx!.fill();
-      ctx!.save(); ctx!.beginPath(); ctx!.arc(mx, my, mr, 0, 6.2832); ctx!.clip();
-      ctx!.fillStyle = 'rgba(70,60,130,.22)';
-      for (const [ax, ay, ar] of [[-0.3, 0.1, 0.22], [0.25, -0.3, 0.14], [0.1, 0.4, 0.16], [0.42, 0.2, 0.1]]) {
-        ctx!.beginPath(); ctx!.arc(mx + ax * mr, my + ay * mr, ar * mr, 0, 6.2832); ctx!.fill();
-      }
-      const ms = ctx!.createRadialGradient(mx - mr * 0.5, my - mr * 0.4, mr * 0.3, mx - mr * 0.5, my - mr * 0.4, mr * 1.6);
-      ms.addColorStop(0, 'rgba(0,0,0,0)'); ms.addColorStop(1, 'rgba(3,3,30,.7)');
-      ctx!.fillStyle = ms; ctx!.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
-      ctx!.restore();
+      const { r } = planet;
+      drawSystem(r * 0.62 - m.sx * 12, H - r * 0.34 - m.sy * 8, r, t, 1, true);
+      const mr = Math.max(14, Math.min(W, H) * 0.04);
+      drawSystem(W * 0.88 - m.sx * 18 + Math.sin(t * 0.04) * 10, H * 0.2 - m.sy * 12 + Math.cos(t * 0.05) * 6, mr, t, 1.3, false);
     }
 
     function drawSat(dt: number, t: number) {
