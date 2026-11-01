@@ -13,6 +13,7 @@ import { useSiteSettings } from '@/lib/siteStore';
 import { FLAG_BOOTED, FLAG_ENTERED, flag, glyphFor, groupGlyph, setFlag } from '@/lib/desktopConfig';
 import { BootScreen } from './BootScreen';
 import { LoginScreen } from './LoginScreen';
+import { DeskHome } from './DeskHome';
 
 type Screen = 'boot' | 'login' | 'desktop';
 interface App { href: string; label: string; group: string; glyph: string }
@@ -248,7 +249,7 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
       <div className="dsk-grid" />
       <div className="dsk-area" ref={areaRef}>
         {wins.length === 0 && (
-          <div className="dsk-watermark"><b>{title.toUpperCase()}</b><span>아래 아이콘을 눌러 메뉴를 열어요</span></div>
+          <DeskHome title={title} nickname={nickname} admin={isAdmin} />
         )}
         {wins.map(w => {
           const isTop = w.id === topId;

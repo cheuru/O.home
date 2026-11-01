@@ -159,3 +159,42 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 .dsk-fly-i .dsk-glyph { width: 22px; height: 20px; font-size: calc(16px*var(--fs,1)); }
 .dsk-fly-i.open::after { content: ''; margin-left: auto; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
 .dsk-fly-i.on::after { background: var(--accent-soft); }
+
+/* ───────── 데스크톱 첫 화면: 궤도 시계 + 터미널 (DeskHome) ───────── */
+.dsk-home { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.dsk-orbit { position: absolute; left: 50%; top: 50%; width: min(72vh, 560px, 86vw); aspect-ratio: 1; transform: translate(-50%, -52%); animation: dskIn 1.2s ease both; }
+.dsk-orbit svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dsk-orbit .ring { fill: none; stroke: rgba(205,195,255,.22); stroke-width: 1; }
+.dsk-orbit .ring.faint { stroke: rgba(205,195,255,.1); }
+.dsk-orbit .ring.dash { stroke: rgba(255,200,225,.18); stroke-dasharray: 2 9; }
+.dsk-orbit .tk { stroke: rgba(205,195,255,.28); stroke-width: 1; }
+.dsk-orbit .tk.long { stroke: rgba(255,225,240,.6); stroke-width: 1.4; }
+.dsk-orbit .trail { fill: none; stroke: rgba(255,205,230,.5); stroke-width: 2; }
+.dsk-orbit .halo { fill: rgba(255,190,225,.7); }
+.dsk-orbit .halo.mn { fill: rgba(170,175,255,.75); } .dsk-orbit .halo.hr { fill: rgba(200,150,255,.75); }
+.dsk-orbit .pl.hr { fill: #e4c9ff; } .dsk-orbit .pl.mn { fill: #c9ccff; }
+.dsk-orbit .spin { transform-origin: 250px 250px; animation: dskSpin 140s linear infinite; }
+.dsk-orbit-core { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; }
+.dsk-orbit-core b { font-family: var(--serif); font-weight: 600; font-size: clamp(18px, 3.4vh, 30px); letter-spacing: .5em; padding-left: .5em; color: #fff3f8; text-shadow: 0 0 18px rgba(255,170,215,.55); }
+.dsk-orbit-core time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: clamp(26px, 5.6vh, 50px); letter-spacing: .08em; color: #f4efff; font-weight: 300; text-shadow: 0 0 22px rgba(170,150,255,.6); }
+.dsk-orbit-core time i { font-style: normal; font-size: .46em; margin-left: .35em; color: #ffc4de; vertical-align: .55em; letter-spacing: .1em; }
+.dsk-orbit-core span { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: clamp(9.5px, 1.5vh, 12px); letter-spacing: .32em; color: #b9b2e0; padding-left: .32em; }
+
+.dsk-term { position: absolute; left: 26px; top: 22px; width: min(340px, 40vw); border: 1px solid rgba(180,170,255,.22); border-radius: 12px;
+  background: rgba(6,7,24,.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 10px 40px rgba(0,0,0,.35); overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; animation: dskIn .9s .2s ease both; }
+.dsk-term-bar { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-bottom: 1px solid rgba(180,170,255,.16); font-size: 10px; color: #9d97c8; letter-spacing: .06em; }
+.dsk-term-bar i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,170,205,.7); }
+.dsk-term-bar i:nth-child(2) { background: rgba(190,175,255,.7); } .dsk-term-bar i:nth-child(3) { background: rgba(160,200,255,.7); }
+.dsk-term-bar span { margin-left: 6px; }
+.dsk-term-body { height: 150px; padding: 10px 12px 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
+.dsk-term-body p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #cfc9f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dsk-term-body em { font-style: normal; color: #ff9fc6; margin-right: 4px; }
+.dsk-term-body p.cur u { display: inline-block; width: 7px; height: 12px; margin-left: 2px; vertical-align: -2px; background: #ffd0e4; animation: dskBlink 1s steps(1) infinite; }
+.dsk-term-foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 8px; border-top: 1px solid rgba(180,170,255,.14); font-size: 10px; letter-spacing: .2em; color: #8f89bb; }
+.dsk-term-foot b { font-weight: 500; letter-spacing: .12em; color: #ffd6e8; }
+@keyframes dskIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dskSpin { to { transform: rotate(360deg); } }
+@keyframes dskBlink { 50% { opacity: 0; } }
+@media (max-width: 900px) { .dsk-term { display: none; } }
+@media (prefers-reduced-motion: reduce) { .dsk-orbit .spin, .dsk-term-body p.cur u { animation: none; } }
