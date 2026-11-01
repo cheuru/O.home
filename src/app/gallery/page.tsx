@@ -82,19 +82,19 @@ function BackupPageInner() {
       <div className="page-head">
         <PageTitle>{sec.id === 'main' ? 'GALLERY' : sec.name}</PageTitle>
         <EditableDesc k="backup-desc" def="로그형(웹툰 스크롤) / 단일형(좌우 넘김) · 리스트/갤러리 보기 전환" />
+        <div className="head-actions">
+          <SearchBar onSearch={setQ} />
+          {/* 글쓰기 권한 (v2.0 사용자 요청) — 메뉴 관리에서 갤러리별로 · 멤버 선택으로 좁힐 수 있다 */}
+          {canGalleryWrite(menuSet, sec.id, { loggedIn: !!user, isAdmin, id: user?.id }) && (
+            <button className="btn btn-dark" onClick={() => router.push('/gallery/write' + secQuery('gallery', sec.id))}>＋ WRITE</button>
+          )}
+        </div>
       </div>
       <IndexFrame cap="GALLERY ARCHIVE // IMAGE INDEX" label="ITEMS" count={visible.length} foot="GALLERY FILE">
       <div className="toolrow">
         <div className="seg">
           <button className={view === 'gal' ? 'on' : ''} onClick={() => setView('gal')}>갤러리</button>
           <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>리스트</button>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SearchBar onSearch={setQ} />
-          {/* 글쓰기 권한 (v2.0 사용자 요청) — 메뉴 관리에서 갤러리별로 · 멤버 선택으로 좁힐 수 있다 */}
-          {canGalleryWrite(menuSet, sec.id, { loggedIn: !!user, isAdmin, id: user?.id }) && (
-            <button className="btn btn-dark" onClick={() => router.push('/gallery/write' + secQuery('gallery', sec.id))}>✎ WRITE</button>
-          )}
         </div>
       </div>
 

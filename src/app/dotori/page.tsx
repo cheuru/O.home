@@ -84,10 +84,14 @@ function DotoriPageInner() {
       <div className="page-head">
         <PageTitle>{sec.id === 'main' ? 'DOTORI' : sec.name}</PageTitle>
         <EditableDesc k="dotori-desc" def="가고 싶은 시나리오 저장함 — 도토리처럼 모아두기" />
+        <div className="head-actions">
+          <SearchBar placeholder="시나리오·라이터·태그 검색" onSearch={setQ} />
+          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/dotori/new' + secQuery('dotori', sec.id))}>＋ ADD</button>}
+        </div>
       </div>
       <IndexFrame cap="DOTORI ARCHIVE // ITEM INDEX" label="ITEMS" count={shown.length} foot="DOTORI FILE">
 
-      {/* 상태 필터 탭 + 검색·ADD — 필터 줄 오른쪽 정렬 (v1.9 사용자 요청) */}
+      {/* 상태 필터 탭 (검색·ADD는 상단 제목 옆 — 전 페이지 공통 규칙) */}
       <div className="toolrow" style={{ marginBottom: 16 }}>
         <div className="tag-row">
           {TABS.map(t => (
@@ -95,10 +99,6 @@ function DotoriPageInner() {
               {t.label} <small>{countOf(t.key)}</small>
             </div>
           ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SearchBar placeholder="시나리오·라이터·태그 검색" onSearch={setQ} />
-          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/dotori/new' + secQuery('dotori', sec.id))}>＋ ADD</button>}
         </div>
       </div>
 

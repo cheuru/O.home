@@ -18,9 +18,6 @@ const CSS = `
 .cl-room-del{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(30,33,38,.7);color:#fff;font-size:13px;cursor:pointer;opacity:0;transition:opacity .2s;}
 .cl-room-wrap:hover .cl-room-del{opacity:1;}
 .cl-room-wrap{position:relative;}
-.cl-new{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:0;height:100%;border:1.5px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--sub);cursor:pointer;font-family:var(--sans);font-size:13px;transition:border-color .2s,color .2s;}
-.cl-new:hover{border-color:var(--accent);color:var(--accent);}
-.cl-new span{font-size:28px;font-weight:200;line-height:1;}
 .cl-empty{max-width:420px;margin:60px auto;text-align:center;padding:36px 28px;background:var(--panel);border-radius:var(--radius);box-shadow:var(--sh-sm);}
 .cl-empty p{margin:0 0 18px;color:var(--sub);font-size:13.5px;line-height:1.8;}
 `;
@@ -49,12 +46,14 @@ function RoomCard({ room, isAdmin, onDelete }: { room: ClosetRoom; isAdmin: bool
   );
 }
 
-export function ClosetLobby({ book, isAdmin, onCreate, onDelete }: {
-  book: ClosetBook; isAdmin: boolean; onCreate: (name: string) => void; onDelete: (id: string) => void;
+// 새 옷장 만들기 모달의 열림 상태는 page가 쥔다 — ＋ ADD 버튼이 다른 목록처럼 상단 제목 옆(page-head)에 있기 때문
+export function ClosetLobby({ book, isAdmin, asking, onAsk, onAskClose, onCreate, onDelete }: {
+  book: ClosetBook; isAdmin: boolean; asking: boolean; onAsk: () => void; onAskClose: () => void;
+  onCreate: (name: string) => void; onDelete: (id: string) => void;
 }) {
   const del = useConfirmDelete();
-  const [asking, setAsking] = useState(false);
   const [name, setName] = useState('');
+  const setAsking = (v: boolean) => { if (v) onAsk(); else onAskClose(); };
   const open = () => { setName(''); setAsking(true); };
   const make = () => { onCreate(name.trim() || '페어명의 옷장'); setAsking(false); };
 
@@ -78,7 +77,6 @@ export function ClosetLobby({ book, isAdmin, onCreate, onDelete }: {
               onDelete={() => del.ask(`「${room.design.gameTitle}」 옷장을 지울까요?`, () => onDelete(room.id),
                 '아이템 목록·대사·디자인이 함께 사라져요. 올린 그림 파일은 이미지 정리에서 따로 지울 수 있어요.')} />
           ))}
-          {isAdmin && <button type="button" className="cl-new" onClick={open}><span>＋</span>새 페어 옷장</button>}
         </div>
       )}
       {del.element}

@@ -1,5 +1,6 @@
 'use client';
-// 옷장 화면 틀 — 자관·캐릭터 화면과 같은 느낌으로 감싼다. 둘 다 화면 가로 전체를 쓴다.
+// 옷장 화면 틀 — 자관·캐릭터 화면과 같은 느낌으로 감싼다.
+//  · 목록(list)은 자관·캐릭터와 같은 표준 폭(.page)을 쓴다. 화면 가로 전체를 쓰는 건 옷장 안(room)뿐.
 //  · variant='list' (옷장 목록): 머리줄·모서리 표식·큰 배경 글씨·바닥줄이 있는 「인덱스 틀」만
 //  · variant='room' (옷장 안): 배경 장식 없이, 얇은 선 틀(모서리 표식·머리줄·바닥줄)만 — 옷 입히는 화면이 주인공이 되게 조용하게
 // 틀 스타일은 globals.css의 .rx-* 를 그대로 쓰고, 옷장 전용 배치만 여기 CSS에 둔다.
@@ -10,7 +11,10 @@ const CSS = `
 .page.cl-stage-page{max-width:none;width:100%;margin:0;padding:0 0 80px;position:relative;animation:none}
 .page.cl-stage-page>*{animation:none}
 .cl-content{position:relative;z-index:1;padding:16px clamp(20px,3.4vw,64px) 0}
-.cl-rx{--rx-ln:color-mix(in srgb,var(--page-title,#222) 26%,transparent);position:relative;margin-top:10px}
+.cl-content.list{padding:0}
+/* 목록 틀의 선 색은 자관·캐릭터 목록(.rx)과 같게 — 선 색 변수는 옷장 안(room)에서만 둔다 */
+.cl-rx{position:relative;margin-top:10px}
+.cl-rx.room{--rx-ln:color-mix(in srgb,var(--page-title,#222) 26%,transparent)}
 .cl-rx-body{position:relative;z-index:1;padding:44px 0 52px}
 .cl-rx .rx-ghost{z-index:0}
 /* 옷장 안 — 머리줄 아래 여백만 조금, 오른쪽 위엔 방 이름 */
@@ -31,9 +35,9 @@ export function ClosetShell({ head, variant, count = 0, roomName = '', children 
   const n = String(count).padStart(2, '0');
   const list = variant === 'list';
   return (
-    <section className="page cl-stage-page">
+    <section className={list ? 'page' : 'page cl-stage-page'}>
       <style>{CSS}</style>
-      <div className="cl-content">
+      <div className={list ? 'cl-content list' : 'cl-content'}>
         {head}
         {list ? (
           <div className="cl-rx">
