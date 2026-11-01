@@ -4,7 +4,7 @@
 // ③ 용량이 거의 없고 ④ 「동작 줄이기」 설정에서 알아서 멈춘다.
 //
 // 쓰는 법 (.rx 안에서)
-//   <RxHud />                         → 맨 뒤 장식층 (스캔선 · 레이더 · 좌표 조준 · 눈금자 · 막대). 카드 뒤에 깔리고 클릭을 받지 않는다
+//   <RxHud />                         → 맨 뒤 장식층 (레이더 · 좌표 조준 · 눈금자 · 막대). 카드 뒤에 깔리고 클릭을 받지 않는다
 //   <RxCoord />                       → 머리줄 가운데 좌표 숫자
 //   <RxPulse />                       → 바닥줄 가운데 심박(바이오그래프) 선
 import React, { useEffect, useState } from 'react';
@@ -67,9 +67,6 @@ export function RxHud() {
   const az = useJitter(() => `AZ ${String(Math.floor(Math.random() * 360)).padStart(3, '0')}°`, 2300);
   return (
     <div className="rx-hud" aria-hidden="true">
-      {/* 위에서 아래로 훑는 스캔선 */}
-      <div className="rx-hud-scan" />
-
       {/* 레이더 — 눈금 링이 서로 반대로 돌고, 부채꼴이 한 바퀴씩 쓸고 지나간다 */}
       <div className="rx-hud-radar">
         <div className="rx-hud-sweep" />
