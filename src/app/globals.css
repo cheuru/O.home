@@ -1539,8 +1539,9 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 
 /* ---------- 게시판 공통 (4.2) ---------- */
 .toolrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}
-/* 줄바꿈으로 검색·버튼 묶음이 아랫줄로 내려가도 오른쪽 정렬 유지 (v1.9 사용자 요청) */
-.toolrow > :last-child{margin-left:auto}
+/* 필터 + 보기전환이 한 줄에 같이 있을 때, 줄바꿈으로 내려가도 보기전환은 오른쪽 정렬 유지.
+   검색·추가 버튼은 전 페이지 공통으로 상단 page-head 오른쪽(.head-actions)에 있다. */
+.toolrow > :last-child:not(:first-child){margin-left:auto}
 .panel.flush{overflow:hidden;padding:4px 0}
 .board-list{padding:6px 0}
 .brow{display:grid;grid-template-columns:70px 1fr 90px 90px;gap:12px;align-items:center;padding:13px 20px;border-bottom:1px solid var(--line);font-size:calc(13px*var(--fs,1));cursor:var(--cur-pointer,pointer);transition:.13s}

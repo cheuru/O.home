@@ -273,7 +273,7 @@ function TrpgPageInner() {
         <EditableDesc k="trpg-desc" def="티켓형 스킨 · 시나리오 타이틀 폰트 개별 설정 · 우측 자관 뱃지로 필터" />
         <div className="head-actions">
           <SearchBar onSearch={setQ} />
-          {isAdmin && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
+          {isAdmin && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD</button>}
         </div>
       </div>
       <IndexFrame cap="TRPG ARCHIVE // LOG INDEX" label="LOGS" count={visible.length} foot="TRPG FILE">

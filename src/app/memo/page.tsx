@@ -148,6 +148,9 @@ export default function MemoPage() {
       <div className="page-head">
         <PageTitle>STICKY NOTES</PageTitle>
         <EditableDesc k="memo-desc" def="드래그 자유 배치 · 색상/기울기 · 작성 권한 옵션" />
+        <div className="head-actions">
+          {canWrite && <button className="btn btn-dark" onClick={openNew}>＋ ADD</button>}
+        </div>
       </div>
       <IndexFrame cap="MEMO ARCHIVE // NOTE INDEX" label="NOTES" count={sorted.length} foot="MEMO FILE">
       <div className="memo-layout">
@@ -181,10 +184,6 @@ export default function MemoPage() {
               </div>
             </div>
           ))}
-          {canWrite && (
-            <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-              onClick={openNew}>＋ MEMO</button>
-          )}
         </div>
       </div>
 

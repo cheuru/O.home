@@ -267,6 +267,13 @@ function ThreadsPageInner() {
       <div className="page-head">
         <PageTitle>{sec.id === 'main' ? 'THREADS' : sec.name}</PageTitle>
         <EditableDesc k="threads-desc" def="본 것, 읽은 것의 감상을 타래로" />
+        <div className="head-actions">
+          <SearchBar onSearch={setQ} />
+          {isAdmin && (
+            <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }}
+              onClick={() => router.push('/threads/new' + secQuery('threads', sec.id))}>＋ ADD</button>
+          )}
+        </div>
       </div>
       <IndexFrame cap="THREADS ARCHIVE // WORK INDEX" label="WORKS" count={visible.length} foot="THREAD FILE">
 
@@ -283,11 +290,6 @@ function ThreadsPageInner() {
             <button className={view === 'thread' ? 'on' : ''} onClick={() => setView('thread')}>타래</button>
             <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>리스트</button>
           </div>
-          <SearchBar onSearch={setQ} />
-          {isAdmin && (
-            <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }}
-              onClick={() => router.push('/threads/new' + secQuery('threads', sec.id))}>＋ NEW THREAD</button>
-          )}
         </div>
       </div>
 

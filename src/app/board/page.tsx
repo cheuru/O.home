@@ -85,6 +85,12 @@ function BoardInner() {
       <div className="page-head">
         <PageTitle href={boardHref(board.id)}>{board.id === MAIN_BOARD_ID ? 'BOARD' : board.name}</PageTitle>
         <EditableDesc k={board.id === MAIN_BOARD_ID ? 'board-desc' : `board-desc-${board.id}`} def={board.desc} />
+        <div className="head-actions">
+          <SearchBar onSearch={v => { setQ(v); setPage(1); }} />
+          {allow(board.permWrite) && !!user && (
+            <button className="btn btn-dark" onClick={() => router.push(`/board/write?b=${board.id}`)}>＋ WRITE</button>
+          )}
+        </div>
       </div>
       <IndexFrame cap="BOARD ARCHIVE // POST INDEX" label="POSTS" count={visible.length} foot="BOARD FILE">
       <div className="toolrow">
@@ -92,12 +98,6 @@ function BoardInner() {
           {['전체', '공지', ...board.cats.map(x => x.label)].map(c => (
             <button key={c} className={cat === c ? 'on' : ''} onClick={() => { setCat(c); setPage(1); }}>{c}</button>
           ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SearchBar onSearch={v => { setQ(v); setPage(1); }} />
-          {allow(board.permWrite) && !!user && (
-            <button className="btn btn-dark" onClick={() => router.push(`/board/write?b=${board.id}`)}>✎ WRITE</button>
-          )}
         </div>
       </div>
 

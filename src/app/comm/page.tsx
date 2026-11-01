@@ -59,7 +59,7 @@ function CommListPageInner() {
           </Tip>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <SearchBar placeholder="커미션 검색" onSearch={setQ} />
-            {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/comm/new' + secQuery('comm', sec.id))}>＋ ADD COMMISSION</button>}
+            {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/comm/new' + secQuery('comm', sec.id))}>＋ ADD</button>}
           </div>
         </div>
       </div>
