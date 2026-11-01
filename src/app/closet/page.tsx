@@ -41,7 +41,7 @@ function ClosetPageInner() {
     return (
       <ClosetShell
         head={<div className="page-head"><PageTitle href="/closet">CLOSET</PageTitle><p><Link href="/closet">← 옷장 목록</Link></p></div>}
-        variant="room">
+        variant="room" roomName={room.design.gameTitle}>
         <Room room={room} book={book} save={save} isAdmin={isAdmin} loaded={loaded} />
       </ClosetShell>
     );
