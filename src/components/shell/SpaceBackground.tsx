@@ -80,21 +80,22 @@ export function SpaceBackground() {
       c.height = Math.ceil((H + pad * 2) * 0.5);
       const g = c.getContext('2d')!;
       g.scale(0.5, 0.5);
-      // [x, y, 반지름 비율, hue 오프셋, 채도, 밝기, 진하기]
+      // [x, y, 반지름 비율, hue(절대값: 남색·보라·푸른 계열), 채도, 밝기, 진하기] — 포인트색은 한 군데만 살짝
       const blobs: [number, number, number, number, number, number, number][] = [
-        [0.18, 0.22, 0.55, 0, 60, 42, 0.2],
-        [0.82, 0.30, 0.5, -38, 55, 40, 0.17],
-        [0.55, 0.78, 0.6, -24, 62, 38, 0.18],
-        [0.12, 0.85, 0.4, -12, 55, 36, 0.14],
-        [0.9, 0.9, 0.38, -62, 48, 38, 0.15],
+        [0.16, 0.24, 0.6, 255, 70, 46, 0.26],
+        [0.84, 0.28, 0.52, 228, 75, 42, 0.22],
+        [0.55, 0.80, 0.64, 275, 62, 40, 0.24],
+        [0.10, 0.86, 0.42, 215, 70, 38, 0.2],
+        [0.92, 0.88, 0.4, 262, 60, 44, 0.2],
+        [0.50, 0.38, 0.30, hh(0), 55, 46, 0.07],
       ];
       const base = Math.max(W, H);
       for (const [fx, fy, fr, ho, sat, lig, al] of blobs) {
         const x = pad + fx * W, y = pad + fy * H, r = fr * base;
         const gr = g.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, `hsla(${hh(ho)},${sat}%,${lig}%,${al})`);
-        gr.addColorStop(0.45, `hsla(${hh(ho)},${sat}%,${lig}%,${al * 0.35})`);
-        gr.addColorStop(1, `hsla(${hh(ho)},${sat}%,${lig}%,0)`);
+        gr.addColorStop(0, `hsla(${ho},${sat}%,${lig}%,${al * 0.8})`);
+        gr.addColorStop(0.45, `hsla(${ho},${sat}%,${lig}%,${al * 0.28})`);
+        gr.addColorStop(1, `hsla(${ho},${sat}%,${lig}%,0)`);
         g.fillStyle = gr;
         g.fillRect(0, 0, W + pad * 2, H + pad * 2);
       }
@@ -168,9 +169,9 @@ export function SpaceBackground() {
 
     function paintSky() {
       const bg = ctx!.createLinearGradient(0, 0, 0, H);
-      bg.addColorStop(0, `hsl(${hue},35%,3%)`);
-      bg.addColorStop(0.6, `hsl(${hue},34%,5.5%)`);
-      bg.addColorStop(1, `hsl(${hh(10)},36%,9%)`);
+      bg.addColorStop(0, '#03041a');
+      bg.addColorStop(0.55, '#0a0b2e');
+      bg.addColorStop(1, '#160f3d');
       ctx!.fillStyle = bg;
       ctx!.fillRect(0, 0, W, H);
     }
