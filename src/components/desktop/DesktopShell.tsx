@@ -241,7 +241,8 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
     <div className={`dsk-desktop ${dragging ? 'dragging' : ''}`}>
       <div className="dsk-grid" />
       <div className="dsk-area" ref={areaRef}>
-        {wins.length === 0 && (
+        {/* 보이는 창이 하나도 없을 때(창이 없거나, 열린 창이 전부 최소화됐을 때) 시계·터미널 바탕을 보여 준다 */}
+        {!wins.some(w => !w.min) && (
           <DeskHome title={title} nickname={nickname} admin={isAdmin} />
         )}
         {wins.map(w => {
