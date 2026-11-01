@@ -23,6 +23,29 @@ export function SpaceBackground() {
   const embedded = useEmbedded();
   const ref = useRef<HTMLCanvasElement>(null);
 
+  // 우주 모드 표시 — 상단바·작업표시줄·제목 글씨를 밤하늘에 맞게 덮는 CSS가 이 속성에 걸린다 (globals.css)
+  useEffect(() => {
+    const el = document.documentElement;
+    el.setAttribute('data-space', '1');
+    return () => el.removeAttribute('data-space');
+  }, []);
+
+  // 창(iframe) 안 페이지: 캔버스는 바깥 데스크톱에 하나만 — 안쪽 마우스 움직임·클릭을 바깥으로 전달해 반응하게 한다
+  useEffect(() => {
+    if (!embedded) return;
+    const fwd = (type: 'pointermove' | 'pointerdown') => (e: PointerEvent) => {
+      try {
+        const fr = window.frameElement?.getBoundingClientRect();
+        if (!fr) return;
+        window.parent.dispatchEvent(new PointerEvent(type, { clientX: e.clientX + fr.left, clientY: e.clientY + fr.top }));
+      } catch { /* 다른 출처면 무시 */ }
+    };
+    const mv = fwd('pointermove'), dn = fwd('pointerdown');
+    window.addEventListener('pointermove', mv, { passive: true });
+    window.addEventListener('pointerdown', dn, { passive: true });
+    return () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerdown', dn); };
+  }, [embedded]);
+
   useEffect(() => {
     if (embedded) return;
     const cv = ref.current;
