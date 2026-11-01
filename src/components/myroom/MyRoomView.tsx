@@ -84,7 +84,6 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   const [remoteVisible, setRemoteVisibleState] = useState(true);
   const remoteVisRef = useRef(true);
   const [sheetTab, setSheetTab] = useState<'deco' | 'settings'>('deco');
-  const [studioTab, setStudioTab] = useState<'room' | 'library' | 'settings'>('room');
   const [titleShown, setTitleShown] = useState(room.title);
   const [titleInput, setTitleInput] = useState(room.title);
   const [cw, setCw] = useState(room.canvasW);
@@ -103,9 +102,22 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   const [ms, setMs] = useState<{ active: boolean; count: number; pending: 'delete' | 'copy' | null }>({ active: false, count: 0, pending: null });
   const [msMenu, setMsMenu] = useState(false);
   const pendingRef = useRef<'delete' | 'copy' | null>(null);
+  const wsRef = useRef<HTMLDivElement>(null);
 
   const setRemoteVisible = (v: boolean) => { remoteVisRef.current = v; setRemoteVisibleState(v); };
   const curCat = cats.some(c => c.id === activeCat) ? activeCat : cats[0]?.id ?? '';
+
+  // 저장된 아이템(보관 참조) → 화면에서 쓰는 아이템(실제 URL). 처음 불러올 때와 「룸」 탭에서 저장본을 다시 불러올 때 같이 쓴다
+  const resolveRoomItems = async (list: any[]) => {
+    const out: any[] = [];
+    for (const it of list || []) {
+      const c: any = { ...it };
+      if (c.src) { const u = await resolveUrl(c.src); if (u) { refOfUrl.current.set(u, c.src); c.src = u; } }
+      if (c.soundUrl) { const u = await resolveUrl(c.soundUrl); if (u) { refOfUrl.current.set(u, c.soundUrl); c.soundUrl = u; } }
+      out.push(c);
+    }
+    return out;
+  };
 
   /* ---------- 에디터 만들기 ---------- */
   useEffect(() => {
@@ -114,13 +126,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
       try { await loadMyRoomEditor(); } catch { toast('에디터를 불러오지 못했어요'); return; }
       if (dead || !canvasRef.current) return;
       const w = window as any;
-      const resolved: any[] = [];
-      for (const it of roomRef.current.items || []) {
-        const c: any = { ...it };
-        if (c.src) { const u = await resolveUrl(c.src); if (u) { refOfUrl.current.set(u, c.src); c.src = u; } }
-        if (c.soundUrl) { const u = await resolveUrl(c.soundUrl); if (u) { refOfUrl.current.set(u, c.soundUrl); c.soundUrl = u; } }
-        resolved.push(c);
-      }
+      const resolved = await resolveRoomItems(roomRef.current.items || []);
       if (dead) return;
       const back = (u?: string) => (u ? refOfUrl.current.get(u) ?? u : u);
       const ed: Ed = new w.MyRoomEditor({
@@ -183,12 +189,21 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
 
     const updateBigCanvasHeight = () => {
       if (!layout || !wrap || !wrap.classList.contains('mr-fullscreen')) return;
+      const ws = wsRef.current;
       if (window.innerWidth <= 700) {
+        if (ws) ws.style.height = '';
         layout.style.height = '';
         if (roomEl) roomEl.style.height = Math.max(260, Math.round(window.innerHeight * 0.5)) + 'px';
         return;
       }
       if (roomEl) roomEl.style.height = '';
+      if (ws) {
+        // 마이룸 창: 작업 영역이 화면 아래까지 꽉 차게(방 영역은 CSS flex로 남는 높이를 모두 사용)
+        const wtop = ws.getBoundingClientRect().top + window.scrollY;
+        ws.style.height = Math.max(480, window.innerHeight - wtop - 14) + 'px';
+        layout.style.height = '';
+        return;
+      }
       const top = layout.getBoundingClientRect().top;
       layout.style.height = Math.max(320, window.innerHeight - top - 30) + 'px';
     };
@@ -322,7 +337,6 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     setEditing(true); setRemoteVisible(true);
     setTitleInput(roomRef.current.title);
     wrapRef.current?.classList.add('mr-fullscreen', 'mr-editing');
-    setStudioTab('room');
   };
   const exitEdit = () => {
     const ed = edRef.current; if (!ed) return;
@@ -331,8 +345,31 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     setEditing(false); setRemoteVisible(false);
     if (ed.spaceDown) { ed.spaceDown = false; setPanOn(false); outerRef.current?.classList.remove('mr-pan-mode'); }
     wrapRef.current?.classList.remove('mr-editing');
-    setStudioTab('room');
   };
+
+  // 「룸」 탭 — 편집 중이던 내용은 버리고, 저장돼 있는 방을 그대로 다시 불러와서 보여준다
+  const showSavedRoom = async () => {
+    const ed = edRef.current; if (!ed) return;
+    exitEdit();
+    const r = roomRef.current;
+    const items = await resolveRoomItems(r.items || []);
+    if (edRef.current !== ed) return;
+    ed.items = items; ed.canvasW = r.canvasW; ed.canvasH = r.canvasH;
+    ed.history = []; ed.selectedId = null; ed.nextZ = ed._maxZ() + 1; ed.roomTitle = r.title;
+    ed.render();
+    setCw(r.canvasW); setChh(r.canvasH); setCwIn(String(r.canvasW)); setChIn(String(r.canvasH));
+    setTitleInput(r.title); setTitleShown(r.title);
+    apiRef.current?.fit();
+  };
+
+  // 「가구 도감」「룸 설정」 탭 — 리모콘처럼 눌러서 열고, 다시 누르면 닫는다
+  const togglePanel = (tab: 'deco' | 'settings') => {
+    if (!canEdit) return;
+    if (editing && remoteVisible && sheetTab === tab) { setRemoteVisible(false); return; }
+    if (!editing) enterEdit();
+    setSheetTab(tab); setRemoteVisible(true);
+  };
+  const navActive: 'room' | 'library' | 'settings' | null = !editing ? 'room' : remoteVisible ? (sheetTab === 'deco' ? 'library' : 'settings') : null;
 
   const save = () => {
     const ed = edRef.current; if (!ed) return;
@@ -448,14 +485,13 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     <MyRoomShell variant="room">
       <div className="myroom-wrap mr-lab-room" ref={wrapRef} style={{ maxWidth: wrapMax }}>
         <div className="mr-os-chrome"><span className="mr-os-brand">✧ CH-REU <small>PERSONAL SYSTEM</small></span><span className="mr-os-version">INTRANET / ROOM MANAGER v2.1</span><span className="mr-os-session">● ONLINE <span>·</span> {canEdit ? 'OWNER' : 'VISITOR'} <span>·</span> ROOM {room.id.slice(0, 6).toUpperCase()}</span></div>
-        <div className="mr-os-tabs"><span className="mr-os-tab-quiet">WORKSPACE</span><span className="mr-os-tab-current">✦ MY ROOM</span><span className="mr-os-tab-quiet">PERSONAL QUARTERS</span></div>
-        <div className="mr-os-workspace">
+        <div className="mr-os-workspace" ref={wsRef}>
           <aside className="mr-os-sidebar" aria-label="마이룸 도구 메뉴">
             <div className="mr-os-sidebar-head"><small>PERSONAL QUARTERS</small><strong>마이룸</strong><span>MY ROOM / A-07</span></div>
             <div className="mr-os-sidebar-group">
-              <button type="button" className={`mr-os-nav${studioTab === 'room' ? ' selected' : ''}`} onClick={() => { setStudioTab('room'); if (editing) setRemoteVisible(true); }}>⌂ <span>룸 꾸미기</span></button>
-              {canEdit && <button type="button" className={`mr-os-nav${studioTab === 'library' ? ' selected' : ''}`} onClick={() => { if (!editing) enterEdit(); setStudioTab('library'); setSheetTab('deco'); setRemoteVisible(true); }}>▦ <span>가구 도감</span></button>}
-              {canEdit && <button type="button" className={`mr-os-nav${studioTab === 'settings' ? ' selected' : ''}`} onClick={() => { if (!editing) enterEdit(); setStudioTab('settings'); setSheetTab('settings'); setRemoteVisible(true); }}>⚙ <span>룸 설정</span></button>}
+              <button type="button" className={`mr-os-nav${navActive === 'room' ? ' selected' : ''}`} onClick={showSavedRoom}>⌂ <span>룸</span></button>
+              {canEdit && <button type="button" className={`mr-os-nav${navActive === 'library' ? ' selected' : ''}`} onClick={() => togglePanel('deco')}>▦ <span>가구 도감</span></button>}
+              {canEdit && <button type="button" className={`mr-os-nav${navActive === 'settings' ? ' selected' : ''}`} onClick={() => togglePanel('settings')}>⚙ <span>룸 설정</span></button>}
             </div>
             <div className="mr-os-sidebar-detail"><div className="mr-os-room-icon">▱</div><small>ROOM ID</small><strong>{room.id.slice(0, 8).toUpperCase()}</strong><span>{canEdit ? '개인 거주실 · 편집 가능' : '개인 거주실 · 방문자 모드'}</span></div>
             <div className="mr-os-sidebar-foot"><span className="mr-os-dot"/> SYSTEM ONLINE<br/><small>PERSONAL ARCHIVE / CONNECTED</small></div>
@@ -502,7 +538,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
                 <div className="mr-sheet-handle" id="sheet-handle" onClick={() => { if (editing) setRemoteVisible(!remoteVisible); }} />
                 <div className="mr-sheet-header">
                   <div className="mr-sheet-header-title"><span className="mr-lab-panel-kicker">OBJECT LIBRARY / EDITOR</span>꾸미기 도구</div>
-                  <button className="mr-remote-close" type="button" title="편집 닫기" onClick={exitEdit}>✦</button>
+                  <button className="mr-remote-close" type="button" title="패널 닫기" onClick={() => setRemoteVisible(false)}>✦</button>
                 </div>
                 <div className="mr-sheet-tabs">
                   <button type="button" className={`mr-sheet-tab${sheetTab === 'deco' ? ' active' : ''}`} onClick={() => setSheetTab('deco')}>꾸미기</button>

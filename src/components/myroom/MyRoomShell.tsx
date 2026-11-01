@@ -6,9 +6,9 @@ import React from 'react';
 import { RxHud, RxCoord, RxBio } from '@/components/rels/RxHud';
 
 const CSS = `
-.page.cl-stage-page{max-width:none;width:100%;margin:0;padding:0 0 80px;position:relative;animation:none}
+.page.cl-stage-page{max-width:none;width:100%;margin:0;padding:0;position:relative;animation:none}
 .page.cl-stage-page>*{animation:none}
-.cl-content{position:relative;z-index:1;padding:16px clamp(20px,3.4vw,64px) 0}
+.cl-content{position:relative;z-index:1;padding:10px}
 .cl-content.list{padding:0}
 /* 목록 틀의 선 색은 자관·캐릭터 목록(.rx)과 같게 — 선 색 변수를 따로 두지 않는다 */
 .cl-rx{position:relative;margin-top:10px}
