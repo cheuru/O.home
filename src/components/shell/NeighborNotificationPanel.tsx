@@ -10,6 +10,8 @@ type Entry = { key: string; neighborId: string; neighborName: string; title: str
 type Cache = { neighbors: Neighbor[]; entries: Entry[]; read: string[]; hidden: string[] };
 const MAX_FEED_ITEMS = 30;
 const MAX_NEIGHBORS = 30;
+const POLL_MS = 5 * 60 * 1000;   // 새 글 확인 주기
+const MIN_GAP_MS = 15 * 1000;    // 자동 확인 최소 간격
 const KEY = (userId: string) => `ohome.neighbor.v2:${userId}`;
 const fmt = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '날짜 미상' : d.toLocaleString('ko-KR'); };
 const httpsUrl = (raw: string) => {
@@ -81,6 +83,7 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
   const busyRef = useRef(false);
   const neighborsRef = useRef<Neighbor[]>([]);
   neighborsRef.current = neighbors;
+  const lastRef = useRef(0);
   const hiddenRef = useRef<string[]>([]);
   hiddenRef.current = hidden;
   useEffect(() => {
@@ -114,12 +117,21 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
     if (!quiet || fails) setNotice(fails ? `${fails}곳의 공개 피드를 읽지 못했습니다. JSON Feed/CORS를 확인해 주세요.` : '이웃의 공개 새 글을 확인했습니다.');
     setLoading(false); busyRef.current = false;
   }, []);
-  // 이 탭이 열려 있는 동안 5분마다 확인(패널을 닫아 둬도 종 배지에 반영). 탭을 닫으면 확인하지 않음.
+  // 이 탭이 열려 있는 동안 5분마다 확인(패널을 닫아 둬도 종 배지에 반영). 탭이 숨겨져 있으면 건너뛰고,
+  // 다시 보이거나 창에 돌아오면 바로 확인한다. 너무 잦은 요청을 막기 위해 최소 15초 간격.
   useEffect(() => {
     if (!ready || !neighbors.length) return;
-    void refresh(neighbors, true);
-    const timer = window.setInterval(() => void refresh(neighbors, true), 5 * 60 * 1000);
-    return () => window.clearInterval(timer);
+    const tick = () => {
+      if (document.hidden || Date.now() - lastRef.current < MIN_GAP_MS) return;
+      lastRef.current = Date.now();
+      void refresh(neighborsRef.current, true);
+    };
+    tick();
+    const timer = window.setInterval(tick, POLL_MS);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', tick);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', tick); };
   }, [ready, neighbors, refresh]);
   // 패널을 열 때도 한 번 확인
   useEffect(() => { if (open && ready) void refresh(neighborsRef.current, true); }, [open, ready, refresh]);
