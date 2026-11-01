@@ -78,7 +78,7 @@ export function ClickFx() {
         const p = rings[i]; p.t += dt;
         if (p.t > LIFE) { rings.splice(i, 1); continue; }
         const k = p.t / LIFE, e = 1 - Math.pow(1 - k, 3), a = 1 - k;   // 처음엔 빠르게, 끝에서 천천히
-        const R1 = 10 + e * 90, R2 = 5 + e * 52;   // 바깥·안쪽 링 최대 반지름 (예전보다 각각 6px 작게)
+        const R1 = 8 + e * 62, R2 = 5 + e * 46;   // 바깥·안쪽 링 최대 반지름
         // 바깥 링 — 밝은 바탕에서도 보이도록 어두운 밑줄을 한 겹 깔고 포인트색을 얹는다
         ctx.lineWidth = 3.4; ctx.strokeStyle = `rgba(10,10,30,${a * 0.28})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, R1, 0, 6.2832); ctx.stroke();
