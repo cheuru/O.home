@@ -254,7 +254,9 @@ export async function createFirebaseBackend(cfg: FirebaseCfg): Promise<Backend> 
       const own = await ownerInfo();
       const admins = new Set([own?.uid, ...(own?.admins ?? [])].filter(Boolean) as string[]);
       const snap = await getDocs(collection(db, 'profiles'));
-      return snap.docs.map(d => {
+      // 가입 순서대로 — 터미널의 계정 번호(GUEST_0042)가 이 순서를 쓴다
+      const byJoin = [...snap.docs].sort((x, y) => ((x.data() as { createdAt?: number }).createdAt ?? 0) - ((y.data() as { createdAt?: number }).createdAt ?? 0));
+      return byJoin.map(d => {
         // avatarUrl도 함께 — 이미지 정리가 프로필 사진을 「안 쓰는 파일」로 지우지 않게 (v2.0 사용자 제보)
         const v = d.data() as { nickname?: string; avatarUrl?: string };
         return {

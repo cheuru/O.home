@@ -187,21 +187,35 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 .dsk-orbit-core time i { font-style: normal; font-size: .46em; margin-left: .35em; color: #ffc4de; vertical-align: .55em; letter-spacing: .1em; }
 .dsk-orbit-core span { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: clamp(9.5px, 1.5vh, 12px); letter-spacing: .32em; color: #b9b2e0; padding-left: .32em; }
 
-.dsk-term { position: absolute; left: 26px; top: 22px; width: min(340px, 40vw); border: 1px solid rgba(180,170,255,.22); border-radius: 12px;
+.dsk-term { position: absolute; left: 26px; top: 22px; width: min(340px, 40vw); height: 210px; min-width: 220px; min-height: 120px; display: flex; flex-direction: column; border: 1px solid rgba(180,170,255,.22); border-radius: 12px;
   background: rgba(6,7,24,.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 10px 40px rgba(0,0,0,.35); overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; animation: dskIn .9s .2s ease both;
-  pointer-events: auto; cursor: grab; user-select: none; touch-action: none; } /* 드래그로 이동 */
-.dsk-term.drag { cursor: grabbing; box-shadow: 0 14px 48px rgba(0,0,0,.5); border-color: rgba(220,200,255,.4); }
-.dsk-term-bar { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-bottom: 1px solid rgba(180,170,255,.16); font-size: 10px; color: #9d97c8; letter-spacing: .06em; }
+  pointer-events: auto; } /* 제목줄 드래그로 이동, 가장자리 드래그로 크기 조절 */
+.dsk-term.drag { box-shadow: 0 14px 48px rgba(0,0,0,.5); border-color: rgba(220,200,255,.4); }
+.dsk-term-bar { flex: none; cursor: grab; user-select: none; touch-action: none; display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-bottom: 1px solid rgba(180,170,255,.16); font-size: 10px; color: #9d97c8; letter-spacing: .06em; }
 .dsk-term-bar i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,170,205,.7); }
 .dsk-term-bar i:nth-child(2) { background: rgba(190,175,255,.7); } .dsk-term-bar i:nth-child(3) { background: rgba(160,200,255,.7); }
 .dsk-term-bar span { margin-left: 6px; }
-.dsk-term-body { height: 150px; padding: 10px 12px 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
-.dsk-term-body p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #cfc9f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dsk-term.drag .dsk-term-bar { cursor: grabbing; }
+.dsk-term-body { position: relative; flex: 1 1 auto; min-height: 0; padding: 10px 12px 6px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; cursor: text; user-select: text; scrollbar-width: thin; scrollbar-color: rgba(180,170,255,.3) transparent; }
+.dsk-term-log { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
+.dsk-term-in { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.dsk-term-body p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #cfc9f2; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dsk-term-body p.out { padding-left: 14px; color: #a9a3d6; }
+.dsk-term-body p.out.r { padding-left: 0; color: #cfc9f2; }
+.dsk-term-body p.out.r em { color: #b9a8ff; font-weight: 600; }
 .dsk-term-body em { font-style: normal; color: #ff9fc6; margin-right: 4px; }
 .dsk-term-body p.cur u { display: inline-block; width: 7px; height: 12px; margin-left: 2px; vertical-align: -2px; background: #ffd0e4; animation: dskBlink 1s steps(1) infinite; }
-.dsk-term-foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 8px; border-top: 1px solid rgba(180,170,255,.14); font-size: 10px; letter-spacing: .2em; color: #8f89bb; }
+.dsk-term-foot { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 8px; border-top: 1px solid rgba(180,170,255,.14); font-size: 10px; letter-spacing: .2em; color: #8f89bb; }
 .dsk-term-foot b { font-weight: 500; letter-spacing: .12em; color: #ffd6e8; }
+/* 크기 조절 손잡이 — 테두리 안쪽에 겹쳐 둔다 (box 가 overflow:hidden 이라 밖으로 못 나감) */
+.dsk-rz { position: absolute; z-index: 3; touch-action: none; }
+.dsk-rz.n, .dsk-rz.s { left: 12px; right: 12px; height: 6px; cursor: ns-resize; } .dsk-rz.n { top: 0; } .dsk-rz.s { bottom: 0; }
+.dsk-rz.e, .dsk-rz.w { top: 12px; bottom: 12px; width: 6px; cursor: ew-resize; } .dsk-rz.e { right: 0; } .dsk-rz.w { left: 0; }
+.dsk-rz.ne, .dsk-rz.nw, .dsk-rz.se, .dsk-rz.sw { width: 14px; height: 14px; }
+.dsk-rz.ne { top: 0; right: 0; cursor: nesw-resize; } .dsk-rz.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.dsk-rz.nw { top: 0; left: 0; cursor: nwse-resize; } .dsk-rz.se { bottom: 0; right: 0; cursor: nwse-resize; }
+.dsk-rz.se::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 6px; height: 6px; border-right: 1.5px solid rgba(255,159,198,.55); border-bottom: 1.5px solid rgba(255,159,198,.55); }
 @keyframes dskIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dskSpin { to { transform: rotate(360deg); } }
 @keyframes dskBlink { 50% { opacity: 0; } }
