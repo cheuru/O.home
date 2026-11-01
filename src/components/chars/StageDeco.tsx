@@ -80,7 +80,7 @@ const ORBITS = [
 // 궤도 위에 놓인 가만한 점들 — [반지름 배수, 각도(rad), 크기]
 const ORB_DOTS = [[1.5, -0.5, 5.5], [2.05, 0.9, 4.5], [1.0, 2.4, 4], [2.05, -2.3, 5], [1.5, 2.9, 3.5], [2.65, 0.2, 4]] as const;
 // tech(자캐 상세) 프레임 중심 높이 비율 — 기본 0.52보다 큰 만큼 프레임과 그림이 같이 내려간다
-const TECH_Y = 0.56;
+const TECH_Y = 0.6;
 const BEAM_DEG = -15.5;   // 기운 직선의 각도
 const ORB_CSS = `@keyframes dcOrb{to{transform:rotate(360deg)}}
 @keyframes dcSlide{0%,100%{transform:translateX(calc(var(--amp,260px) * -1))}50%{transform:translateX(var(--amp,260px))}}
@@ -104,8 +104,7 @@ function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: numbe
     </g>
   );
 }
-/* ── tech 변형 — 자캐 상세: 원 대신 뷰파인더 프레임·치수선·성좌 (우주 × 컴퓨터 × 공학) ── */
-const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+/* ── tech 변형 — 자캐 상세: 원 대신 뷰파인더 프레임·성좌 (우주 × 컴퓨터 × 공학) ── */
 // 성좌 — 점 몇 개를 가는 선으로 잇는다 (메인의 별자리 배경과 같은 말투)
 const CONSTS: { pts: [number, number][]; edges: [number, number][] }[] = [
   { pts: [[470, 150], [560, 205], [640, 150], [700, 260], [600, 330]], edges: [[0, 1], [1, 2], [1, 3], [3, 4]] },
@@ -125,7 +124,7 @@ interface Props {
   mode: DecoMode;
   /** 뒤쪽 큰 도형 모양 — 비우면 반원 */
   shape?: DecoShape;
-  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선 — 자관) · 'tech'(뷰파인더 프레임·치수선·성좌 — 자캐) */
+  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선 — 자관) · 'tech'(뷰파인더 프레임·성좌 — 자캐) */
   variant?: 'classic' | 'orbit' | 'tech';
   /** true면 뒤쪽 큰 도형(반원·판)과 그 윤곽선을 그리지 않는다 */
   noShape?: boolean;
@@ -371,14 +370,6 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             <rect x={F.x} y={F.y} width={F.w} height={F.h} fill="none" stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".5" />
             <path fill="none" stroke="var(--d-acc)" strokeWidth="2.2" strokeLinecap="square" opacity=".9"
               d={`M${F.x} ${F.y + 40}V${F.y}H${F.x + 40}M${F.x + F.w - 40} ${F.y}H${F.x + F.w}V${F.y + 40}M${F.x} ${F.y + F.h - 40}V${F.y + F.h}H${F.x + 40}M${F.x + F.w - 40} ${F.y + F.h}H${F.x + F.w}V${F.y + F.h - 40}`} />
-            {/* 치수선 — 아래(가로)·왼쪽(세로). 양 끝 화살표 + 가운데 숫자 */}
-            <g stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" fill="none" opacity=".75">
-              <path d={`M${F.x} ${F.y + F.h + 26}H${F.x + F.w / 2 - 34}M${F.x + F.w / 2 + 34} ${F.y + F.h + 26}H${F.x + F.w}M${F.x + 9} ${F.y + F.h + 22}L${F.x} ${F.y + F.h + 26}L${F.x + 9} ${F.y + F.h + 30}M${F.x + F.w - 9} ${F.y + F.h + 22}L${F.x + F.w} ${F.y + F.h + 26}L${F.x + F.w - 9} ${F.y + F.h + 30}M${F.x} ${F.y + F.h + 18}V${F.y + F.h + 34}M${F.x + F.w} ${F.y + F.h + 18}V${F.y + F.h + 34}`} />
-              <path d={`M${F.x - 26} ${F.y}V${F.y + F.h / 2 - 34}M${F.x - 26} ${F.y + F.h / 2 + 34}V${F.y + F.h}M${F.x - 30} ${F.y + 9}L${F.x - 26} ${F.y}L${F.x - 22} ${F.y + 9}M${F.x - 30} ${F.y + F.h - 9}L${F.x - 26} ${F.y + F.h}L${F.x - 22} ${F.y + F.h - 9}M${F.x - 34} ${F.y}H${F.x - 18}M${F.x - 34} ${F.y + F.h}H${F.x - 18}`} />
-            </g>
-            <Scr text={`W ${F.w}`} delay={1000} period={7000} x={F.x + F.w / 2} y={F.y + F.h + 30} fontSize="11" letterSpacing="2" fill="var(--d-line)" textAnchor="middle" fontFamily={MONO} />
-            <text x={F.x - 26} y={F.y + F.h / 2 + 4} fontSize="11" letterSpacing="2" fill="var(--d-line)" textAnchor="middle" fontFamily={MONO}
-              transform={`rotate(-90 ${F.x - 26} ${F.y + F.h / 2})`}>{`H ${F.h}`}</text>
             {/* 화면 끝까지 뻗는 직선 + 그 위를 오가는 점 */}
             <line x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}
               stroke="url(#dc-beam)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
@@ -478,7 +469,7 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
         {orb || tech ? (
           <>
             <Bars x={1730} y={380} rot={0} d={0.7} acc={acc} />
-            <Bars x={110} y={470} rot={90} d={0.8} acc={acc} />
+            {!tech && <Bars x={110} y={470} rot={90} d={0.8} acc={acc} />}
             <Bars x={1040} y={1010} rot={180} d={0.9} acc={acc} />
           </>
         ) : (
