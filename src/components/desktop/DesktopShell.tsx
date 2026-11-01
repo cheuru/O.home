@@ -10,7 +10,7 @@ import { useBoards } from '@/lib/boardStore';
 import { sectionMenuEntries, useSections } from '@/lib/sectionStore';
 import { linkEntries, useCustomLinks } from '@/lib/linkStore';
 import { useSiteSettings } from '@/lib/siteStore';
-import { FLAG_BOOTED, FLAG_CLASSIC, FLAG_ENTERED, flag, glyphFor, groupGlyph, setFlag } from '@/lib/desktopConfig';
+import { FLAG_BOOTED, FLAG_ENTERED, flag, glyphFor, groupGlyph, setFlag } from '@/lib/desktopConfig';
 import { BootScreen } from './BootScreen';
 import { LoginScreen } from './LoginScreen';
 
@@ -337,7 +337,6 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
               ) : (
                 <button onClick={() => { setUserOpen(false); onLogin(); }}>로그인</button>
               )}
-              <button onClick={() => { setFlag(FLAG_CLASSIC, true); }}>기존 홈으로 보기</button>
               {nickname && <button onClick={() => { setUserOpen(false); onLogout(); }}>로그아웃</button>}
             </div>
           )}
