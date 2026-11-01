@@ -27,7 +27,7 @@ import { RelTab } from '@/components/chars/RelTab';
 import { StageWindow, type StageWindowItem } from '@/components/chars/StageWindow';
 import type { BackupPost } from '@/lib/galleryStore';
 import { SpecsDisplay, PlainSpecRow } from '@/components/chars/SpecsDisplay';
-import { useStageInk } from '@/lib/useBgInk';
+import { useBgInk } from '@/lib/useBgInk';
 import { StageDeco } from '@/components/chars/StageDeco';
 
 /** 우측 정보 패널에서 「기본 정보」·탭 다음으로 쓰는 세 번째 특수 탭 값 — TRPG 버튼(EDIT·DELETE·
@@ -216,7 +216,15 @@ function CharDetailInner() {
   });
   const [artIdx, setArtIdx] = useState(0);
   // 스테이지 소개 본문 글자색 — 캐릭터마다 배경이 다르므로 지금 깔린 배경의 밝기를 재서 자동으로 (밝은 배경 → 어두운 글자)
-  const bgInk = useStageInk();
+  const bgInk = useBgInk();
+  // 좁은 화면(≤960px)은 그림·글이 위에서 아래로 쌓여서, PC 기준 위치의 큰 프레임은 빼고 나머지 장식만 깐다
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width:960px)');
+    const on = () => setNarrow(mq.matches);
+    on(); mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const [delAsk, setDelAsk] = useState(false);   // 캐릭터 삭제 확인
   const infoRef = useRef<HTMLDivElement>(null);
 
@@ -445,7 +453,7 @@ function CharDetailInner() {
         style={{ fontFamily: familyOf(eff.bodyFontId), '--char-theme': eff.color, ...(customInk ? { '--cs-body': customInk } : {}) } as React.CSSProperties}>
         {/* 배경 장식 — 그림보다 뒤. 이미지를 등록하면 기본은 이미지 전체 + 흰색/검은색 장식, 「장식 안에 이미지」면 띠 안에 이미지 + 포인트색 */}
         {decoOn && (
-          <StageDeco variant="tech" mode={bgUrl && !decoBand ? 'mono' : 'accent'} tone={bgInk === 'dark' ? 'light' : 'dark'}
+          <StageDeco variant="tech" noShape={narrow} mode={bgUrl && !decoBand ? 'mono' : 'accent'} tone={bgInk === 'dark' ? 'light' : 'dark'}
             ink={bgInk === 'dark' ? 'dark' : 'light'} image={decoBand ? bgUrl : undefined} blur={bgBlur}
             ghost={eff.altName?.trim() || undefined} ghostFont={familyOf(eff.decoFontId || eff.fontId) ?? undefined}
             ghostPos={eff.decoGhost ?? undefined}
