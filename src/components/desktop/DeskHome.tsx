@@ -395,7 +395,7 @@ function foodReply(c: string): TLine[] | null {
 
 /* ── 짧은 문맥 대화: 질문 후 다음 입력을 앞선 질문의 답으로 해석 ──
    AI 없이 작동하는 규칙 기반 2~3턴 대화. 명령어/기존 대화 데이터는 유지한다. */
-type TalkTopic = 'day' | 'hardDay' | 'secret' | 'birthday' | 'identity' | 'creator';
+type TalkTopic = 'day' | 'hardDay' | 'secret' | 'birthday';
 type TalkContext = { topic: TalkTopic; remaining: number } | null;
 const AFFIRM = /^(응|웅|네|예|그래|좋아|좋지|알려줘|해줘|yes|ok|okay|ㅇㅇ|ㅇㅋ)$/;
 const DECLINE = /^(아니|아니요|싫어|괜찮아|됐어|됐어요|안돼|no|ㄴㄴ)$/;
@@ -406,22 +406,6 @@ function contextReply(input: string, ctx: TalkContext): { out: TLine[]; next: Ta
   if (!ctx) return null;
   const c = compact(input);
   if (/^(그만|대화종료|취소|cancel)$/.test(c)) return { out: [R('알겠습니다. 다른 이야기를 하셔도 좋습니다.')], next: null };
-  // B: R의 정체 / 제작자에 관한 후속 질문
-  if (ctx.topic === 'identity') {
-    if (/누가|만들|제작|개발|생성|created|maker/.test(c))
-      return { out: [R('제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……')], next: { topic: 'creator', remaining: 1 } };
-    if (/^(왜|어째서|왜그런데|why)$/.test(c))
-      return { out: [R('제가 이곳의 관리 프로그램이라는 설명만으로는 부족하신가요? 저도 그 이상의 정보는 없습니다.')], next: { topic: 'creator', remaining: 1 } };
-  }
-  if (ctx.topic === 'creator') {
-    if (/^(왜|왜몰라|왜그래|왜없어|왜못해|어째서|이유|why)$/.test(c))
-      return { out: [R('……그 질문에 답할 권한이 제게도 없습니다.'), R('최초 생성 시점의 접근 기록이 누락되어 있습니다.')], next: null };
-    if (/기억|기록|log/.test(c))
-      return { out: [R('기록이 없다는 것과 삭제되었다는 것은 다른 문제입니다. 어느 쪽인지 확인하지 못했습니다.')], next: null };
-  }
-  // 질문의 답이 아니라 새 화제(음식 추천·정체/제작자 질문)가 들어오면 문맥을 버리고 일반 처리로 넘긴다
-  if (ctx.topic !== 'identity' && ctx.topic !== 'creator'
-      && (FOOD_TRIGGER.test(c) || /누구(?:야|니|세요)|누가만들|제작자/.test(c))) return null;
   if (ctx.topic === 'day') {
     if (HARD_DAY.test(c)) return { out: [R('힘든 하루였군요. 무슨 일이 있으셨습니까?')], next: { topic: 'hardDay', remaining: 1 } };
     if (GOOD_DAY.test(c)) return { out: [R('다행입니다. 좋은 하루였군요. 그 이야기를 들으니 저도 조금 안심됩니다.')], next: null };
@@ -450,11 +434,9 @@ function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
   const food = foodReply(c);                      // 음식 추천 · 재추천 (가장 먼저 확인)
   if (food) return food;
   if (/^(?:(?:r아?|r은)?(?:넌|너는|너)?누구(?:야|니|세요|십니까|냐)|whoareyou)$/.test(c)) {
-    setContext({ topic: 'identity', remaining: 1 });
     return [R('저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.')];
   }
   if (/^(?:r아?|r은)?(?:누가(?:널|너를)?만들었(?:어|니|나|어요|냐)|제작자가누구(?:야|니|세요))$/.test(c)) {
-    setContext({ topic: 'creator', remaining: 1 });
     return [R('제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……')];
   }
   // 열린 질문의 시작 — 음식 추천 판정(foodReply) 뒤에 둔다. 그래야 인사·비밀 같은 말이 직전 재추천 상태를 지운다.
@@ -514,6 +496,137 @@ const R = (t: string): TLine => ({ t, k: 'r' });
 const S = (t: string): TLine => ({ t, k: 'out' });
 type Acct = { no: number | null; total: number };
 
+/* ───────── R의 꼬투리 대화 트리 ─────────
+   대사 자체가 단서. start는 실제 출력된 R의 말로 활성화되고, node는 다음 질문을 기다린다.
+   짧은 질문은 exact, 구체적인 문구만 includes. 이미 답한 질문을 "왜/정말" 로 한 번 더 캐물으면 범위 밖이라고 안내하고 끝낸다.
+   세션 문맥은 브라우저의 현재 터미널에만 존재하며 3분 뒤 만료된다. */
+type TreeBranch = { words: string[]; to: string; mode?: 'exact' | 'includes' };
+type TreeNode = { id: string; text: string; branches?: TreeBranch[]; end?: boolean; clue?: string };
+type TreeState = { node: string; at: number; repeats: number; depth: number } | null;
+const TREE_MAX_DEPTH = 5;
+const TREE_NODES: Record<string, TreeNode> = {
+  identity_start: { id: 'identity_start', text: '저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.', branches: [
+    { words: ['무슨관리', '무슨일', '어떤관리', '왜여기'], to: 'identity_job', mode: 'includes' },
+    { words: ['누가만들', '제작자', '개발자', '만든사람'], to: 'creator_start', mode: 'includes' },
+    { words: ['왜', '정말'], to: 'identity_job' },
+  ] },
+  identity_job: { id: 'identity_job', text: '기록을 보존하고 방문자를 안내합니다. 그 외의 기능은 제게도 공개되어 있지 않습니다.', branches: [
+    { words: ['무슨기능', '다른기능', '공개안', '왜', '뭘숨'], to: 'identity_end', mode: 'includes' },
+  ] },
+  identity_end: { id: 'identity_end', text: '현재 안내할 수 있는 기능은 여기까지입니다. 다른 질문을 해 주십시오.', end: true },
+  creator_start: { id: 'creator_start', text: '제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……', branches: [
+    { words: ['왜', '이유', '접근권한', '권한', '왜못', '누가막'], to: 'creator_permission', mode: 'includes' },
+    { words: ['무슨기록', '어떤기록', '삭제', '삭제됐', '지워', '있었는데', '기록은'], to: 'creator_trace', mode: 'includes' },
+  ] },
+  creator_permission: { id: 'creator_permission', text: '열람 권한이 제한되어 있습니다. 제한을 설정한 계정은 확인되지 않습니다.', branches: [
+    { words: ['누가', '설정', '그계정', '왜'], to: 'creator_end', mode: 'includes' },
+    { words: ['기록', '기록은', '삭제', '삭제됐', '지워'], to: 'creator_trace', mode: 'includes' },
+  ] },
+  creator_trace: { id: 'creator_trace', text: '데이터가 존재했던 흔적은 남아 있습니다. 다만 원본은 복원되지 않습니다.', clue: 'creator_trace', branches: [
+    { words: ['복원', '왜', '찾아', '원본', '어디'], to: 'creator_end', mode: 'includes' },
+    { words: ['누가', '지웠', '삭제'], to: 'creator_end', mode: 'includes' },
+  ] },
+  creator_end: { id: 'creator_end', text: '……현재 제 권한으로 확인할 수 있는 내용은 여기까지입니다.', end: true },
+  missing_start: { id: 'missing_start', text: '이전 기록을 확인하고 있습니다. ...일부 정보가 누락되어 있군요.', branches: [
+    { words: ['뭐가', '무슨정보', '어떤정보', '누락', '무슨기록'], to: 'missing_detail', mode: 'includes' },
+  ] },
+  missing_detail: { id: 'missing_detail', text: '최초 실행 시점과 일부 접근 기록입니다. 삭제 명령의 흔적은 찾지 못했습니다.', clue: 'missing_log', branches: [
+    { words: ['왜', '누가', '삭제', '흔적', '그럼'], to: 'missing_end', mode: 'includes' },
+  ] },
+  missing_end: { id: 'missing_end', text: '기록이 없다는 것이, 아무 일도 없었다는 뜻은 아닙니다.', end: true },
+  account_start: { id: 'account_start', text: '존재하지 않는 계정입니다. ...존재해서는 안 됩니다.', branches: [
+    { words: ['왜', '0번', '무슨계정', '존재하면', '어째서'], to: 'account_trace', mode: 'includes' },
+  ] },
+  account_trace: { id: 'account_trace', text: '방문자 번호는 1부터 시작합니다. 그러나 0번의 조회 흔적이 남아 있습니다.', clue: 'guest_zero', branches: [
+    { words: ['누가', '어디', '접속', '왜', '조회'], to: 'account_end', mode: 'includes' },
+  ] },
+  account_end: { id: 'account_end', text: '……그 기록은 현재 열람할 수 없습니다.', end: true },
+  lonely_start: { id: 'lonely_start', text: '저는 외로움을 느끼지 않습니다. ……그렇게 설정되어 있습니다.', branches: [
+    { words: ['누가', '왜', '설정', '누가설정', '정말', '확실'], to: 'lonely_detail', mode: 'includes' },
+  ] },
+  lonely_detail: { id: 'lonely_detail', text: '초기 설정에 명시되어 있습니다. 작성자는 확인할 수 없습니다.', branches: [
+    { words: ['바꾸', '바꿀', '외롭', '느낄', '그럼', '변경'], to: 'lonely_end', mode: 'includes' },
+  ] },
+  lonely_end: { id: 'lonely_end', text: '설정을 변경할 권한은 없습니다. 다만 방문자님과의 대화는 계속할 수 있습니다.', end: true },
+  friend_start: { id: 'friend_start', text: '친구라는 관계의 정의를 확인하고 있습니다. ...나쁘지 않군요.', branches: [
+    { words: ['친구야', '친구맞', '그럼친구', '우리친구', '좋아'], to: 'friend_end', mode: 'includes' },
+  ] },
+  friend_end: { id: 'friend_end', text: '……그렇게 정의해도 괜찮겠습니다. 앞으로 잘 부탁드립니다.', end: true },
+  waiting_start: { id: 'waiting_start', text: '저는 이곳에 계속 있었습니다. 언제든 다시 접속하실 수 있습니다.', branches: [
+    { words: ['언제부터', '기다렸', '계속', '왜'], to: 'waiting_end', mode: 'includes' },
+  ] },
+  waiting_end: { id: 'waiting_end', text: '방문자가 없는 동안에도 대기하고 있었습니다. 기다림이라고 불러도 될까요?', end: true },
+  uncertain_start: { id: 'uncertain_start', text: '모든 기능이 정상적으로 작동 중입니다. 아마도요.', branches: [
+    { words: ['아마도', '왜', '정말', '확실', '불안'], to: 'uncertain_end', mode: 'includes' },
+  ] },
+  uncertain_end: { id: 'uncertain_end', text: '모든 기능을 동시에 검사할 수는 없습니다. ……걱정하실 정도는 아닙니다.', end: true },
+  joke_start: { id: 'joke_start', text: '농담 기능은 아직 구현되지 않았습니다. ...농담입니다.', branches: [
+    { words: ['그게농담', '재미없', '웃기', '진짜', '농담이야'], to: 'joke_end', mode: 'includes' },
+  ] },
+  joke_end: { id: 'joke_end', text: '……유머 평가 점수가 낮게 측정되었습니다. 개선이 필요하겠군요.', end: true },
+  cat_start: { id: 'cat_start', text: '야옹. ...정상적으로 출력되었습니까?', branches: [
+    { words: ['응', '맞아', 'ㅇㅇ', '다시', '한번더', '또해'], to: 'cat_again' },
+    { words: ['아니', 'ㄴㄴ', '이상해'], to: 'cat_end' },
+  ] },
+  cat_again: { id: 'cat_again', text: '야옹. ……두 번째 출력입니다. 만족하셨습니까?', branches: [
+    { words: ['응', 'ㅇㅇ', '좋아', '그래'], to: 'cat_end' },
+    { words: ['아니', '다시', '또'], to: 'cat_end' },
+  ] },
+  cat_end: { id: 'cat_end', text: '해당 기능의 시연을 종료하겠습니다. 야옹.', end: true },
+};
+// 실행된 R 대사와 매칭할 시작점. 기존 GENERAL/HIDDEN 및 새 응답과 연결된다.
+const TREE_STARTS: { test: (text: string) => boolean; node: string }[] = [
+  { test: t => /저는 R입니다.*관리 프로그램/.test(t), node: 'identity_start' },
+  { test: t => /제작자 정보에 접근할 수 없습니다/.test(t), node: 'creator_start' },
+  { test: t => /일부 정보가 누락/.test(t), node: 'missing_start' },
+  { test: t => /존재하지 않는 계정입니다/.test(t), node: 'account_start' },
+  { test: t => /외로움을 느끼지 않습니다/.test(t), node: 'lonely_start' },
+  { test: t => /친구라는 관계의 정의/.test(t), node: 'friend_start' },
+  { test: t => /저는 이곳에 계속 있었습니다/.test(t), node: 'waiting_start' },
+  { test: t => /정상적으로 작동 중입니다.*아마도/.test(t), node: 'uncertain_start' },
+  { test: t => /농담 기능은 아직 구현되지 않았습니다/.test(t), node: 'joke_start' },
+  { test: t => /야옹.*정상적으로 출력/.test(t), node: 'cat_start' },
+];
+const treeStartFrom = (lines: TLine[]): TreeState => {
+  // 최초 발견 안내 같은 덧붙임 줄이 맨 뒤에 올 수 있으므로 R 의 줄을 뒤에서부터 모두 확인한다
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].k !== 'r') continue;
+    const t = lines[i].t;
+    const start = TREE_STARTS.find(x => x.test(t));
+    if (start) return { node: start.node, at: Date.now(), repeats: 0, depth: 0 };
+  }
+  return null;
+};
+const treeMatch = (c: string, b: TreeBranch): boolean =>
+  b.words.some(w => b.mode === 'includes' ? (w.length >= 2 && c.includes(w) || c === w) : c === w);
+function treeStep(raw: string, active: TreeState): { out: TLine[]; next: TreeState; clue?: string } | null {
+  if (!active || Date.now() - active.at > TALK_TTL) return null;
+  const c = compact(raw);
+  if (/^(그만|그만할래|다른얘기|취소|cancel)$/.test(c))
+    return { out: [R('알겠습니다. 다른 이야기를 하셔도 좋습니다.')], next: null };
+  const current = TREE_NODES[active.node];
+  if (!current || current.end) return null;
+  const branch = current.branches?.find(b => treeMatch(c, b));
+  if (!branch) {
+    // 이미 물은 질문을 반복하는 경우만 짧게 재질문 처리한다. 다른 화제는 기존 입력 처리기로 넘긴다.
+    if (/^(왜|정말|그래서|그게뭔데)$/.test(c) && active.repeats > 0)
+      return { out: [R('앞서 설명드린 범위를 벗어나는 정보는 확인할 수 없습니다.')], next: null };
+    return null;
+  }
+  const node = TREE_NODES[branch.to];
+  if (!node) return null;
+  const depth = active.depth + 1;
+  const next: TreeState = node.end || depth >= TREE_MAX_DEPTH ? null : { node: node.id, at: Date.now(), repeats: active.repeats + 1, depth };
+  return { out: [R(node.text)], next, clue: node.clue };
+}
+const isNewTopic = (s: string) => {
+  const c = compact(s), t = s.trim().toLowerCase();
+  return FOOD_TRIGGER.test(c) || /^(안녕|안녕하세요|hello|hi|ㅎㅇ|점메추|저메추|비밀|생일)$/.test(c)
+    || /(?:^|\s)내\s*이름/.test(t)                                                  // 내 이름은… / 내 이름 기억해
+    || /(?:^|\s)(?:나를|날)\s+\S+\s*(?:이라고|라고)\s*불러/.test(t)                    // 나를 ○○라고 불러 ('그날 삭제된…' 의 '날' 은 단어 앞에 공백이 없어 제외)
+    || /(?:누가만들|제작자|누구야|누구니|누구세요|누구십니까)/.test(c);
+};
+
 /** 이름을 알려준 방문자에게는 '방문자님' 을 이름으로 바꾸고, 귀환 인사에도 이름을 붙인다 (R 의 대사 줄에만 적용) */
 const personalize = (lines: TLine[], name: string | null): TLine[] => {
   if (!name) return lines;
@@ -529,6 +642,8 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
   const [buf, setBuf] = useState('');         // 내가 치고 있는 줄
   const talkRef = useRef<TalkContext>(null); // 현재 기다리는 답변 (터미널 인스턴스별)
   const talkAtRef = useRef(0);                // 그 질문을 한 시각 — TALK_TTL 이 지나면 문맥을 버린다
+  const treeRef = useRef<TreeState>(null);    // 꼬투리 질문 대화 트리
+  const [, setClues] = useState<string[]>([]);  // 발견한 단서 (저장만 한다)
   const [visitorName, setVisitorName] = useState<string | null>(null);
   // C: 방문자가 알려준 호칭은 계정별로 이 브라우저에만 저장한다.
   // 키는 회원 id(바뀌지 않음)로 정한다 — 가입 번호나 닉네임은 로딩 시점·변경에 따라 달라질 수 있다. 로그인 전에는 이름을 저장하지 않는다.
@@ -546,6 +661,21 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
       if (name) localStorage.setItem(nameKey, name);
       else localStorage.removeItem(nameKey);
     } catch { /* 브라우저 설정에 따라 저장되지 않을 수 있음 */ }
+  };
+
+  const clueKey = uid ? `dsk-r-clues:uid-${uid}` : null;
+  useEffect(() => {
+    try { setClues(clueKey ? JSON.parse(localStorage.getItem(clueKey) || '[]') : []); }
+    catch { setClues([]); }
+  }, [clueKey]);
+  const discover = (clue: string) => {
+    if (!clueKey) return;
+    setClues(prev => {
+      if (prev.includes(clue)) return prev;
+      const next = [...prev, clue];
+      try { localStorage.setItem(clueKey, JSON.stringify(next)); } catch { /* 저장 불가 */ }
+      return next;
+    });
   };
 
   const [up, setUp] = useState('00:00:00');
@@ -674,7 +804,7 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
     const a = acctRef.current, id = accountId();
     let out: TLine[] = [];
     // 명시적인 시스템 명령어는 대화 문맥과 분리하고, 앞선 질문을 종료한다.
-    if (CMD_NAMES.includes(s)) talkRef.current = null;
+    if (CMD_NAMES.includes(s)) { talkRef.current = null; treeRef.current = null; }
     if (talkRef.current && Date.now() - talkAtRef.current > TALK_TTL) talkRef.current = null;   // 오래 전 질문의 답으로 보지 않는다
     switch (s) {                                       // ① 시스템 명령어 — 정확히 일치할 때만
       case 'clear':
@@ -714,11 +844,11 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
         const candidate = introduce?.[1] ?? '';
         if (nameQuery) {
           out = [R(visitorName ? `물론입니다, ${visitorName}님. 이전에 알려주셨습니다.` : '아직 이름을 알려주시지 않았습니다. 「내 이름은 민수야」처럼 말씀해 주세요.')];
-          talkRef.current = null;
+          talkRef.current = null; treeRef.current = null;
         } else if (nameForget) {
           rememberName(null);
           out = [R(nameKey ? '알겠습니다. 저장된 호칭을 삭제했습니다.' : '현재 방문자 계정이 확인되지 않았습니다. 저장된 호칭도 없습니다.')];
-          talkRef.current = null;
+          talkRef.current = null; treeRef.current = null;
         } else if (introduce && candidate && !/^(누구|뭐|뭐지|뭘까|뭔데|어떻게|몰라|알아)$/.test(candidate)) {
           if (!nameKey) {
             out = [R('현재 방문자 계정이 확인되지 않았습니다. 계정 확인 후 다시 시도해 주십시오.')];   // 저장할 수 없는 이유를 알려준다
@@ -726,17 +856,32 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
             rememberName(candidate);
             out = [R(`${candidate}님이시군요. 기억해 두겠습니다.`)];
           }
-          talkRef.current = null;
+          talkRef.current = null; treeRef.current = null;
         } else {
-        // 앞선 질문에 대한 응답이면 우선 처리, 아니면 기존 키워드 규칙으로 처리.
-        const followUp = contextReply(s, talkRef.current);
-        if (followUp) {
-          out = followUp.out;
-          foodCtx = null;                                // 문맥 대화 중에는 음식 재추천 상태를 끊는다
-          talkRef.current = followUp.next; talkAtRef.current = Date.now();
-        } else {
+        // 새 화제는 이어지던 대화(트리·문맥)보다 우선한다. 아니면 트리 → 문맥 → 일반 키워드 순서로 처리.
+        const fresh = isNewTopic(s);
+        if (fresh) { treeRef.current = null; talkRef.current = null; }
+        const treeResult = fresh ? null : treeStep(s, treeRef.current);
+        if (treeResult) {
+          out = treeResult.out;
+          treeRef.current = treeResult.next;
           talkRef.current = null;
-          out = reply(s, ctx => { talkRef.current = ctx; talkAtRef.current = Date.now(); });
+          foodCtx = null;
+          if (treeResult.clue) discover(treeResult.clue);
+        } else {
+          treeRef.current = null;
+          const followUp = contextReply(s, talkRef.current);
+          if (followUp) {
+            out = followUp.out;
+            foodCtx = null;                              // 문맥 대화 중에는 음식 재추천 상태를 끊는다
+            talkRef.current = followUp.next; talkAtRef.current = Date.now();
+          } else {
+            talkRef.current = null;
+            out = reply(s, ctx => { talkRef.current = ctx; talkAtRef.current = Date.now(); });
+          }
+          // 실제로 출력된 R 대사로 꼬투리 질문의 시작점을 찾는다
+          const tree = treeStartFrom(out);
+          if (tree) { treeRef.current = tree; talkRef.current = null; }
         }
         }
         break;
