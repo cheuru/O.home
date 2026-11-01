@@ -6,7 +6,7 @@
 
 
 /* ── 레이더 ── */
-.rx-hud-radar{position:absolute;right:2%;top:56%;height:max(88%,340px);width:auto;aspect-ratio:1;transform:translateY(-50%);opacity:.6}
+.rx-hud-radar{position:absolute;right:5%;top:56%;height:max(58%,220px);width:auto;aspect-ratio:1;transform:translateY(-50%);opacity:.6}
 .rx-hud-radar svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .hr-spin{transform-box:view-box;transform-origin:50% 50%}
 .hr-spin.a{animation:rxSpin 60s linear infinite}
@@ -64,15 +64,17 @@
 .rx-coord i{width:5px;height:5px;border-radius:50%;background:var(--hud);animation:rxHudDot 1.2s steps(1) infinite}
 @keyframes rxHudDot{50%{opacity:.15}}
 
-/* ── 바닥줄 심박선 ── */
-.rx-pulse{display:inline-flex;align-items:center;gap:10px;flex:1;max-width:300px;min-width:0;color:var(--hud)}
-.rx-pulse-svg{flex:1;min-width:40px;height:20px;overflow:hidden;
-  -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
-.rx-pulse-svg path{fill:none;stroke:currentColor;stroke-width:1.3;vector-effect:non-scaling-stroke;stroke-linejoin:round}
-.rx-pulse-run{animation:rxPulseRun 2.4s linear infinite}
-@keyframes rxPulseRun{to{transform:translateX(-120px)}}
-.rx-pulse b{font:700 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;white-space:nowrap}
-.rx-pulse b small{font-size:8px;opacity:.6;font-weight:600}
+/* ── 바닥줄 바이오리듬 ── */
+.rx-bio{display:inline-flex;align-items:center;gap:10px;flex:1;max-width:320px;min-width:0;color:var(--hud)}
+.rx-bio-svg{flex:1;min-width:40px;height:24px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)}
+.rx-bio-svg path{fill:none;stroke:currentColor;stroke-width:1.2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.rx-bio-svg path:nth-of-type(2){opacity:.75}
+.rx-bio-svg path:nth-of-type(3){opacity:.55}
+.rx-bio-svg line{vector-effect:non-scaling-stroke}
+.rx-bio-svg .zero{stroke:currentColor;stroke-width:.6;opacity:.3;stroke-dasharray:2 3}
+.rx-bio-svg .now{stroke:currentColor;stroke-width:1;opacity:.7}
+.rx-bio b{font:700 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;white-space:nowrap}
 
 /* ── 카드 위 장식 (캐릭터 목록 카드 한정) — 스캔 띠 + 떠다니는 조준 십자 ── */
 .chars-grid .rx-art::after{content:"";position:absolute;left:0;right:0;top:-34%;height:34%;pointer-events:none;mix-blend-mode:screen;
@@ -96,5 +98,5 @@
 }
 @media (max-width:640px){
   .rx-hud-ruler,.rx-hud-bars{display:none}
-  .rx-pulse{max-width:140px}
+  .rx-bio{max-width:150px}.rx-bio b{display:none}
 }

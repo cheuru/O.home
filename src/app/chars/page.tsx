@@ -10,7 +10,7 @@ import { backend, isServerMode } from '@/lib/backend';
 import { useSectionParam, filterSection, sectionSetter, secQuery } from '@/lib/sectionStore';
 import { SearchBar, FitText } from '@/components/ui/Kit';
 import { RxCard } from '@/components/rels/RxCard';
-import { RxHud, RxCoord, RxPulse } from '@/components/rels/RxHud';
+import { RxHud, RxCoord, RxBio } from '@/components/rels/RxHud';
 
 import { useToast } from '@/components/ui/Toast';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
@@ -95,7 +95,7 @@ function CharsInner() {
         <div className="rx-foot">
           <span className="rx-bar" aria-hidden="true" />
           <span className="rx-cap">CHARACTER FILE // {String(visible.length).padStart(2, '0')}</span>
-          <RxPulse />
+          <RxBio />
           <span className="rx-chev" aria-hidden="true">›››</span>
         </div>
       </div>

@@ -6,8 +6,8 @@
 // 쓰는 법 (.rx 안에서)
 //   <RxHud />                         → 맨 뒤 장식층 (레이더 · 좌표 조준 · 눈금자 · 막대). 카드 뒤에 깔리고 클릭을 받지 않는다
 //   <RxCoord />                       → 머리줄 가운데 좌표 숫자
-//   <RxPulse />                       → 바닥줄 가운데 심박(바이오그래프) 선
-import React, { useEffect, useState } from 'react';
+//   <RxBio />                         → 바닥줄 가운데 바이오리듬(신체·감정·지성 세 곡선) — 가운데 세로선이 「오늘」
+import React, { useEffect, useRef, useState } from 'react';
 import './rxhud.css';
 
 /** 눈금 링 — 원 둘레에 짧은 선을 n개 (긴 눈금은 every 번째마다) */
@@ -42,21 +42,52 @@ export function RxCoord() {
   return <span className="rx-coord" aria-hidden="true"><i />{t}</span>;
 }
 
-/** 바닥줄 심박선 — 같은 모양 한 토막을 두 번 이어 붙여 끊김 없이 흘려보낸다 */
-export function RxPulse() {
-  const bpm = useJitter(() => String(Math.round(66 + Math.random() * 18)), 1400);
-  // 한 토막: 평평 → 작은 P → 큰 R(QRS) → T → 평평. 폭 120
-  const beat = 'M0 12 H18 q4 -4 8 0 H36 l3 3 l4 -20 l4 24 l3 -7 H62 q6 -6 12 0 H120';
+/** 바닥줄 바이오리듬 — 신체 23일 · 감정 28일 · 지성 33일 주기의 사인 곡선 세 개가 왼쪽으로 흘러간다.
+    가운데 세로선이 「오늘」이고, 옆 숫자는 그 자리의 세 값(%). 진짜 오늘 날짜에서 출발한다. */
+const BIO = [{ p: 23, d: '' }, { p: 28, d: '3 2' }, { p: 33, d: '1 2.2' }];
+const BW = 240, BH = 26, BPX = 5;   // 폭 · 높이 · 하루당 가로 칸수
+function bioPath(t: number, p: number) {
+  let d = '';
+  for (let x = 0; x <= BW; x += 3) {
+    const day = t + (x - BW / 2) / BPX;
+    const y = BH / 2 - (BH / 2 - 3) * Math.sin((2 * Math.PI * day) / p);
+    d += `${x ? 'L' : 'M'}${x} ${y.toFixed(1)}`;
+  }
+  return d;
+}
+const sgn = (v: number) => (v >= 0 ? '+' : '−') + String(Math.abs(Math.round(v * 100))).padStart(2, '0');
+export function RxBio() {
+  const paths = useRef<(SVGPathElement | null)[]>([]);
+  const label = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const t0 = Date.now() / 86400000;   // 오늘(일 단위)
+    const draw = (t: number) => {
+      BIO.forEach((c, i) => paths.current[i]?.setAttribute('d', bioPath(t, c.p)));
+      if (label.current) label.current.textContent = BIO.map((c, i) => `${'PEI'[i]}${sgn(Math.sin((2 * Math.PI * t) / c.p))}`).join(' ');
+    };
+    draw(t0);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0, last = 0;
+    const start = performance.now();
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (now - last < 50) return;   // 20프레임이면 충분
+      last = now;
+      draw(t0 + ((now - start) / 1000) * 0.5);   // 1초에 반 칸(0.5일)씩
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   return (
-    <span className="rx-pulse" aria-hidden="true">
-      <svg className="rx-pulse-svg" viewBox="0 0 240 24" preserveAspectRatio="none">
-        <g className="rx-pulse-run">
-          <path d={beat} />
-          <path d={beat} transform="translate(120 0)" />
-          <path d={beat} transform="translate(240 0)" />
-        </g>
+    <span className="rx-bio" aria-hidden="true">
+      <svg className="rx-bio-svg" viewBox={`0 0 ${BW} ${BH}`} preserveAspectRatio="none">
+        <line className="zero" x1="0" x2={BW} y1={BH / 2} y2={BH / 2} />
+        {BIO.map((c, i) => (
+          <path key={i} ref={el => { paths.current[i] = el; }} d={bioPath(0, c.p)} strokeDasharray={c.d || undefined} />
+        ))}
+        <line className="now" x1={BW / 2} x2={BW / 2} y1="0" y2={BH} />
       </svg>
-      <b>{bpm}<small> BPM</small></b>
+      <b ref={label}>P+00 E+00 I+00</b>
     </span>
   );
 }
