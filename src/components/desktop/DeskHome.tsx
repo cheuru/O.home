@@ -443,7 +443,7 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     const push = (l: TLine) => setLines(p => [...p, l].slice(-200));
     if (reduce) { [...boot, ...greetings()].forEach(push); return () => { clearInterval(iv); }; }
 
-    // 한 줄씩 타이핑 → 끝나면 줄 확정 → 다음 줄. 부팅이 끝난 뒤엔 가끔 한 줄씩 더 흘려 보낸다 (내가 입력 중이면 잠시 쉼)
+    // 한 줄씩 타이핑 → 끝나면 줄 확정 → 다음 줄. 부팅이 끝난 뒤엔 우주 문구를 한 줄씩 한 번만 흘려 보낸다 (내가 입력 중이면 잠시 쉼)
     const q = [...boot]; let fi = 0, greeted = false;
     const typeLine = (l: TLine, done: () => void) => {
       let i = 0;
@@ -462,9 +462,9 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
       if (busyRef.current) { timer = window.setTimeout(next, 400); return; }   // 입력을 잡고 있는 동안은 새 줄을 올리지 않는다
       if (!q.length && !greeted) { greeted = true; q.push(...greetings()); }
       if (q.length) { const l = q.shift()!; timer = window.setTimeout(() => typeLine(l, next), 260); }
-      else timer = window.setTimeout(() => {
+      else if (fi < FLAVOR.length) timer = window.setTimeout(() => {       // 우주 문구는 한 번씩만 — 다 나오면 더 이상 올리지 않는다
         if (busyRef.current) { next(); return; }
-        typeLine({ t: FLAVOR[fi++ % FLAVOR.length] }, next);
+        typeLine({ t: FLAVOR[fi++] }, next);
       }, 4500 + Math.random() * 3500);
     };
     timer = window.setTimeout(next, 500);
