@@ -131,6 +131,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // 페이지 배경 지정 (v2.0) — 팔레트를 적용한 뒤에 배경 세 값만 덮어쓴다.
     // 이 effect가 팔레트를 다시 칠하므로 순서상 여기서 덮어야 남는다.
     const root = document.documentElement;
+    // 우주 배경 — 페이지별 스킨(캐릭터 테마색·자관 배경·자관 배경 사진)이 있는 화면에서는 끈다 (globals.css)
+    root.toggleAttribute('data-skin-bg', !!(pageColor || pageBg || pageBgImageUrl));
     if (!pageColor && !pageBg && !pageBgImageUrl && pathname !== '/' && site.subBgOn) {
       root.style.setProperty('--bg-g1', site.subBgG1 ?? site.bgG1);
       root.style.setProperty('--bg-g2', site.subBgG2 ?? site.bgG2);
@@ -167,6 +169,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // 이전 사진은 한 겹 아래(body::after)에 그대로 두고, 새 사진이 그 위에서 떠오른다 — 맞교차
     root.style.setProperty('--bg-image-prev', lastBgImg.current ?? 'none');
     lastBgImg.current = value;
+    // 배경 사진이 지정된 화면에서는 우주 배경을 끈다 — 사진이 그대로 보이게 (globals.css)
+    root.toggleAttribute('data-bg-img', !!value);
     if (value) root.style.setProperty('--bg-image', value); else root.style.removeProperty('--bg-image');
     root.classList.remove('bg-fx');
     void root.offsetWidth;
