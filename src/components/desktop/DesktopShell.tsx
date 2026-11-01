@@ -10,12 +10,15 @@ import { useBoards } from '@/lib/boardStore';
 import { sectionMenuEntries, useSections } from '@/lib/sectionStore';
 import { linkEntries, useCustomLinks } from '@/lib/linkStore';
 import { useSiteSettings } from '@/lib/siteStore';
-import { FLAG_BOOTED, FLAG_CLASSIC, FLAG_ENTERED, flag, glyphFor, setFlag } from '@/lib/desktopConfig';
+import { FLAG_BOOTED, FLAG_CLASSIC, FLAG_ENTERED, flag, glyphFor, groupGlyph, setFlag } from '@/lib/desktopConfig';
 import { BootScreen } from './BootScreen';
 import { LoginScreen } from './LoginScreen';
 
 type Screen = 'boot' | 'login' | 'desktop';
 interface App { href: string; label: string; group: string; glyph: string }
+/** 하단 독에 놓이는 칸 — 바로 열리는 메뉴(app) 또는 하위 메뉴를 품은 상위 메뉴(group) */
+type DockItem = { kind: 'app'; app: App } | { kind: 'group'; label: string; glyph: string; apps: App[] };
+interface Fly { label: string; left: number; apps: App[] }
 interface Win {
   id: string; href: string; title: string; glyph: string;
   x: number; y: number; w: number; h: number;   // 최대화 해제 시 돌아갈 자리·크기
@@ -76,15 +79,24 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
   const { map: secMap } = useSections();
   const { links } = useCustomLinks();
 
-  // ── 하단 앱 아이콘 = 상단 메뉴와 같은 규칙으로 만든 목록 (맨 앞에 홈)
-  const apps: App[] = useMemo(() => {
-    const out: App[] = [{ href: '/', label: '홈', group: '', glyph: glyphFor('/', '홈') }];
-    if (!(menuLoaded && boardsLoaded)) return out;
+  // ── 홈 = 왼쪽 로고(C) 버튼. 하단 아이콘 줄에는 따로 두지 않는다
+  const home: App = useMemo(() => ({ href: '/', label: '홈', group: '', glyph: glyphFor('/', '홈') }), []);
+
+  // ── 하단 아이콘 = 상단 메뉴와 같은 규칙으로 만든 「상위 메뉴」 목록
+  //    하위 메뉴가 있는 상위 메뉴는 아이콘 하나로 접어 두고, 누르면 위로 펼쳐진다
+  const dock: DockItem[] = useMemo(() => {
+    if (!(menuLoaded && boardsLoaded)) return [];
     const menu = buildMenu(menuSet, [...boardEntries(boards), ...sectionMenuEntries(secMap), ...linkEntries(links)],
       { loggedIn: !!user, isAdmin, id: user?.id });
+    const out: DockItem[] = [];
     for (const m of menu) {
-      if (m.children) for (const c of m.children) out.push({ href: c.href, label: c.label, group: m.label, glyph: glyphFor(c.href, c.label) });
-      else if (m.href) out.push({ href: m.href, label: m.label, group: '', glyph: glyphFor(m.href, m.label) });
+      if (m.children) {
+        if (!m.children.length) continue;
+        out.push({
+          kind: 'group', label: m.label, glyph: groupGlyph(m.label, m.children[0]),
+          apps: m.children.map(c => ({ href: c.href, label: c.label, group: m.label, glyph: glyphFor(c.href, c.label) })),
+        });
+      } else if (m.href) out.push({ kind: 'app', app: { href: m.href, label: m.label, group: '', glyph: glyphFor(m.href, m.label) } });
     }
     return out;
   }, [menuSet, menuLoaded, boards, boardsLoaded, secMap, links, user, isAdmin]);
@@ -200,6 +212,23 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
     return () => document.removeEventListener('mousedown', close);
   }, [userOpen]);
 
+  // ── 상위 메뉴 펼침 — 독의 가로 스크롤 영역에 잘리지 않도록 화면 기준(fixed)으로 띄운다
+  const [fly, setFly] = useState<Fly | null>(null);
+  const toggleFly = (e: React.MouseEvent<HTMLButtonElement>, g: Extract<DockItem, { kind: 'group' }>) => {
+    if (fly?.label === g.label) { setFly(null); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    const half = 100;   // 펼침 메뉴 너비의 절반쯤 — 화면 밖으로 나가지 않게 가운데 기준 위치를 안쪽으로 맞춘다
+    setFly({ label: g.label, left: Math.min(Math.max(r.left + r.width / 2, half), window.innerWidth - half), apps: g.apps });
+  };
+  useEffect(() => {
+    if (!fly) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setFly(null); };
+    const close = () => setFly(null);
+    window.addEventListener('keydown', esc);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('keydown', esc); window.removeEventListener('resize', close); };
+  }, [fly]);
+
   // 아이콘 줄이 길면 휠로 가로 이동
   const appsRef = useRef<HTMLDivElement>(null);
   const onWheel = (e: React.WheelEvent) => { if (appsRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) appsRef.current.scrollLeft += e.deltaY; };
@@ -246,26 +275,50 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
       </div>
 
       <footer className="dsk-dock">
-        <button className="dsk-brand" onClick={() => { const h = apps[0]; clickApp(h); }} title={`${title} — 홈`}>
-          <span className="dsk-mark">{mark}</span>
-        </button>
+        {(() => {
+          const hw = wins.find(x => x.id === home.href);
+          return (
+            <button
+              className={`dsk-brand ${hw ? 'open' : ''} ${hw && !hw.min && hw.id === topId ? 'on' : ''}`}
+              onClick={() => { setFly(null); clickApp(home); }}
+              title={`${title} — 홈`}
+            >
+              <span className="dsk-mark">{mark}</span>
+            </button>
+          );
+        })()}
         <div className="dsk-apps" ref={appsRef} onWheel={onWheel}>
-          {apps.map((a, i) => {
-            const w = wins.find(x => x.id === a.href);
-            const on = !!w && !w.min && w.id === topId;
-            const prev = apps[i - 1];
-            return (
-              <React.Fragment key={`${a.group}|${a.href}|${i}`}>
-                {prev && prev.group !== a.group && <i className="dsk-sep" />}
+          {dock.map(item => {
+            if (item.kind === 'app') {
+              const a = item.app;
+              const w = wins.find(x => x.id === a.href);
+              const on = !!w && !w.min && w.id === topId;
+              return (
                 <button
+                  key={`app|${a.href}`}
                   className={`dsk-app ${w ? 'open' : ''} ${on ? 'on' : ''} ${w?.min ? 'min' : ''}`}
-                  onClick={() => clickApp(a)}
-                  title={a.group ? `${a.group} / ${a.label}` : a.label}
+                  onClick={() => { setFly(null); clickApp(a); }}
+                  title={a.label}
                 >
                   <span className="dsk-glyph">{a.glyph}</span>
                   <span className="dsk-label">{a.label}</span>
                 </button>
-              </React.Fragment>
+              );
+            }
+            const kids = item.apps.map(a => wins.find(x => x.id === a.href)).filter((w): w is Win => !!w);
+            const on = kids.some(w => !w.min && w.id === topId);
+            return (
+              <button
+                key={`group|${item.label}`}
+                className={`dsk-app dsk-group ${kids.length ? 'open' : ''} ${on ? 'on' : ''} ${fly?.label === item.label ? 'pop' : ''}`}
+                onClick={e => toggleFly(e, item)}
+                title={item.label}
+                aria-haspopup="menu"
+                aria-expanded={fly?.label === item.label}
+              >
+                <span className="dsk-glyph">{item.glyph}</span>
+                <span className="dsk-label">{item.label}</span>
+              </button>
             );
           })}
         </div>
@@ -290,6 +343,31 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
           )}
         </div>
       </footer>
+
+      {fly && (
+        <>
+          {/* iframe 안을 눌러도 닫히도록 독 위쪽 전체를 덮는 투명 막 */}
+          <div className="dsk-fly-back" onPointerDown={() => setFly(null)} />
+          <div className="dsk-fly" role="menu" style={{ left: fly.left }}>
+            <b className="dsk-fly-h">{fly.label}</b>
+            {fly.apps.map(a => {
+              const w = wins.find(x => x.id === a.href);
+              const on = !!w && !w.min && w.id === topId;
+              return (
+                <button
+                  key={a.href}
+                  role="menuitem"
+                  className={`dsk-fly-i ${w ? 'open' : ''} ${on ? 'on' : ''}`}
+                  onClick={() => { setFly(null); clickApp(a); }}
+                >
+                  <span className="dsk-glyph">{a.glyph}</span>
+                  <span>{a.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

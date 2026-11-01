@@ -30,6 +30,14 @@ export function glyphFor(href: string, label: string): string {
   return GLYPHS[path] ?? (label.trim().charAt(0) || '■');
 }
 
+/** 상위 메뉴(그룹) 아이콘 — 기본 이름이면 아래 글리프, 이름을 바꿨거나 새로 만든 그룹은 첫 하위 메뉴의 글리프를 따른다 */
+const GROUP_GLYPHS: Record<string, string> = {
+  '자놀': '✧', '게시판': '☰', 'TRPG': '▤', '커미션': '✦', '기록': '▥',
+};
+export function groupGlyph(label: string, firstChild?: { href: string; label: string }): string {
+  return GROUP_GLYPHS[label.trim()] ?? (firstChild ? glyphFor(firstChild.href, firstChild.label) : (label.trim().charAt(0) || '■'));
+}
+
 export function flag(key: string): boolean {
   try { return sessionStorage.getItem(key) === '1'; } catch { return false; }
 }
