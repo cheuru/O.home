@@ -665,3 +665,85 @@
 .mr-preview-canvas { position: relative; flex: none; transform-origin: center center; }
 .mr-preview-item { position: absolute; box-sizing: border-box; }
 .mr-preview-item img { width: 100%; height: 100%; display: block; object-fit: fill; }
+
+
+/* ==========================================================
+   MY ROOM / PERSONAL QUARTERS TERMINAL — room detail only.
+   All selectors are rooted in mr-lab-room to prevent other-page changes.
+   The underlying editor coordinate system and item backgrounds stay intact.
+   ========================================================== */
+.myroom-wrap.mr-lab-room {
+  --mr-lab-border:rgba(231,151,202,.3);--mr-lab-ink:#f9eaf5;
+  color:var(--mr-lab-ink);text-align:left;padding:18px clamp(12px,2.4vw,32px) 36px;
+}
+.mr-lab-room .mr-topbar {
+  min-height:76px;margin-bottom:0;padding:14px 20px;gap:16px;border-radius:15px 15px 0 0;
+  border:1px solid var(--mr-lab-border);
+  background:linear-gradient(120deg,rgba(42,23,59,.96),rgba(24,23,53,.94) 68%,rgba(60,30,72,.96));
+  box-shadow:0 16px 50px rgba(8,4,25,.22),inset 0 1px rgba(255,210,246,.10);
+}
+.mr-lab-room .mr-lab-identity{min-width:0;flex:1}
+.mr-lab-room .mr-lab-kicker,.mr-lab-room .mr-lab-panel-kicker{display:block;letter-spacing:.15em;font-size:10px;font-weight:700;color:#e18fb8;margin-bottom:5px}
+.mr-lab-room .mr-topbar-title{font-size:clamp(17px,1.6vw,23px);color:#fff0f9;letter-spacing:-.02em}
+.mr-lab-room .mr-lab-top-actions{display:flex;align-items:center;gap:12px;flex:none}
+.mr-lab-room .mr-lab-status{font:700 10px/1.2 monospace;letter-spacing:.09em;color:#ccb1d6;white-space:nowrap}
+.mr-lab-room .mr-lab-status i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#9ce2ca;box-shadow:0 0 10px #9ce2ca;margin-right:5px}
+.mr-lab-room .mr-topbar .mr-back-to-list{background:rgba(15,11,34,.55);border:1px solid rgba(238,171,215,.27);color:#f2c1dd;padding:9px 13px;border-radius:8px}
+.mr-lab-room .mr-topbar .mr-back-to-list:hover{background:#e88ca8;color:#24152e}
+.mr-lab-room .mr-lab-sectionbar{display:flex;align-items:center;gap:22px;padding:9px 16px;color:#bfa5cf;background:rgba(14,13,38,.9);border:1px solid var(--mr-lab-border);border-top:0;border-bottom:0;font:600 10px/1.3 monospace;letter-spacing:.11em}
+.mr-lab-room .mr-lab-sectionbar span:first-child{margin-right:auto;color:#f0a1d1}
+.mr-lab-room .mr-layout{border:1px solid var(--mr-lab-border);border-radius:0 0 15px 15px;overflow:hidden;background:radial-gradient(ellipse at 52% 50%,rgba(117,66,142,.11),transparent 65%),rgba(13,12,37,.32);box-shadow:0 25px 60px rgba(5,4,22,.24)}
+.mr-lab-room.mr-fullscreen.mr-editing .mr-room{background:linear-gradient(135deg,#17162b,#242039 56%,#16182c)}
+.mr-lab-room .mr-canvas.mr-show-center{background-color:#f4f0f5;outline:1px dashed rgba(237,144,190,.55);box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.mr-lab-room .mr-canvas-outer{border:1px solid rgba(244,171,216,.28);border-radius:3px;box-shadow:0 12px 35px rgba(0,0,0,.2)}
+.mr-lab-room .mr-enter-edit-tab{width:auto;min-width:80px;height:36px;gap:5px;padding:0 12px;border-radius:9px;background:linear-gradient(120deg,#e993b9,#da77a5);border:1px solid #ffd2e9;color:#21112b;font-size:14px;font-weight:800;box-shadow:0 3px 18px rgba(231,115,177,.25)}
+.mr-lab-room .mr-enter-edit-tab span{font-size:12px}
+.mr-lab-room .mr-pan-toggle,.mr-lab-room .mr-zoom-control{background:rgba(28,23,49,.96);border:1px solid rgba(235,156,206,.42);color:#f7d9ec;box-shadow:0 5px 18px rgba(0,0,0,.3)}
+.mr-lab-room .mr-pan-toggle:hover,.mr-lab-room .mr-zoom-btn:hover{background:#574064;color:white}
+.mr-lab-room .mr-zoom-btn{color:#f1d3e8}
+.mr-lab-room .mr-zoom-slider{background:#60435e}
+.mr-lab-room .mr-remote{background:linear-gradient(160deg,rgba(35,25,55,.98),rgba(22,21,44,.99));color:#f5e5f0;border:1px solid rgba(235,151,205,.49);border-radius:12px;box-shadow:-10px 0 32px rgba(3,3,18,.32);padding:14px}
+.mr-lab-room .mr-sheet-header{padding-bottom:10px;border-bottom:1px solid rgba(235,151,205,.24)}
+.mr-lab-room .mr-sheet-header-title{color:#ffdeef;font-size:16px;font-weight:800;line-height:1.45}
+.mr-lab-room .mr-remote-close{color:#ffcfeb;background:rgba(237,159,208,.13);border-radius:8px}
+.mr-lab-room .mr-sheet-tab,.mr-lab-room .mr-cat-tab,.mr-lab-room .mr-catalog-more,.mr-lab-room .mr-remote-controls button{background:#302540;color:#e2c5da;border:1px solid rgba(233,157,207,.26);border-radius:8px}
+.mr-lab-room .mr-sheet-tab.active,.mr-lab-room .mr-cat-tab.active{background:#e58fb5;color:#221529;border-color:#ffd3e7}
+.mr-lab-room .mr-catalog-item{background:#32293f;border:1px solid rgba(233,157,207,.24);border-radius:9px}
+.mr-lab-room .mr-catalog-item:hover{border-color:#f4a5d2;background:#47304b;box-shadow:0 0 0 1px rgba(244,165,210,.4)}
+.mr-lab-room .mr-catalog-add{background:rgba(233,157,207,.06);color:#e9aacd;border-style:dashed}
+.mr-lab-room .mr-remote-save{background:linear-gradient(90deg,#e790b9,#c96ea6);color:#211429;font-weight:800;border-radius:8px}
+.mr-lab-room .mr-remote .mr-modal-btn:not(.mr-modal-btn-danger){background:#31283d;color:#ead1e3;border-color:rgba(236,155,204,.3);border-radius:8px}
+.mr-lab-room .mr-remote .mr-modal-btn-danger{background:#642c48;color:#ffd0da;border-color:#aa5066;border-radius:8px}
+.mr-lab-room .mr-remote-field label,.mr-lab-room .mr-catalog-manage summary{color:#d9b4d1}
+.mr-lab-room .mr-remote input,.mr-lab-room .mr-remote select,.mr-lab-room .mr-remote textarea{background:#19172c;color:#f5e1ef;border:1px solid rgba(233,157,207,.34);border-radius:7px}
+.mr-lab-room .mr-remote input:focus-visible,.mr-lab-room .mr-remote select:focus-visible,.mr-lab-room button:focus-visible{outline:2px solid #f0a5d2;outline-offset:2px}
+.mr-lab-room .mr-catalog-manage{border-top-color:rgba(233,157,207,.28)}
+.mr-lab-room .mr-remote-dropzone{border-color:rgba(233,157,207,.45);color:#dfb4cf;background:rgba(243,167,214,.04)}
+.mr-lab-room .mr-remote-dropzone:hover{background:rgba(243,167,214,.12)}
+/* --- 검수 반영 --- */
+/* 팝업은 흰 배경이라 래퍼의 연분홍 글자색을 물려받지 않게, 원래처럼 가운데 정렬 */
+.mr-lab-room .mr-modal{color:#1a1a1a;text-align:center}
+/* 어두운 리모콘 패널 안에서 흰색/어두운 글씨로 남던 요소들 */
+.mr-lab-room .mr-multiselect-bar{color:#ead1e3}
+.mr-lab-room .mr-multiselect-bar button#multiselect-cancel,
+.mr-lab-room .mr-remote-controls button#btn-multiselect,
+.mr-lab-room .mr-catmanage-row button,.mr-lab-room .mr-catmanage-addrow button{background:#302540;color:#e2c5da;border:1px solid rgba(233,157,207,.26)}
+.mr-lab-room .mr-multiselect-bar button#multiselect-cancel:hover,
+.mr-lab-room .mr-remote-controls button#btn-multiselect:hover,
+.mr-lab-room .mr-catmanage-row button:hover,.mr-lab-room .mr-catmanage-addrow button:hover{background:#47304b}
+.mr-lab-room .mr-catmanage-row button.mr-catmanage-del{color:#ff9fb0;border-color:#aa5066}
+.mr-lab-room .mr-catmanage-row button.mr-catmanage-del:hover{background:#642c48}
+.mr-lab-room .mr-remote-hint{background:rgba(243,167,214,.08);color:#caa9c2}
+@media(max-width:700px){
+ .myroom-wrap.mr-lab-room{padding:8px 12px 40px}
+ .mr-lab-room .mr-topbar{padding:12px;min-height:65px}
+ .mr-lab-room .mr-lab-status{display:none}
+ .mr-lab-room .mr-lab-sectionbar{gap:10px;padding:8px 10px;font-size:9px}
+ .mr-lab-room .mr-lab-sectionbar span:nth-child(2){display:none}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-remote{background:linear-gradient(160deg,#281f3a,#19192e);border-radius:15px;padding-bottom:18px}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-sheet-header-title{color:#ffdeef}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-sheet-tab{background:#342840;color:#ead0e0;border:1px solid rgba(233,157,207,.26)}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-sheet-tab.active{background:#e58fb5;color:#25152a}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-cat-tab-icon{background:#48334f;color:#f1c3e0}
+ .myroom-wrap.mr-fullscreen.mr-lab-room .mr-cat-tab.active .mr-cat-tab-icon{background:#efafd0;color:#23142c}
+}

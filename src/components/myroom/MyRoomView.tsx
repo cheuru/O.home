@@ -435,15 +435,16 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
 
   return (
     <MyRoomShell variant="room">
-      <div className="myroom-wrap" ref={wrapRef} style={{ maxWidth: wrapMax }}>
+      <div className="myroom-wrap mr-lab-room" ref={wrapRef} style={{ maxWidth: wrapMax }}>
         <div className="mr-topbar">
-          <div className="mr-topbar-title" id="room-title-display">{titleShown}</div>
-          <Link href="/myroom" className="mr-back-to-list">← 목록으로</Link>
+          <div className="mr-lab-identity"><span className="mr-lab-kicker">PERSONAL QUARTERS / ROOM TERMINAL</span><div className="mr-topbar-title" id="room-title-display">{titleShown}</div></div>
+          <div className="mr-lab-top-actions"><span className="mr-lab-status"><i /> {editing ? 'EDIT SESSION' : 'VIEW MODE'}</span><Link href="/myroom" className="mr-back-to-list">← 목록으로</Link></div>
         </div>
+        <div className="mr-lab-sectionbar"><span>◈ ROOM VIEWPORT</span><span>ROOM / {room.id.slice(0, 8).toUpperCase()}</span><span>{cw} × {chh} PX</span></div>
         <div className="mr-layout" ref={layoutRef}>
           <div className="mr-room" ref={roomElRef} style={{ maxWidth: cw }}>
             <div className="mr-canvas-outer" ref={outerRef}>
-              {canEdit && !editing && <button className="mr-enter-edit-tab" id="btn-enter-edit" type="button" title="내 방 꾸미기" onClick={enterEdit}>✧</button>}
+              {canEdit && !editing && <button className="mr-enter-edit-tab" id="btn-enter-edit" type="button" title="내 방 꾸미기" onClick={enterEdit}>✎ <span>편집</span></button>}
               <div className="mr-canvas" id="canvas" ref={canvasRef} />
               {canEdit && (
                 <button type="button" className={`mr-pan-toggle${panOn ? ' active' : ''}`} id="btn-pan-toggle" title="화면 이동 모드 (가구를 건드리지 않고 화면만 움직여요)"
@@ -474,7 +475,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
               <div className="mr-remote" id="remote" ref={remoteRef} style={{ display: editing && remoteVisible ? 'block' : 'none' }}>
                 <div className="mr-sheet-handle" id="sheet-handle" onClick={() => { if (editing) setRemoteVisible(!remoteVisible); }} />
                 <div className="mr-sheet-header">
-                  <div className="mr-sheet-header-title">꾸미기</div>
+                  <div className="mr-sheet-header-title"><span className="mr-lab-panel-kicker">OBJECT LIBRARY / EDITOR</span>꾸미기 도구</div>
                   <button className="mr-remote-close" type="button" title="편집 닫기" onClick={exitEdit}>✦</button>
                 </div>
                 <div className="mr-sheet-tabs">
