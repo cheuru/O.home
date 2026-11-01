@@ -73,11 +73,6 @@ html[data-space]{
   --page-title:#eef2ff!important; --page-desc:#9fabd2!important;
   --line-dark:rgba(150,180,255,.18)!important;
 }
-/* 창 안 페이지·데스크톱 창은 투명 — 뒤의 우주가 비친다 */
-html[data-space][data-embed],html[data-space][data-embed] body{background:transparent!important}
-html[data-space][data-embed] body::before{display:none}
-html[data-space] .dsk-win,html[data-space] .dsk-body,html[data-space] .dsk-loading{background:transparent}
-html[data-space] .dsk-win:not(.max){backdrop-filter:blur(2px)}
 html[data-space] .dsk-grid{opacity:0}
 html[data-space] .dsk-watermark b{color:#cfe0ff;opacity:.2}
 button{font-family:inherit;cursor:var(--cur-pointer,pointer);border:none;background:none;color:inherit}

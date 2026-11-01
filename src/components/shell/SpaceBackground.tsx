@@ -6,9 +6,9 @@
 //  · 위에서 쏟아지는 유성우 + 가끔 쏟아지는 무리 (sf)
 //  · 아주 옅게 흐르는 16진수·이진수 코드 비 (매트릭스 느낌)
 //  · 클릭하면 퍼지는 펄스 링 + 유성
+// 창(iframe) 안 페이지도 각자 이 배경을 불투명하게 깐다 (창마다 하나).
 // 성능: 보이지 않는 탭에선 멈춤, 모션 줄이기 설정이면 정지 화면만, DPR 상한 2.
 import { useEffect, useRef } from 'react';
-import { useEmbedded } from '@/lib/useEmbedded';
 
 type Star = { x: number; y: number; r: number; a: number; tw: number; sp: number; hue: number };
 type Pt = { x: number; y: number; vx: number; vy: number; r: number };
@@ -20,7 +20,6 @@ const HEX = '0123456789ABCDEF';
 const GLYPH = '01{}<>/=;$#%&*+';
 
 export function SpaceBackground() {
-  const embedded = useEmbedded();
   const ref = useRef<HTMLCanvasElement>(null);
 
   // 우주 모드 표시 — 상단바·작업표시줄·제목 글씨를 밤하늘에 맞게 덮는 CSS가 이 속성에 걸린다 (globals.css)
@@ -30,24 +29,7 @@ export function SpaceBackground() {
     return () => el.removeAttribute('data-space');
   }, []);
 
-  // 창(iframe) 안 페이지: 캔버스는 바깥 데스크톱에 하나만 — 안쪽 마우스 움직임·클릭을 바깥으로 전달해 반응하게 한다
   useEffect(() => {
-    if (!embedded) return;
-    const fwd = (type: 'pointermove' | 'pointerdown') => (e: PointerEvent) => {
-      try {
-        const fr = window.frameElement?.getBoundingClientRect();
-        if (!fr) return;
-        window.parent.dispatchEvent(new PointerEvent(type, { clientX: e.clientX + fr.left, clientY: e.clientY + fr.top }));
-      } catch { /* 다른 출처면 무시 */ }
-    };
-    const mv = fwd('pointermove'), dn = fwd('pointerdown');
-    window.addEventListener('pointermove', mv, { passive: true });
-    window.addEventListener('pointerdown', dn, { passive: true });
-    return () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerdown', dn); };
-  }, [embedded]);
-
-  useEffect(() => {
-    if (embedded) return;
     const cv = ref.current;
     if (!cv) return;
     const ctx = cv.getContext('2d');
@@ -350,9 +332,8 @@ export function SpaceBackground() {
       document.removeEventListener('scroll', onScroll, { capture: true });
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [embedded]);
+  }, []);
 
-  if (embedded) return null;
   // z-index -1: 본문·상단바 전부 이 위. 클릭은 통과
   return <canvas ref={ref} aria-hidden="true" className="space-bg" />;
 }
