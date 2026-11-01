@@ -673,7 +673,7 @@
    The underlying editor coordinate system and item backgrounds stay intact.
    ========================================================== */
 .myroom-wrap.mr-lab-room {
-  --mr-lab-border:rgba(231,151,202,.3);--mr-lab-ink:#f9eaf5;
+  --mr-lab-border:rgba(231,151,202,.3);--mr-lab-muted:#b89abf;--mr-lab-ink:#f9eaf5;
   color:var(--mr-lab-ink);text-align:left;padding:18px clamp(12px,2.4vw,32px) 36px;
 }
 .mr-lab-room .mr-topbar {
@@ -720,22 +720,7 @@
 .mr-lab-room .mr-catalog-manage{border-top-color:rgba(233,157,207,.28)}
 .mr-lab-room .mr-remote-dropzone{border-color:rgba(233,157,207,.45);color:#dfb4cf;background:rgba(243,167,214,.04)}
 .mr-lab-room .mr-remote-dropzone:hover{background:rgba(243,167,214,.12)}
-/* --- 검수 반영 --- */
-/* 팝업은 흰 배경이라 래퍼의 연분홍 글자색을 물려받지 않게, 원래처럼 가운데 정렬 */
-.mr-lab-room .mr-modal{color:#1a1a1a;text-align:center}
-/* 어두운 리모콘 패널 안에서 흰색/어두운 글씨로 남던 요소들 */
-.mr-lab-room .mr-multiselect-bar{color:#ead1e3}
-.mr-lab-room .mr-multiselect-bar button#multiselect-cancel,
-.mr-lab-room .mr-remote-controls button#btn-multiselect,
-.mr-lab-room .mr-catmanage-row button,.mr-lab-room .mr-catmanage-addrow button{background:#302540;color:#e2c5da;border:1px solid rgba(233,157,207,.26)}
-.mr-lab-room .mr-multiselect-bar button#multiselect-cancel:hover,
-.mr-lab-room .mr-remote-controls button#btn-multiselect:hover,
-.mr-lab-room .mr-catmanage-row button:hover,.mr-lab-room .mr-catmanage-addrow button:hover{background:#47304b}
-.mr-lab-room .mr-catmanage-row button.mr-catmanage-del{color:#ff9fb0;border-color:#aa5066}
-.mr-lab-room .mr-catmanage-row button.mr-catmanage-del:hover{background:#642c48}
-.mr-lab-room .mr-remote-hint{background:rgba(243,167,214,.08);color:#caa9c2}
 @media(max-width:700px){
- .myroom-wrap.mr-lab-room{padding:8px 12px 40px}
  .mr-lab-room .mr-topbar{padding:12px;min-height:65px}
  .mr-lab-room .mr-lab-status{display:none}
  .mr-lab-room .mr-lab-sectionbar{gap:10px;padding:8px 10px;font-size:9px}
@@ -747,3 +732,48 @@
  .myroom-wrap.mr-fullscreen.mr-lab-room .mr-cat-tab-icon{background:#48334f;color:#f1c3e0}
  .myroom-wrap.mr-fullscreen.mr-lab-room .mr-cat-tab.active .mr-cat-tab-icon{background:#efafd0;color:#23142c}
 }
+
+/* ===== Room detail OS redesign, intentionally scoped to mr-lab-room ===== */
+.mr-lab-room{--os-bg:#100d1c;--os-panel:#1a1428;--os-line:rgba(234,132,195,.24);--os-rose:#f29ac8;--os-text:#f7e7f4;--os-soft:#ad93b4}
+.myroom-wrap.mr-lab-room{padding:0!important;width:100%!important;max-width:none!important;border:1px solid var(--os-line);background:#110c1b;border-radius:14px;overflow:hidden;box-shadow:0 24px 65px #0005}
+.mr-lab-room .mr-os-chrome{height:43px;display:flex;align-items:center;gap:26px;background:#0c0a15;border-bottom:1px solid var(--os-line);padding:0 20px;color:var(--os-text);font:600 11px/1.2 monospace;letter-spacing:.045em}
+.mr-lab-room .mr-os-brand{font-weight:900;color:#f0a0cb;font-size:14px;white-space:nowrap}.mr-lab-room .mr-os-brand small{font-size:10px;color:#ac92b4;margin-left:7px;font-weight:500}.mr-lab-room .mr-os-version{color:#94859e}.mr-lab-room .mr-os-session{margin-left:auto;color:#89d7c8}.mr-lab-room .mr-os-session span{color:#7a647d;margin:0 8px}
+.mr-lab-room .mr-os-tabs{height:51px;background:linear-gradient(90deg,#130e20,#1d142c);border-bottom:1px solid var(--os-line);display:flex;align-items:stretch;justify-content:center;gap:9px}
+.mr-lab-room .mr-os-tabs>span{padding:17px 22px;color:#9686a9;font-size:12px;letter-spacing:.06em}.mr-lab-room .mr-os-tabs>.mr-os-tab-current{color:#1a101f;background:#f0a1ca;box-shadow:0 0 19px #ee8fbd6b;border-radius:8px 8px 0 0;font-weight:900;padding:17px 36px}
+.mr-lab-room .mr-os-workspace{display:grid;grid-template-columns:204px minmax(0,1fr);min-height:660px;background:radial-gradient(ellipse at 55% 25%,#211338,#0e0c1a 75%)}
+.mr-lab-room .mr-os-sidebar{display:flex;flex-direction:column;border-right:1px solid var(--os-line);background:linear-gradient(160deg,#180f23,#130f1c);min-width:0}
+.mr-lab-room .mr-os-sidebar-head{padding:26px 18px 21px;border-bottom:1px solid var(--os-line);display:flex;flex-direction:column;gap:7px}.mr-lab-room .mr-os-sidebar-head small{color:#b78cb2;font:600 10px monospace;letter-spacing:.05em}.mr-lab-room .mr-os-sidebar-head strong{font-size:23px;color:#fff}.mr-lab-room .mr-os-sidebar-head span{font:11px monospace;color:#e18bb4}
+.mr-lab-room .mr-os-sidebar-group{padding:16px 0}.mr-lab-room .mr-os-nav{border:0;border-left:3px solid transparent;background:transparent;color:#bbaabd;text-align:left;width:100%;padding:14px 18px;font-size:16px;cursor:pointer;display:flex;gap:12px;align-items:center}.mr-lab-room .mr-os-nav span{font-size:13px}.mr-lab-room .mr-os-nav.selected,.mr-lab-room .mr-os-nav:hover{border-left-color:#f59ac7;color:#ffe5f2;background:linear-gradient(90deg,#67305091,#3b203b30)}
+.mr-lab-room .mr-os-sidebar-detail{border-top:1px solid var(--os-line);margin-top:auto;padding:23px 19px 18px;display:flex;flex-direction:column;gap:7px}.mr-lab-room .mr-os-room-icon{font:55px/1 monospace;color:#bd75aa;transform:rotate(-12deg)}.mr-lab-room .mr-os-sidebar-detail small{color:#bb8bac;font:10px monospace}.mr-lab-room .mr-os-sidebar-detail strong{font:700 15px monospace;color:#f5add2}.mr-lab-room .mr-os-sidebar-detail span{font-size:11px;color:#b2a2b7}
+.mr-lab-room .mr-os-sidebar-foot{border-top:1px solid var(--os-line);padding:18px;color:#e2bfd6;font:700 10px/1.8 monospace}.mr-lab-room .mr-os-sidebar-foot small{color:#8f8298}.mr-lab-room .mr-os-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#73d9bf;margin-right:8px;box-shadow:0 0 8px #73d9bf}
+.mr-lab-room .mr-os-main{position:relative;min-width:0;padding:18px 20px 18px;display:flex;flex-direction:column}
+.mr-lab-room .mr-topbar{border:0;border-radius:0;background:transparent;box-shadow:none;padding:0 0 16px;min-height:68px;flex-wrap:wrap}
+.mr-lab-room .mr-lab-sectionbar{border:1px solid var(--os-line);border-radius:12px 12px 0 0;background:#120e21}.mr-lab-room .mr-os-stage-caption{display:flex;justify-content:space-between;gap:12px;padding:8px 14px;font:10px monospace;color:#9884ad;background:#1a1329;border-left:1px solid var(--os-line);border-right:1px solid var(--os-line)}.mr-lab-room .mr-os-stage-caption span:first-child{color:#e49fc4}
+.mr-lab-room .mr-os-primary-action{border:1px solid #f8b6d7;border-radius:22px;background:linear-gradient(90deg,#ffb5d7,#e887ba);color:#201126;padding:10px 20px;cursor:pointer;font-size:12px;font-weight:900;box-shadow:0 0 18px #e887ba38}
+.mr-lab-room .mr-layout{flex:1;min-height:450px;border-radius:0 0 12px 12px;background:radial-gradient(ellipse at center,#38244b 0%,#241936 47%,#161324 100%);border-top:0;box-shadow:inset 0 0 75px #0807146b}
+.mr-lab-room.mr-fullscreen .mr-room{background:transparent}
+.mr-lab-room.mr-fullscreen.mr-editing .mr-room{background:transparent}
+.mr-lab-room .mr-canvas-outer{border:1px solid #c17ea87a;border-radius:4px;box-shadow:0 0 0 5px #0b08134a,0 12px 40px #0004}
+.mr-lab-room .mr-canvas.mr-show-center{background-color:#231a31;background-image:linear-gradient(#e8a3d30e 1px,transparent 1px),linear-gradient(90deg,#e8a3d30e 1px,transparent 1px);background-size:24px 24px;outline:1px dashed #d68aaa77}
+.mr-lab-room .mr-canvas.mr-show-center::before,.mr-lab-room .mr-canvas.mr-show-center::after{background:#efa6d28c}
+.mr-lab-room .mr-remote{background:#20162ef5;border:1px solid #e891c178;border-radius:13px;box-shadow:0 12px 35px #0009}
+.mr-lab-room .mr-remote .mr-catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.mr-lab-room .mr-remote .mr-catalog-item{aspect-ratio:1.1;border:1px solid #ad729973}
+.mr-lab-room .mr-remote .mr-catalog-tabs{gap:5px}
+.mr-lab-room .mr-os-bottomline{display:flex;justify-content:space-between;gap:12px;margin-top:10px;color:#857491;font:10px monospace}.mr-lab-room .mr-os-bottomline b{color:#d9a0c7;font-weight:600}
+@media(min-width:701px){.mr-lab-room.mr-fullscreen .mr-layout{height:clamp(470px,68vh,790px)!important}.mr-lab-room.mr-fullscreen .mr-side-slot{top:10px;right:10px;bottom:10px;width:310px}.mr-lab-room.mr-fullscreen .mr-remote{height:100%;border-radius:13px}.mr-lab-room.mr-fullscreen.mr-editing .mr-room{padding-right:170px}}
+@media(max-width:900px){.mr-lab-room .mr-os-workspace{grid-template-columns:156px minmax(0,1fr)}.mr-lab-room .mr-os-sidebar-head{padding:22px 12px}.mr-lab-room .mr-os-sidebar-detail{padding:15px 12px}.mr-lab-room .mr-os-nav{padding:13px 9px}}
+@media(max-width:700px){.mr-lab-room .mr-os-chrome{padding:0 12px;gap:5px}.mr-lab-room .mr-os-version,.mr-lab-room .mr-os-session,.mr-lab-room .mr-os-tab-quiet{display:none}.mr-lab-room .mr-os-workspace{display:block}.mr-lab-room .mr-os-sidebar{border-right:0;border-bottom:1px solid var(--os-line)}.mr-lab-room .mr-os-sidebar-head{padding:12px}.mr-lab-room .mr-os-sidebar-head strong{font-size:18px}.mr-lab-room .mr-os-sidebar-detail,.mr-lab-room .mr-os-sidebar-foot{display:none}.mr-lab-room .mr-os-sidebar-group{display:flex;padding:0 7px 8px}.mr-lab-room .mr-os-nav{justify-content:center;width:auto;flex:1;font-size:12px;padding:9px 3px;border-left:0;border-bottom:2px solid transparent;gap:5px}.mr-lab-room .mr-os-nav.selected{border-left:0;border-bottom-color:#efa1c5}.mr-lab-room .mr-os-main{padding:12px}.mr-lab-room .mr-topbar{gap:10px}.mr-lab-room .mr-os-stage-caption span:last-child{display:none}.mr-lab-room .mr-os-bottomline{font-size:9px}}
+
+/* --- 검수 반영 (팝업·리모콘 가독성) --- */
+.mr-lab-room .mr-modal{color:#1a1a1a;text-align:center}
+.mr-lab-room .mr-multiselect-bar{color:#ead1e3}
+.mr-lab-room .mr-multiselect-bar button#multiselect-cancel,
+.mr-lab-room .mr-remote-controls button#btn-multiselect,
+.mr-lab-room .mr-catmanage-row button,.mr-lab-room .mr-catmanage-addrow button{background:#302540;color:#e2c5da;border:1px solid rgba(233,157,207,.26)}
+.mr-lab-room .mr-multiselect-bar button#multiselect-cancel:hover,
+.mr-lab-room .mr-remote-controls button#btn-multiselect:hover,
+.mr-lab-room .mr-catmanage-row button:hover,.mr-lab-room .mr-catmanage-addrow button:hover{background:#47304b}
+.mr-lab-room .mr-catmanage-row button.mr-catmanage-del{color:#ff9fb0;border-color:#aa5066}
+.mr-lab-room .mr-catmanage-row button.mr-catmanage-del:hover{background:#642c48}
+.mr-lab-room .mr-remote-hint{background:rgba(243,167,214,.08);color:#caa9c2}

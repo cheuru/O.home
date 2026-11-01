@@ -84,6 +84,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   const [remoteVisible, setRemoteVisibleState] = useState(true);
   const remoteVisRef = useRef(true);
   const [sheetTab, setSheetTab] = useState<'deco' | 'settings'>('deco');
+  const [studioTab, setStudioTab] = useState<'room' | 'library' | 'settings'>('room');
   const [titleShown, setTitleShown] = useState(room.title);
   const [titleInput, setTitleInput] = useState(room.title);
   const [cw, setCw] = useState(room.canvasW);
@@ -303,6 +304,14 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
+  // 상세 화면은 입장 직후부터 OS형 넓은 뷰포트를 사용한다.
+  useEffect(() => {
+    if (!ready) return;
+    wrapRef.current?.classList.add('mr-fullscreen');
+    const frame = requestAnimationFrame(() => apiRef.current?.fit());
+    return () => cancelAnimationFrame(frame);
+  }, [ready]);
+
   // 리모콘이 열리고 닫히거나 편집 상태가 바뀌면 배율/줌 컨트롤 위치를 다시 맞춘다
   useEffect(() => { apiRef.current?.fit(); }, [editing, remoteVisible, sheetTab]);
 
@@ -313,6 +322,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     setEditing(true); setRemoteVisible(true);
     setTitleInput(roomRef.current.title);
     wrapRef.current?.classList.add('mr-fullscreen', 'mr-editing');
+    setStudioTab('room');
   };
   const exitEdit = () => {
     const ed = edRef.current; if (!ed) return;
@@ -321,6 +331,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     setEditing(false); setRemoteVisible(false);
     if (ed.spaceDown) { ed.spaceDown = false; setPanOn(false); outerRef.current?.classList.remove('mr-pan-mode'); }
     wrapRef.current?.classList.remove('mr-editing');
+    setStudioTab('room');
   };
 
   const save = () => {
@@ -436,11 +447,26 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   return (
     <MyRoomShell variant="room">
       <div className="myroom-wrap mr-lab-room" ref={wrapRef} style={{ maxWidth: wrapMax }}>
-        <div className="mr-topbar">
-          <div className="mr-lab-identity"><span className="mr-lab-kicker">PERSONAL QUARTERS / ROOM TERMINAL</span><div className="mr-topbar-title" id="room-title-display">{titleShown}</div></div>
-          <div className="mr-lab-top-actions"><span className="mr-lab-status"><i /> {editing ? 'EDIT SESSION' : 'VIEW MODE'}</span><Link href="/myroom" className="mr-back-to-list">← 목록으로</Link></div>
-        </div>
-        <div className="mr-lab-sectionbar"><span>◈ ROOM VIEWPORT</span><span>ROOM / {room.id.slice(0, 8).toUpperCase()}</span><span>{cw} × {chh} PX</span></div>
+        <div className="mr-os-chrome"><span className="mr-os-brand">✧ CH-REU <small>PERSONAL SYSTEM</small></span><span className="mr-os-version">INTRANET / ROOM MANAGER v2.1</span><span className="mr-os-session">● ONLINE <span>·</span> {canEdit ? 'OWNER' : 'VISITOR'} <span>·</span> ROOM {room.id.slice(0, 6).toUpperCase()}</span></div>
+        <div className="mr-os-tabs"><span className="mr-os-tab-quiet">WORKSPACE</span><span className="mr-os-tab-current">✦ MY ROOM</span><span className="mr-os-tab-quiet">PERSONAL QUARTERS</span></div>
+        <div className="mr-os-workspace">
+          <aside className="mr-os-sidebar" aria-label="마이룸 도구 메뉴">
+            <div className="mr-os-sidebar-head"><small>PERSONAL QUARTERS</small><strong>마이룸</strong><span>MY ROOM / A-07</span></div>
+            <div className="mr-os-sidebar-group">
+              <button type="button" className={`mr-os-nav${studioTab === 'room' ? ' selected' : ''}`} onClick={() => { setStudioTab('room'); if (editing) setRemoteVisible(true); }}>⌂ <span>룸 꾸미기</span></button>
+              {canEdit && <button type="button" className={`mr-os-nav${studioTab === 'library' ? ' selected' : ''}`} onClick={() => { if (!editing) enterEdit(); setStudioTab('library'); setSheetTab('deco'); setRemoteVisible(true); }}>▦ <span>가구 도감</span></button>}
+              {canEdit && <button type="button" className={`mr-os-nav${studioTab === 'settings' ? ' selected' : ''}`} onClick={() => { if (!editing) enterEdit(); setStudioTab('settings'); setSheetTab('settings'); setRemoteVisible(true); }}>⚙ <span>룸 설정</span></button>}
+            </div>
+            <div className="mr-os-sidebar-detail"><div className="mr-os-room-icon">▱</div><small>ROOM ID</small><strong>{room.id.slice(0, 8).toUpperCase()}</strong><span>{canEdit ? '개인 거주실 · 편집 가능' : '개인 거주실 · 방문자 모드'}</span></div>
+            <div className="mr-os-sidebar-foot"><span className="mr-os-dot"/> SYSTEM ONLINE<br/><small>PERSONAL ARCHIVE / CONNECTED</small></div>
+          </aside>
+          <div className="mr-os-main">
+            <div className="mr-topbar">
+              <div className="mr-lab-identity"><span className="mr-lab-kicker">ROOM TERMINAL / PERSONAL SPACE</span><div className="mr-topbar-title" id="room-title-display">{titleShown}</div></div>
+              <div className="mr-lab-top-actions"><span className="mr-lab-status"><i /> {editing ? 'EDIT MODE' : 'VIEW MODE'}</span>{canEdit && (editing ? <button type="button" className="mr-os-primary-action" onClick={save}>✓ 저장</button> : <button type="button" className="mr-os-primary-action" onClick={enterEdit}>✎ 꾸미기</button>)}<Link href="/myroom" className="mr-back-to-list">← 목록</Link></div>
+            </div>
+            <div className="mr-lab-sectionbar"><span>◈ ROOM VIEWPORT</span><span>{cw} × {chh} PX</span><span>{zoomPct}% ZOOM</span></div>
+            <div className="mr-os-stage-caption"><span>LIVE ROOM CANVAS</span><span>{editing ? '오브젝트를 선택해 위치를 편집할 수 있습니다' : '방을 탐색하거나 꾸미기 모드를 시작하세요'}</span></div>
         <div className="mr-layout" ref={layoutRef}>
           <div className="mr-room" ref={roomElRef} style={{ maxWidth: cw }}>
             <div className="mr-canvas-outer" ref={outerRef}>
@@ -576,6 +602,9 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
               </div>
             </div>
           )}
+        </div>
+        <div className="mr-os-bottomline"><span>◆ ROOM SESSION <b>{editing ? 'UNSAVED EDIT SESSION' : 'READ ONLY / VIEW'}</b></span><span>DRAG · PLACE · CUSTOMIZE</span></div>
+          </div>
         </div>
       </div>
 
