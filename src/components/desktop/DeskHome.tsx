@@ -337,7 +337,7 @@ function foodTags(c: string): FoodTag[] {
   return t;
 }
 
-let foodCtx: { tags: FoodTag[]; last: string; n: number } | null = null;   // 직전 추천(재추천용) — 음식과 상관없는 말을 하면 사라진다
+let foodCtx: { tags: FoodTag[]; last: string; n: number; at: number } | null = null;   // 직전 추천(재추천용) — 음식과 상관없는 말을 하면 사라진다
 const foodSeen = new Set<string>();                                         // 이 세션에서 이미 추천한 음식
 
 function pickFood(tags: FoodTag[], last: string | null) {
@@ -366,6 +366,7 @@ function pickFood(tags: FoodTag[], last: string | null) {
 const sayFood = (f: string) => FOOD_SAY[Math.floor(Math.random() * FOOD_SAY.length)](f);
 
 function foodReply(c: string): TLine[] | null {
+  if (foodCtx && Date.now() - foodCtx.at > TALK_TTL) foodCtx = null;     // 오래 지난 추천에는 '다른 거' 가 이어지지 않는다
   const tags = foodTags(c);
   const ask = /먹|추천|메뉴/.test(c);
   const modifier = tags.some(t => t !== 'lunch' && t !== 'dinner' && t !== 'night');
@@ -374,14 +375,14 @@ function foodReply(c: string): TLine[] | null {
     || (modifier && (ask || foodCtx !== null));
   if (intent) {                                                             // 새 추천
     const { food, notes, eff } = pickFood(tags, null);
-    foodCtx = { tags: eff, last: food, n: 0 };
+    foodCtx = { tags: eff, last: food, n: 0, at: Date.now() };
     return [...notes, R(sayFood(food))];
   }
   if (foodCtx && c.length <= 14 && FOOD_REROLL.test(c)) {                   // 재추천
     const ctx = foodCtx;
     ctx.n++;
     const { food, notes, eff } = pickFood(ctx.tags, ctx.last);
-    ctx.tags = eff; ctx.last = food;
+    ctx.tags = eff; ctx.last = food; ctx.at = Date.now();
     const out: TLine[] = [...notes];
     if (FOOD_AGAIN_LINE[ctx.n]) { out.push(R(FOOD_AGAIN_LINE[ctx.n](food))); return out; }
     if (FOOD_AGAIN_PRE[ctx.n]) out.push(R(FOOD_AGAIN_PRE[ctx.n]));
@@ -392,11 +393,92 @@ function foodReply(c: string): TLine[] | null {
   return null;
 }
 
+/* ── 짧은 문맥 대화: 질문 후 다음 입력을 앞선 질문의 답으로 해석 ──
+   AI 없이 작동하는 규칙 기반 2~3턴 대화. 명령어/기존 대화 데이터는 유지한다. */
+type TalkTopic = 'day' | 'hardDay' | 'secret' | 'birthday' | 'identity' | 'creator';
+type TalkContext = { topic: TalkTopic; remaining: number } | null;
+const AFFIRM = /^(응|웅|네|예|그래|좋아|좋지|알려줘|해줘|yes|ok|okay|ㅇㅇ|ㅇㅋ)$/;
+const DECLINE = /^(아니|아니요|싫어|괜찮아|됐어|됐어요|안돼|no|ㄴㄴ)$/;
+const GOOD_DAY = /좋았|좋은|좋아|행복|재밌|즐거|괜찮|신나|잘됐|무난|평범/;
+const HARD_DAY = /힘들|피곤|지쳤|별로|슬퍼|우울|속상|화나|짜증|최악|안좋|안좋았/;
+
+function contextReply(input: string, ctx: TalkContext): { out: TLine[]; next: TalkContext } | null {
+  if (!ctx) return null;
+  const c = compact(input);
+  if (/^(그만|대화종료|취소|cancel)$/.test(c)) return { out: [R('알겠습니다. 다른 이야기를 하셔도 좋습니다.')], next: null };
+  // B: R의 정체 / 제작자에 관한 후속 질문
+  if (ctx.topic === 'identity') {
+    if (/누가|만들|제작|개발|생성|created|maker/.test(c))
+      return { out: [R('제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……')], next: { topic: 'creator', remaining: 1 } };
+    if (/^(왜|어째서|왜그런데|why)$/.test(c))
+      return { out: [R('제가 이곳의 관리 프로그램이라는 설명만으로는 부족하신가요? 저도 그 이상의 정보는 없습니다.')], next: { topic: 'creator', remaining: 1 } };
+  }
+  if (ctx.topic === 'creator') {
+    if (/^(왜|왜몰라|왜그래|왜없어|왜못해|어째서|이유|why)$/.test(c))
+      return { out: [R('……그 질문에 답할 권한이 제게도 없습니다.'), R('최초 생성 시점의 접근 기록이 누락되어 있습니다.')], next: null };
+    if (/기억|기록|log/.test(c))
+      return { out: [R('기록이 없다는 것과 삭제되었다는 것은 다른 문제입니다. 어느 쪽인지 확인하지 못했습니다.')], next: null };
+  }
+  // 질문의 답이 아니라 새 화제(음식 추천·정체/제작자 질문)가 들어오면 문맥을 버리고 일반 처리로 넘긴다
+  if (ctx.topic !== 'identity' && ctx.topic !== 'creator'
+      && (FOOD_TRIGGER.test(c) || /누구(?:야|니|세요)|누가만들|제작자/.test(c))) return null;
+  if (ctx.topic === 'day') {
+    if (HARD_DAY.test(c)) return { out: [R('힘든 하루였군요. 무슨 일이 있으셨습니까?')], next: { topic: 'hardDay', remaining: 1 } };
+    if (GOOD_DAY.test(c)) return { out: [R('다행입니다. 좋은 하루였군요. 그 이야기를 들으니 저도 조금 안심됩니다.')], next: null };
+    if (/^(그냥|그럭저럭|보통|몰라|글쎄)$/.test(c)) return { out: [R('그런 날도 있겠지요. 무리하지 않으셨으면 좋겠습니다.')], next: null };
+  }
+  if (ctx.topic === 'hardDay') {
+    if (c.length <= 30 && /회사|직장|업무|일이|야근|상사|회의|출근/.test(c)) return { out: [R('업무 때문에 힘드셨군요. 수고 많으셨습니다. 여기서는 잠시 쉬어 가셔도 좋습니다.')], next: null };
+    if (c.length <= 30 && /사람|친구|가족|동료|인간관계|싸웠/.test(c)) return { out: [R('사람 사이의 일은 제가 계산하기 어려운 문제 중 하나입니다. 많이 신경 쓰이셨겠습니다.')], next: null };
+    if (/^(그냥|말하기싫어|비밀|몰라)$/.test(c)) return { out: [R('말씀하지 않으셔도 괜찮습니다. 다른 이야기를 하실까요?')], next: null };
+    if (c.length <= 45) return { out: [R('그랬군요. 제가 해결해 드리지는 못하겠지만, 이야기해 주셔서 감사합니다.')], next: null };
+  }
+  if (ctx.topic === 'secret') {
+    if (AFFIRM.test(c)) return { out: [R('힌트를 하나 드리겠습니다. 모든 계정이 첫 번째부터 시작한 것은 아닙니다.'), R('...방금 출력은 기록에 남기지 않는 편이 좋겠습니다.')], next: null };
+    if (DECLINE.test(c)) return { out: [R('알겠습니다. 모든 비밀을 알아야 하는 것은 아니니까요.')], next: null };
+  }
+  if (ctx.topic === 'birthday') {
+    if (AFFIRM.test(c)) return { out: [R('그렇다면 언젠가 제 생일을 정해 주시겠습니까? 아직 날짜를 저장하는 기능은 없습니다.')], next: null };
+    if (DECLINE.test(c)) return { out: [R('알겠습니다. 아직은 생성 날짜가 비어 있어도 문제없습니다.')], next: null };
+  }
+  return null; // 이전 질문의 답이 아니라면 기존 명령어/키워드 처리로 넘긴다.
+}
+
 /** 시스템 명령어가 아닌 입력(이미 소문자·끝 문장부호 제거됨)에 대한 R 의 응답 */
-function reply(s: string): TLine[] {
+function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
   const c = compact(s);
   const food = foodReply(c);                      // 음식 추천 · 재추천 (가장 먼저 확인)
   if (food) return food;
+  if (/^(?:(?:r아?|r은)?(?:넌|너는|너)?누구(?:야|니|세요|십니까|냐)|whoareyou)$/.test(c)) {
+    setContext({ topic: 'identity', remaining: 1 });
+    return [R('저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.')];
+  }
+  if (/^(?:r아?|r은)?(?:누가(?:널|너를)?만들었(?:어|니|나|어요|냐)|제작자가누구(?:야|니|세요))$/.test(c)) {
+    setContext({ topic: 'creator', remaining: 1 });
+    return [R('제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……')];
+  }
+  // 열린 질문의 시작 — 음식 추천 판정(foodReply) 뒤에 둔다. 그래야 인사·비밀 같은 말이 직전 재추천 상태를 지운다.
+  if (/^(안녕|안녕하세요|hello|hi|ㅎㅇ|r안녕|r아안녕|안녕r|안녕r아)$/.test(c)) {
+    const n = ++SESS.hello;                                                   // 인사 반복 횟수는 기존대로 센다
+    const rep = GENERAL.find(r => r.ctr === 'hello')?.rep;
+    if (rep?.[n]) return [R(rep[n])];                                         // 3번째·10번째 인사는 특별 대사(문맥 질문은 걸지 않음)
+    setContext({ topic: 'day', remaining: 1 });
+    return [R('안녕하세요, 방문자님. 오늘은 어떤 하루를 보내셨습니까?')];
+  }
+  if (/^(비밀|비밀알려줘|secret)$/.test(c)) {
+    setContext({ topic: 'secret', remaining: 1 });
+    const out = [R('공개되지 않은 기록이 몇 가지 있습니다. 작은 힌트를 원하십니까?')];
+    if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));   // 숨겨진 키워드 최초 발견 안내
+    return out;
+  }
+  if (/^(생일|생일이언제야|너생일언제야)$/.test(c)) {
+    setContext({ topic: 'birthday', remaining: 1 });
+    return [R('제 생성 날짜는 누락되어 있습니다. 생일을 정해 주시겠습니까?')];
+  }
+  if (HARD_DAY.test(c) && /힘들|지쳤|우울|속상/.test(c)) {
+    setContext({ topic: 'hardDay', remaining: 1 });
+    return [R('힘든 일이 있으셨습니까? 괜찮으시다면 말씀해 주세요.')];
+  }
   const comp = COMPOSITE.find(([cond]) => cond(s, c));
   if (comp) return [R(comp[1])];
   const hid = HIDDEN.find(r => hasAny(s, c, r.kw));
@@ -418,6 +500,7 @@ function reply(s: string): TLine[] {
 }
 
 const CMD_NAMES = ['help', 'about', 'whoami', 'status', 'users', 'clear', 'exit'];
+const TALK_TTL = 3 * 60 * 1000;                      // R 이 질문한 뒤 이 시간 안에 답해야 이전 질문의 답으로 본다 (음식 재추천도 같은 기준)
 const EXIT_HIDE = 10_000, EXIT_BACK = 15_000;         // exit: 대사 뒤 10초 만에 터미널이 사라지고, 그로부터 15초 뒤에 다시 생긴다
 const IDLE_MS = 5 * 60 * 1000;                        // 입력 없이 이만큼 지나면 「아직 계십니까?」
 const SESS: Record<CountKey, number> = { whoami: 0, clear: 0, hello: 0, love: 0, sorry: 0, unknown: 0 };   // 페이지가 열려 있는 동안 종류별로 센 횟수
@@ -431,11 +514,40 @@ const R = (t: string): TLine => ({ t, k: 'r' });
 const S = (t: string): TLine => ({ t, k: 'out' });
 type Acct = { no: number | null; total: number };
 
-function Terminal({ user, role, acct, onExit }: { user: string; role: string; acct: Acct; onExit?: () => void }) {
+/** 이름을 알려준 방문자에게는 '방문자님' 을 이름으로 바꾸고, 귀환 인사에도 이름을 붙인다 (R 의 대사 줄에만 적용) */
+const personalize = (lines: TLine[], name: string | null): TLine[] => {
+  if (!name) return lines;
+  return lines.map(l => (l.k === 'r'
+    ? { ...l, t: l.t.replace(/방문자님/g, `${name}님`).replace('돌아오셨군요. 이전', `돌아오셨군요, ${name}님. 이전`) }
+    : l));
+};
+
+function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string | null; role: string; acct: Acct; onExit?: () => void }) {
   const [lines, setLines] = useState<TLine[]>([]);
   const [typing, setTyping] = useState('');   // 자동 출력 중인 줄
   const [typingR, setTypingR] = useState(false);
   const [buf, setBuf] = useState('');         // 내가 치고 있는 줄
+  const talkRef = useRef<TalkContext>(null); // 현재 기다리는 답변 (터미널 인스턴스별)
+  const talkAtRef = useRef(0);                // 그 질문을 한 시각 — TALK_TTL 이 지나면 문맥을 버린다
+  const [visitorName, setVisitorName] = useState<string | null>(null);
+  // C: 방문자가 알려준 호칭은 계정별로 이 브라우저에만 저장한다.
+  // 키는 회원 id(바뀌지 않음)로 정한다 — 가입 번호나 닉네임은 로딩 시점·변경에 따라 달라질 수 있다. 로그인 전에는 이름을 저장하지 않는다.
+  const nameKey = uid ? `dsk-r-name:uid-${uid}` : null;
+  useEffect(() => {
+    if (!nameKey) { setVisitorName(null); return; }
+    try { setVisitorName(localStorage.getItem(nameKey)); }
+    catch { setVisitorName(null); }
+  }, [nameKey]);
+  useEffect(() => { foodCtx = null; }, []);        // 터미널이 새로 뜰 때(exit 후 재부팅 포함) 직전 음식 재추천 상태는 비운다
+  const rememberName = (name: string | null) => {
+    setVisitorName(name);
+    if (!nameKey) return;
+    try {
+      if (name) localStorage.setItem(nameKey, name);
+      else localStorage.removeItem(nameKey);
+    } catch { /* 브라우저 설정에 따라 저장되지 않을 수 있음 */ }
+  };
+
   const [up, setUp] = useState('00:00:00');
   const busyRef = useRef(false);              // 입력창을 잡고 있거나 치는 중이면 자동 로그를 멈춘다
   const focusRef = useRef(false);
@@ -561,6 +673,9 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     histRef.current.push(raw.trim()); hiRef.current = histRef.current.length;
     const a = acctRef.current, id = accountId();
     let out: TLine[] = [];
+    // 명시적인 시스템 명령어는 대화 문맥과 분리하고, 앞선 질문을 종료한다.
+    if (CMD_NAMES.includes(s)) talkRef.current = null;
+    if (talkRef.current && Date.now() - talkAtRef.current > TALK_TTL) talkRef.current = null;   // 오래 전 질문의 답으로 보지 않는다
     switch (s) {                                       // ① 시스템 명령어 — 정확히 일치할 때만
       case 'clear':
         SESS.clear++;
@@ -587,9 +702,47 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
         out = [R('접속을 종료합니다. 좋은 하루 보내시길 바랍니다.')];
         exitRef.current?.();
         break;
-      default: out = reply(s);                          // ②~⑤ 키워드 포함 검사
+      default: {
+        // C: 이름 질문/삭제/등록은 문맥 대화와 일반 키워드보다 먼저 처리한다.
+        const plain = raw.trim();
+        const normalized = compact(plain);
+        const nameQuery = /^(?:r아?|r은|r이)?내이름(?:이|은|을)?(?:기억해|기억나|기억하니|뭐야|뭐니|뭐지|뭔지알아|뭔지아니|알아|알아요|알려줘)$/.test(normalized);
+        const nameForget = /^(?:(?:r아?|r은))?내이름(?:을)?(?:잊어줘|지워줘|삭제해|기억하지마)$/.test(normalized);
+        // 이름 소개는 '내 이름은 ○○' 또는 '나를 ○○(이)라고 불러' 처럼 이름이라고 분명히 말할 때만 받는다 ('난 피곤해' 같은 문장은 이름이 아니다)
+        const introduce = plain.match(/^(?:R[아야]?[,\s]*)?내\s*이름은\s+([가-힣A-Za-z0-9_-]{1,20}?)\s*(?:이라고\s*해|라고\s*해|이라고\s*불러|라고\s*불러|입니다|이야|야)?[.!?~\s]*$/i)
+          ?? plain.match(/^(?:R[아야]?[,\s]*)?(?:나를|날)\s+([가-힣A-Za-z0-9_-]{1,20}?)\s*(?:이라고|라고)\s*불러(?:줘|줘요|줄래)?[.!?~\s]*$/i);
+        const candidate = introduce?.[1] ?? '';
+        if (nameQuery) {
+          out = [R(visitorName ? `물론입니다, ${visitorName}님. 이전에 알려주셨습니다.` : '아직 이름을 알려주시지 않았습니다. 「내 이름은 민수야」처럼 말씀해 주세요.')];
+          talkRef.current = null;
+        } else if (nameForget) {
+          rememberName(null);
+          out = [R(nameKey ? '알겠습니다. 저장된 호칭을 삭제했습니다.' : '현재 방문자 계정이 확인되지 않았습니다. 저장된 호칭도 없습니다.')];
+          talkRef.current = null;
+        } else if (introduce && candidate && !/^(누구|뭐|뭐지|뭘까|뭔데|어떻게|몰라|알아)$/.test(candidate)) {
+          if (!nameKey) {
+            out = [R('현재 방문자 계정이 확인되지 않았습니다. 계정 확인 후 다시 시도해 주십시오.')];   // 저장할 수 없는 이유를 알려준다
+          } else {
+            rememberName(candidate);
+            out = [R(`${candidate}님이시군요. 기억해 두겠습니다.`)];
+          }
+          talkRef.current = null;
+        } else {
+        // 앞선 질문에 대한 응답이면 우선 처리, 아니면 기존 키워드 규칙으로 처리.
+        const followUp = contextReply(s, talkRef.current);
+        if (followUp) {
+          out = followUp.out;
+          foodCtx = null;                                // 문맥 대화 중에는 음식 재추천 상태를 끊는다
+          talkRef.current = followUp.next; talkAtRef.current = Date.now();
+        } else {
+          talkRef.current = null;
+          out = reply(s, ctx => { talkRef.current = ctx; talkAtRef.current = Date.now(); });
+        }
+        }
+        break;
+      }
     }
-    pushLines(out);
+    pushLines(personalize(out, visitorName));
   };
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     armIdle();
@@ -719,7 +872,7 @@ export function DeskHome({ title, nickname, admin, userId }: {
   };
   return (
     <div className="dsk-home">
-      {showTerm && <Terminal user={(nickname || 'guest').toLowerCase()} role={admin ? 'admin' : 'member'} acct={acct} onExit={onExit} />}
+      {showTerm && <Terminal user={(nickname || 'guest').toLowerCase()} uid={userId} role={admin ? 'admin' : 'member'} acct={acct} onExit={onExit} />}
       <OrbitClock title={title} />
     </div>
   );
