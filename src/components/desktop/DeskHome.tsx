@@ -5,6 +5,7 @@
 // 터미널은 제목줄 드래그로 옮기고, 가장자리·모서리를 잡아 크기를 바꾼다(위치·크기는 이 브라우저에 기억). 정해진 명령어는 직접 칠 수도 있다. 나머지는 pointer-events:none — 아래 아이콘·창 조작을 가로막지 않는다.
 import React, { useEffect, useRef, useState } from 'react';
 import { useMembers } from '@/lib/members';
+import { getSetting, setSetting } from '@/lib/settingStore';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -481,7 +482,10 @@ function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
   return [R(WRONG[i])];
 }
 
-const CMD_NAMES = ['help', 'about', 'whoami', 'status', 'users', 'clear', 'exit'];
+const CMD_NAMES = ['help', 'about', 'whoami', 'status', 'users', 'clear', 'guide', 'exit'];
+// guide: 이 홈페이지에 대한 안내문. 설정(settings/ohome.guide.v1)에 저장하므로 모든 방문자가 같은 글을 보고, 쓰기는 관리자만 된다(보안 규칙).
+const GUIDE_KEY = 'ohome.guide.v1';
+const GUIDE_MAX = 6000;
 const TALK_TTL = 3 * 60 * 1000;                      // R 이 질문한 뒤 이 시간 안에 답해야 이전 질문의 답으로 본다 (음식 재추천도 같은 기준)
 const EXIT_HIDE = 10_000, EXIT_BACK = 15_000;         // exit: 대사 뒤 10초 만에 터미널이 사라지고, 그로부터 15초 뒤에 다시 생긴다
 const IDLE_MS = 5 * 60 * 1000;                        // 입력 없이 이만큼 지나면 「아직 계십니까?」
@@ -641,6 +645,9 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
   const [typingR, setTypingR] = useState(false);
   const [buf, setBuf] = useState('');         // 내가 치고 있는 줄
   const talkRef = useRef<TalkContext>(null); // 현재 기다리는 답변 (터미널 인스턴스별)
+  const [editing, setEditing] = useState<string | null>(null);   // guide edit — 수정 중인 글 (null 이면 편집창 닫힘)
+  const [guideDraft0, setGuideDraft0] = useState('');             // 편집을 연 시점의 글 — 바뀐 게 있는지 비교용
+  const isAdmin = role === 'admin';
   const talkAtRef = useRef(0);                // 그 질문을 한 시각 — TALK_TTL 이 지나면 문맥을 버린다
   const treeRef = useRef<TreeState>(null);    // 꼬투리 질문 대화 트리
   const [, setClues] = useState<string[]>([]);  // 발견한 단서 (저장만 한다)
@@ -795,6 +802,32 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
   };
   useEffect(() => { armIdle(); return () => clearTimeout(idleRef.current); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  const readGuide = () => { const v = getSetting<unknown>(GUIDE_KEY, ''); return typeof v === 'string' ? v : ''; };
+  const guideLines = (): TLine[] => {
+    const text = readGuide();
+    if (!text.trim()) return [R('아직 작성된 가이드가 없습니다.'), ...(isAdmin ? [R('「guide edit」 로 직접 작성하실 수 있습니다.')] : [])];
+    return [R('이 홈페이지에 대한 안내입니다.'), S(' '), ...text.replace(/\r\n/g, '\n').split('\n').map(l => S(l.trim() ? l : ' ')), S(' ')];
+  };
+  const openGuideEditor = () => {
+    const t = readGuide();
+    setGuideDraft0(t); setEditing(t);
+    busyRef.current = true;                                  // 편집하는 동안 자동 로그를 멈춘다
+  };
+  const closeGuideEditor = (msg: string) => {
+    setEditing(null);
+    busyRef.current = bufRef.current.length > 0;
+    stickRef.current = true;
+    pushLines([R(msg)]);
+    window.setTimeout(() => inRef.current?.focus({ preventScroll: true }), 0);
+  };
+  const saveGuide = () => {
+    if (!isAdmin || editing === null) return;
+    const text = editing.replace(/\r\n/g, '\n').trimEnd().slice(0, GUIDE_MAX);
+    setSetting(GUIDE_KEY, text);                             // 캐시·로컬 → DB. 서버 저장이 실패하면 SettingSync 가 알려 준다
+    closeGuideEditor(text ? '가이드를 저장했습니다. 「guide」 로 확인해 보세요.' : '가이드를 비웠습니다. 이제 기본 안내가 표시됩니다.');
+  };
+  const cancelGuide = () => closeGuideEditor('수정을 취소했습니다.');
+
   const exec = (raw: string) => {
     const s = norm(raw);
     stickRef.current = true;
@@ -804,7 +837,7 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
     const a = acctRef.current, id = accountId();
     let out: TLine[] = [];
     // 명시적인 시스템 명령어는 대화 문맥과 분리하고, 앞선 질문을 종료한다.
-    if (CMD_NAMES.includes(s)) { talkRef.current = null; treeRef.current = null; }
+    if (CMD_NAMES.includes(s) || s === 'guide edit') { talkRef.current = null; treeRef.current = null; }
     if (talkRef.current && Date.now() - talkAtRef.current > TALK_TTL) talkRef.current = null;   // 오래 전 질문의 답으로 보지 않는다
     switch (s) {                                       // ① 시스템 명령어 — 정확히 일치할 때만
       case 'clear':
@@ -812,7 +845,7 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
         setLines(SESS.clear === 5 ? [R('기록을 자주 지우시는군요.')] : []);
         return;
       case 'help':
-        out = [S('사용 가능한 명령어 목록을 출력합니다.'), S('  help  about  whoami  status'), S('  users  clear  exit'), S('  R 에게 말을 걸어볼 수도 있습니다 — 예: 안녕'), S('  메뉴가 고민이라면 — 예: 점메추')];
+        out = [S('사용 가능한 명령어 목록을 출력합니다.'), S('  help  about  whoami  status'), S('  users  clear  guide  exit'), ...(isAdmin ? [S('  guide edit  (관리자: 가이드 수정)')] : []), S('  R 에게 말을 걸어볼 수도 있습니다 — 예: 안녕'), S('  메뉴가 고민이라면 — 예: 점메추')];
         break;
       case 'about': out = [R('이곳은 개인 기록 보관소입니다. 자유롭게 둘러보셔도 좋습니다.')]; break;
       case 'whoami': {
@@ -828,6 +861,11 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
         out = [R(a.total ? `현재까지 등록된 방문자 계정은 총 ${a.total}개입니다.` : '등록된 방문자 계정 정보를 확인할 수 없습니다.')];
         break;
       case 'status': out = [S('SYSTEM: ONLINE / R: ACTIVE / ERROR: 0')]; break;
+      case 'guide': out = guideLines(); break;
+      case 'guide edit':
+        if (isAdmin) { out = [R('가이드를 수정합니다. 저장은 아래 버튼 또는 Ctrl+Enter 입니다.')]; openGuideEditor(); }
+        else out = [R('가이드 수정은 관리자만 할 수 있습니다.')];
+        break;
       case 'exit':
         out = [R('접속을 종료합니다. 좋은 하루 보내시길 바랍니다.')];
         exitRef.current?.();
@@ -972,7 +1010,7 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
     <div ref={boxRef} className={`dsk-term${dragging ? ' drag' : ''}`} role="region" aria-label="terminal"
       onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <div className="dsk-term-bar" onPointerDown={onDown}><i /><i /><i /><span>terminal — {user}@home</span></div>
-      <div ref={bodyRef} className="dsk-term-body" onClick={() => inRef.current?.focus({ preventScroll: true })}
+      <div ref={bodyRef} className="dsk-term-body" style={editing !== null ? { display: 'none' } : undefined} onClick={() => inRef.current?.focus({ preventScroll: true })}
         onScroll={e => { const b = e.currentTarget; stickRef.current = b.scrollHeight - b.scrollTop - b.clientHeight < 24; }}>
         <div className="dsk-term-log">
           {lines.map((l, i) => l.k === 'out' ? <p key={i} className="out">{l.t}</p>
@@ -987,7 +1025,25 @@ function Terminal({ user, uid, role, acct, onExit }: { user: string; uid: string
         onFocus={() => { focusRef.current = true; busyRef.current = true; }}
         onBlur={() => { focusRef.current = false; busyRef.current = bufRef.current.length > 0; }}
         autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} aria-label="terminal input" />
-      <div className="dsk-term-foot"><span>UPTIME</span><b>{up}</b></div>
+      {editing !== null && (
+        <div className="dsk-term-edit">
+          <textarea autoFocus value={editing} maxLength={GUIDE_MAX} spellCheck={false} aria-label="guide editor"
+            placeholder="이 홈페이지에 대한 안내를 적어 주세요. 줄바꿈은 그대로 표시됩니다."
+            onChange={e => setEditing(e.target.value)}
+            onKeyDown={e => {
+              e.stopPropagation();                                          // 바탕화면 단축키로 새지 않게
+              if (e.nativeEvent.isComposing) return;                        // 한글 조합 중 오작동 방지
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveGuide(); }
+              else if (e.key === 'Escape' && editing === guideDraft0) cancelGuide();   // 바뀐 게 없을 때만 Esc 로 닫는다
+            }} />
+        </div>
+      )}
+      {editing !== null
+        ? <div className="dsk-term-foot edit">
+            <span>{editing.length}/{GUIDE_MAX}</span>
+            <span className="btns"><button type="button" onClick={cancelGuide}>취소</button><button type="button" className="ok" onClick={saveGuide}>저장</button></span>
+          </div>
+        : <div className="dsk-term-foot"><span>UPTIME</span><b>{up}</b></div>}
       {RZ_DIRS.map(d => <i key={d} className={`dsk-rz ${d}`} data-d={d}
         onPointerDown={onRzDown} onPointerMove={onRzMove} onPointerUp={onRzUp} onPointerCancel={onRzUp} />)}
     </div>

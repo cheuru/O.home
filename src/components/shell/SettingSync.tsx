@@ -16,6 +16,7 @@ const LABEL: Record<string, string> = {
   'ohome.menuset.v1': '메뉴',
   'ohome.main.v1': '메인 위젯',
   'ohome.pagetext.v1': '페이지 문구',
+  'ohome.guide.v1': '터미널 가이드',
 };
 
 export function SettingSync() {
