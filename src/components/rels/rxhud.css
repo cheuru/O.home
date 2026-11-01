@@ -1,0 +1,105 @@
+/* 인덱스 틀 장식 (RxHud.tsx) — 모든 색은 테마 포인트색(--accent)에서 나온다. 반복 동작은 전부 CSS, 숫자 몇 개만 JS.
+   「동작 줄이기」 설정에서는 globals.css 의 `.rx *` 규칙이 애니메이션을 모두 멈춘다. */
+.rx{position:relative;--hud:var(--accent,#c0457a)}
+.rx-hud{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;color:var(--hud);animation:rxHudIn 1.2s ease 1.1s both}
+@keyframes rxHudIn{from{opacity:0}to{opacity:1}}
+
+/* ── 위→아래 스캔선 ── */
+.rx-hud-scan{position:absolute;left:0;right:0;top:-90px;height:90px;
+  background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--hud) 11%,transparent) 85%,color-mix(in srgb,var(--hud) 26%,transparent));
+  border-bottom:1px solid color-mix(in srgb,var(--hud) 55%,transparent);animation:rxHudScan 7.5s cubic-bezier(.5,0,.5,1) infinite}
+@keyframes rxHudScan{0%{top:-90px;opacity:0}8%{opacity:1}88%{opacity:1}100%{top:100%;opacity:0}}
+
+/* ── 레이더 ── */
+.rx-hud-radar{position:absolute;right:3%;top:96px;width:clamp(170px,19vw,290px);aspect-ratio:1;opacity:.55}
+.rx-hud-radar svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.hr-spin{transform-box:view-box;transform-origin:50% 50%}
+.hr-spin.a{animation:rxSpin 60s linear infinite}
+.hr-spin.b{animation:rxSpin 24s linear infinite reverse}
+.hr-spin.c{animation:rxSpin 16s linear infinite}
+@keyframes rxSpin{to{transform:rotate(360deg)}}
+.rx-hud-sweep{position:absolute;inset:6%;border-radius:50%;
+  background:conic-gradient(from 0deg,transparent 0 292deg,color-mix(in srgb,var(--hud) 38%,transparent) 360deg);
+  animation:rxSpin 6s linear infinite}
+.hr-blip{fill:var(--hud);opacity:.1;animation:rxBlip 6s linear infinite}
+.hr-blip.b1{animation-delay:.78s}
+.hr-blip.b2{animation-delay:3.87s}
+.hr-blip.b3{animation-delay:2.65s}
+@keyframes rxBlip{0%{opacity:1;transform:scale(1.8)}8%{opacity:1}35%{opacity:.12;transform:scale(1)}100%{opacity:.12}}
+.hr-blip{transform-box:fill-box;transform-origin:center}
+.rx-hud-lab{position:absolute;font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.22em;white-space:nowrap}
+.rx-hud-lab.t{left:50%;top:-16px;transform:translateX(-50%)}
+.rx-hud-lab.b{left:50%;bottom:-16px;transform:translateX(-50%)}
+
+/* ── 좌표 조준 (십자선이 돌아다니다 잠긴다) ── */
+.rx-hud-lock{position:absolute;inset:0;opacity:.5}
+.rx-hud-lock i{position:absolute;background:color-mix(in srgb,var(--hud) 45%,transparent)}
+.rx-hud-lock .lk-h{left:0;right:0;height:1px;animation:rxLkY 13s cubic-bezier(.7,0,.2,1) infinite;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent);mask-image:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent)}
+.rx-hud-lock .lk-v{top:0;bottom:0;width:1px;animation:rxLkX 13s cubic-bezier(.7,0,.2,1) infinite;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent);mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent)}
+.rx-hud-lock .lk-box{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;animation:rxLkX 13s cubic-bezier(.7,0,.2,1) infinite,rxLkY2 13s cubic-bezier(.7,0,.2,1) infinite}
+.rx-hud-lock .lk-box u{position:absolute;width:9px;height:9px;border:0 solid var(--hud);animation:rxLkBlink 13s steps(1) infinite}
+.lk-box u:nth-child(1){left:0;top:0;border-width:1.5px 0 0 1.5px}
+.lk-box u:nth-child(2){right:0;top:0;border-width:1.5px 1.5px 0 0}
+.lk-box u:nth-child(3){left:0;bottom:0;border-width:0 0 1.5px 1.5px}
+.lk-box u:nth-child(4){right:0;bottom:0;border-width:0 1.5px 1.5px 0}
+.rx-hud-lock .lk-txt{position:absolute;font:700 8px/1 ui-monospace,Menlo,monospace;letter-spacing:.3em;margin:-30px 0 0 14px;animation:rxLkX 13s cubic-bezier(.7,0,.2,1) infinite,rxLkY2 13s cubic-bezier(.7,0,.2,1) infinite,rxLkTxt 13s steps(1) infinite}
+/* 같은 시각표 — 움직이고(이동) 멈춰서(잠금) 반복. 세로 위치는 선(top)과 상자(top)가 같아야 하므로 두 키프레임 이름이 같은 값을 쓴다 */
+@keyframes rxLkX{0%,10%{left:62%}18%,38%{left:80%}46%,62%{left:48%}70%,88%{left:70%}96%,100%{left:62%}}
+@keyframes rxLkY{0%,10%{top:34%}18%,38%{top:58%}46%,62%{top:26%}70%,88%{top:72%}96%,100%{top:34%}}
+@keyframes rxLkY2{0%,10%{top:34%}18%,38%{top:58%}46%,62%{top:26%}70%,88%{top:72%}96%,100%{top:34%}}
+@keyframes rxLkBlink{0%,10%{opacity:.5}18%{opacity:1}22%{opacity:.2}26%{opacity:1}30%{opacity:.2}34%,38%{opacity:1}46%{opacity:.5}54%{opacity:1}58%{opacity:.2}62%{opacity:1}70%{opacity:.5}78%{opacity:1}82%{opacity:.2}86%,88%{opacity:1}96%,100%{opacity:.5}}
+@keyframes rxLkTxt{0%,16%{opacity:0}18%,38%{opacity:1}39%,52%{opacity:0}54%,62%{opacity:1}63%,76%{opacity:0}78%,88%{opacity:1}89%,100%{opacity:0}}
+
+/* ── 오른쪽 눈금자 ── */
+.rx-hud-ruler{position:absolute;right:0;top:52px;bottom:52px;width:24px;opacity:.5}
+.rx-hud-ruler svg{position:absolute;inset:0;width:100%;height:100%}
+.rx-hud-mark{position:absolute;right:0;width:0;height:0;border:5px solid transparent;border-right:8px solid var(--hud);border-left:0;margin-top:-5px;animation:rxMark 9s cubic-bezier(.6,0,.4,1) infinite alternate}
+@keyframes rxMark{0%{top:6%}30%{top:38%}45%{top:38%}70%{top:84%}100%{top:20%}}
+
+/* ── 아래 왼쪽 막대 ── */
+.rx-hud-bars{position:absolute;left:0;bottom:44px;display:flex;align-items:flex-end;gap:3px;height:26px;opacity:.45}
+.rx-hud-bars i{width:3px;height:100%;background:var(--hud);transform-origin:bottom;animation:rxBar var(--s,1.4s) ease-in-out var(--d,0s) infinite alternate}
+@keyframes rxBar{from{transform:scaleY(.12)}to{transform:scaleY(1)}}
+
+/* ── 머리줄 좌표 숫자 ── */
+.rx-coord{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:8px;white-space:pre;
+  font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.2em;color:var(--page-desc);animation:rxFade .6s ease .6s both}
+.rx-coord i{width:5px;height:5px;border-radius:50%;background:var(--hud);animation:rxHudDot 1.2s steps(1) infinite}
+@keyframes rxHudDot{50%{opacity:.15}}
+
+/* ── 바닥줄 심박선 ── */
+.rx-pulse{display:inline-flex;align-items:center;gap:10px;flex:1;max-width:300px;min-width:0;color:var(--hud)}
+.rx-pulse-svg{flex:1;min-width:40px;height:20px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+.rx-pulse-svg path{fill:none;stroke:currentColor;stroke-width:1.3;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.rx-pulse-run{animation:rxPulseRun 2.4s linear infinite}
+@keyframes rxPulseRun{to{transform:translateX(-120px)}}
+.rx-pulse b{font:700 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;white-space:nowrap}
+.rx-pulse b small{font-size:8px;opacity:.6;font-weight:600}
+
+/* ── 카드 위 장식 (캐릭터 목록 카드 한정) — 스캔 띠 + 떠다니는 조준 십자 ── */
+.chars-grid .rx-art::after{content:"";position:absolute;left:0;right:0;top:-34%;height:34%;pointer-events:none;mix-blend-mode:screen;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.16) 78%,rgba(255,255,255,.5));
+  border-bottom:1px solid rgba(255,255,255,.55);
+  animation:rxCardScan 5.2s linear calc(var(--i,0)*.6s + 1.6s) infinite}
+@keyframes rxCardScan{0%{top:-34%;opacity:0}10%{opacity:1}85%{opacity:1}100%{top:100%;opacity:0}}
+.chars-grid .rx-card::before{content:"";position:absolute;z-index:1;width:16px;height:16px;margin:-8px 0 0 -8px;pointer-events:none;mix-blend-mode:difference;opacity:.8;
+  background:
+    linear-gradient(#fff,#fff) center/1px 100% no-repeat,
+    linear-gradient(#fff,#fff) center/100% 1px no-repeat;
+  animation:rxCardAim 9s cubic-bezier(.6,0,.3,1) calc(var(--i,0)*-1.3s) infinite}
+@keyframes rxCardAim{0%,12%{left:34%;top:30%}24%,42%{left:62%;top:46%}54%,70%{left:40%;top:64%}82%,100%{left:34%;top:30%}}
+.chars-grid .rx-card:hover::before{animation-play-state:paused;opacity:1}
+
+@media (max-width:1100px){
+  .rx-coord{display:none}
+}
+@media (max-width:900px){
+  .rx-hud-radar,.rx-hud-lock{display:none}
+}
+@media (max-width:640px){
+  .rx-hud-ruler,.rx-hud-bars{display:none}
+  .rx-pulse{max-width:140px}
+}

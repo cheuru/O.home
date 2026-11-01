@@ -10,6 +10,7 @@ import { backend, isServerMode } from '@/lib/backend';
 import { useSectionParam, filterSection, sectionSetter, secQuery } from '@/lib/sectionStore';
 import { SearchBar, FitText } from '@/components/ui/Kit';
 import { RxCard } from '@/components/rels/RxCard';
+import { RxHud, RxCoord, RxPulse } from '@/components/rels/RxHud';
 
 import { useToast } from '@/components/ui/Toast';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
@@ -68,9 +69,10 @@ function CharsInner() {
         <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
         <div className="rx-headline">
           <span className="rx-cap">CHARACTER ARCHIVE // CHARACTER INDEX</span>
+          <RxCoord />
           <span className="rx-count"><em>CHARACTER</em><b>{String(visible.length).padStart(2, '0')}</b></span>
         </div>
-        <div className="rx-ghost" aria-hidden="true">CHARACTER</div>
+        <RxHud />
       <div className="g5 chars-grid rx-pad">
         {visible.map((c, i) => {
           const priv = c.visibility === 'private';
@@ -93,6 +95,7 @@ function CharsInner() {
         <div className="rx-foot">
           <span className="rx-bar" aria-hidden="true" />
           <span className="rx-cap">CHARACTER FILE // {String(visible.length).padStart(2, '0')}</span>
+          <RxPulse />
           <span className="rx-chev" aria-hidden="true">›››</span>
         </div>
       </div>
