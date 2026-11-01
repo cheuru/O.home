@@ -11,6 +11,7 @@ import { BgmPlayer } from '@/components/shell/BgmPlayer';
 import { TipLayer } from '@/components/ui/TipLayer';
 import { CursorLayer } from '@/components/shell/CursorLayer';
 import { ClickFx } from '@/components/shell/ClickFx';
+import { EmbedEditBar } from '@/components/shell/EmbedEditBar';
 import { SpaceBackground } from '@/components/shell/SpaceBackground';
 import { ImgProtect } from '@/components/shell/ImgProtect';
 import { SetupGate } from '@/components/shell/SetupGate';
@@ -106,6 +107,8 @@ if(navigator.userAgent.indexOf('Whale/')>-1){document.documentElement.style.colo
                   <CursorLayer />
                   {/* 클릭 효과 — 어느 페이지에서나 링이 퍼지고 비프음이 난다 */}
                   <ClickFx />
+                  {/* 데스크톱 창 안 페이지의 편집 도구줄 — 상단바가 감춰져 사라졌던 편집모드·위젯 추가 */}
+                  <EmbedEditBar />
                   {/* 이미지 저장 방지 — 메뉴 관리 > 권한에서 영역별 지정 (v1.9) */}
                   <ImgProtect />
                   {/* 브라우저 탭 제목 — 디자인 탭에서 지정 (v1.9) */}
