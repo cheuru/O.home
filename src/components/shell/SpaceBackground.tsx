@@ -118,6 +118,18 @@ export function SpaceBackground() {
       ctx!.beginPath(); ctx!.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, a0, a1); ctx!.stroke();
     }
     const TAU = 6.2832;
+    // 화면 끝까지 쭉 뻗는 직선 궤도 — (cx,cy)를 지나는 기운 직선. 가운데는 진하고 양 끝은 옅어진다
+    function beam(cx: number, cy: number, rot: number, a: number, w: number) {
+      const L = Math.hypot(W, H) + 200; // 어느 방향이든 화면 밖까지
+      const ux = Math.cos(rot), uy = Math.sin(rot);
+      const x1 = cx - ux * L, y1 = cy - uy * L, x2 = cx + ux * L, y2 = cy + uy * L;
+      const g = ctx!.createLinearGradient(x1, y1, x2, y2);
+      g.addColorStop(0, `hsla(${hh(0)},75%,90%,${a * 0.25})`);
+      g.addColorStop(0.5, `hsla(${hh(0)},75%,90%,${a})`);
+      g.addColorStop(1, `hsla(${hh(0)},75%,90%,${a * 0.25})`);
+      ctx!.lineWidth = w; ctx!.strokeStyle = g;
+      ctx!.beginPath(); ctx!.moveTo(x1, y1); ctx!.lineTo(x2, y2); ctx!.stroke();
+    }
     function drawSystem(cx: number, cy: number, R: number, t: number, k: number, big: boolean) {
       const line = (a: number) => `hsla(${hh(0)},75%,90%,${a})`;
       const glow = `hsla(${hh(-6)},100%,82%,.9)`;
@@ -129,6 +141,8 @@ export function SpaceBackground() {
         const ex = Math.cos(ang) * rx, ey = Math.sin(ang) * ry;
         return [cx + ex * Math.cos(rot) - ey * Math.sin(rot), cy + ex * Math.sin(rot) + ey * Math.cos(rot)];
       };
+      // 직선 위의 점 — 중심에서 rot 방향으로 d 만큼
+      const onLine = (rot: number, d: number): [number, number] => [cx + Math.cos(rot) * d, cy + Math.sin(rot) * d];
       ctx!.lineCap = 'round';
       // 점선 십자축
       ctx!.lineWidth = 0.8; ctx!.strokeStyle = line(0.2); ctx!.setLineDash([3, 6]);
@@ -153,15 +167,14 @@ export function SpaceBackground() {
         // 점으로 이어진 바깥 궤도
         ctx!.lineWidth = 1; ctx!.strokeStyle = line(0.26); ctx!.setLineDash([1, 7]); ell(cx, cy, R * 1.8, R * 1.8); ctx!.setLineDash([]);
       }
-      // 길게 기운 타원 궤도 + 도는 점
+      // 길게 기운 직선 궤도 (화면 끝까지) + 그 위를 오가는 점
       const er = big ? -0.27 : -0.72;
-      ctx!.lineWidth = 1.1; ctx!.strokeStyle = line(0.5);
-      ell(cx, cy, R * (big ? 1.75 : 3.2), R * (big ? 0.27 : 0.62), er);
-      const [ex, ey] = onEll(R * (big ? 1.75 : 3.2), R * (big ? 0.27 : 0.62), er, t * 0.2 * k + 0.6);
+      beam(cx, cy, er, 0.5, 1.1);
+      const [ex, ey] = onLine(er, Math.sin(t * 0.2 * k + 0.6) * R * (big ? 1.75 : 3.2));
       dot(ex, ey, big ? 4 : 3);
-      if (!big) { // 달: 교차하는 가는 타원 하나 더 + 별 모양 십자 선
-        ctx!.lineWidth = 0.9; ctx!.strokeStyle = line(0.3); ell(cx, cy, R * 2.4, R * 0.4, 0.72);
-        const [fx, fy] = onEll(R * 2.4, R * 0.4, 0.72, -t * 0.28 * k);
+      if (!big) { // 달: 교차하는 가는 직선 하나 더 (별 모양 십자)
+        beam(cx, cy, 0.72, 0.3, 0.9);
+        const [fx, fy] = onLine(0.72, Math.sin(-t * 0.28 * k) * R * 2.4);
         dot(fx, fy, 2.2);
       }
       // 가운데 점

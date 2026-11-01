@@ -2,7 +2,7 @@
 // 데스크톱 첫 화면 장식 (사용자 요청) — 창이 하나도 없을 때만 보인다.
 //  · 가운데: 궤도 시계 — 초·분·시가 행성처럼 세 겹 궤도를 돈다 (가운데에 사이트 이름 + 디지털 시각)
 //  · 왼쪽 위: 시스템 터미널 — 부팅 로그가 타이핑되고, 접속 시간(uptime)이 실시간으로 흐른다
-// 전부 pointer-events:none — 아래 아이콘·창 조작을 가로막지 않는다.
+// 터미널은 드래그로 옮길 수 있다(위치는 이 브라우저에 기억). 나머지는 pointer-events:none — 아래 아이콘·창 조작을 가로막지 않는다.
 import React, { useEffect, useRef, useState } from 'react';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -116,6 +116,55 @@ function Terminal({ user, role }: { user: string; role: string }) {
   const [typing, setTyping] = useState('');
   const [up, setUp] = useState('00:00:00');
 
+  // ── 드래그로 위치 옮기기 (놓으면 localStorage 에 저장, 창 크기가 바뀌어도 화면 안으로 되돌린다)
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const KEY = 'dsk-term-pos';
+  const clamp = (x: number, y: number) => {
+    const el = boxRef.current, par = el?.offsetParent as HTMLElement | null;
+    if (!el || !par) return { x, y };
+    return {
+      x: Math.min(Math.max(0, x), Math.max(0, par.clientWidth - el.offsetWidth)),
+      y: Math.min(Math.max(0, y), Math.max(0, par.clientHeight - el.offsetHeight)),
+    };
+  };
+  const place = (x: number, y: number) => {
+    const el = boxRef.current; if (!el) return;
+    const p = clamp(x, y);
+    el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
+    return p;
+  };
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const v = JSON.parse(raw); if (typeof v.x === 'number' && typeof v.y === 'number') place(v.x, v.y); }
+    } catch { /* 저장값 없음/손상 — 기본 위치 */ }
+    const onResize = () => { const el = boxRef.current; if (el) place(el.offsetLeft, el.offsetTop); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const el = boxRef.current; if (!el) return;
+    drag.current = { dx: e.clientX - el.offsetLeft, dy: e.clientY - el.offsetTop };
+    el.setPointerCapture(e.pointerId);
+    setDragging(true);
+    e.preventDefault();
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    place(e.clientX - drag.current.dx, e.clientY - drag.current.dy);
+  };
+  const onUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    drag.current = null; setDragging(false);
+    try { boxRef.current?.releasePointerCapture(e.pointerId); } catch { /* 이미 해제됨 */ }
+    const el = boxRef.current;
+    if (el) try { localStorage.setItem(KEY, JSON.stringify({ x: el.offsetLeft, y: el.offsetTop })); } catch { /* 저장 불가 */ }
+  };
+
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const t0 = Date.now();
@@ -159,7 +208,8 @@ function Terminal({ user, role }: { user: string; role: string }) {
   }, [user, role]);
 
   return (
-    <div className="dsk-term" aria-hidden="true">
+    <div ref={boxRef} className={`dsk-term${dragging ? ' drag' : ''}`} aria-hidden="true"
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <div className="dsk-term-bar"><i /><i /><i /><span>terminal — {user}@home</span></div>
       <div className="dsk-term-body">
         {lines.map((l, i) => <p key={i}><em>&gt;</em> {l}</p>)}

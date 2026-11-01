@@ -182,7 +182,9 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 
 .dsk-term { position: absolute; left: 26px; top: 22px; width: min(340px, 40vw); border: 1px solid rgba(180,170,255,.22); border-radius: 12px;
   background: rgba(6,7,24,.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 10px 40px rgba(0,0,0,.35); overflow: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; animation: dskIn .9s .2s ease both; }
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; animation: dskIn .9s .2s ease both;
+  pointer-events: auto; cursor: grab; user-select: none; touch-action: none; } /* 드래그로 이동 */
+.dsk-term.drag { cursor: grabbing; box-shadow: 0 14px 48px rgba(0,0,0,.5); border-color: rgba(220,200,255,.4); }
 .dsk-term-bar { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-bottom: 1px solid rgba(180,170,255,.16); font-size: 10px; color: #9d97c8; letter-spacing: .06em; }
 .dsk-term-bar i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,170,205,.7); }
 .dsk-term-bar i:nth-child(2) { background: rgba(190,175,255,.7); } .dsk-term-bar i:nth-child(3) { background: rgba(160,200,255,.7); }
