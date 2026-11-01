@@ -251,6 +251,8 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 .dsk-bgm { background: none; border: 0; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--top-fg); transition: .15s; }
 .dsk-bgm:hover { background: var(--dd-hv); color: var(--top-hv); }
 .dsk-bgm svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.dsk-bell { position: relative; }
+.dsk-bell[data-n]:not([data-n="0"])::after { content: attr(data-n); position: absolute; top: -3px; right: -4px; background: var(--accent); color: #fff; font-size: calc(9px*var(--fs,1)); font-weight: 700; width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center; line-height: 1; letter-spacing: 0; }
 .dsk-bgm.open { background: var(--dd-hv); color: var(--top-hv); }   /* 펼쳐진 상태 표시 */
 .dsk-bgm.on { color: var(--accent-soft, var(--top-hv)); }
 .dsk-bgm.on .w1 { animation: dsk-wave 1.2s ease-in-out infinite; }

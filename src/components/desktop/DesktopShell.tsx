@@ -11,6 +11,10 @@ import { sectionMenuEntries, useSections } from '@/lib/sectionStore';
 import { linkEntries, useCustomLinks } from '@/lib/linkStore';
 import { useSiteSettings } from '@/lib/siteStore';
 import { FLAG_BOOTED, FLAG_ENTERED, flag, glyphFor, groupGlyph, setFlag } from '@/lib/desktopConfig';
+import { Notif, NOTIF_EVENT, readNotifs, syncNotifs, selfTestNotif } from '@/lib/notifStore';
+import { subscribeTable } from '@/lib/db';
+import { useToast } from '@/components/ui/Toast';
+import { NeighborNotificationPanel } from '@/components/shell/NeighborNotificationPanel';
 import { BootScreen } from './BootScreen';
 import { LoginScreen } from './LoginScreen';
 import { DeskHome } from './DeskHome';
@@ -30,6 +34,12 @@ const NARROW = 720;       // 이보다 좁은 화면 — 창은 항상 꽉 차�
 const MIN_W = 360, MIN_H = 260;
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 const isExternal = (href: string) => /^https?:\/\//.test(href);
+const BellIcon = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M6 9.5a6 6 0 0 1 12 0c0 4.2 1.6 5.6 2.2 6.3H3.8C4.4 15.1 6 13.7 6 9.5Z" />
+    <path d="M10 18.8a2.1 2.1 0 0 0 4 0" />
+  </svg>
+);
 
 export function DesktopShell() {
   const { user, isAdmin, ready, logout } = useAuth();
@@ -215,6 +225,31 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
     return () => document.removeEventListener('mousedown', close);
   }, [userOpen]);
 
+  // ── 알림 센터 (작업표시줄 종) — 데스크톱 모드에는 상단바가 없어 여기서 직접 받아 온다.
+  //    창 안(iframe) 페이지가 쌓은 알림은 localStorage 'storage' 이벤트로 이쪽에 전달된다.
+  const toast = useToast();
+  const [bellOpen, setBellOpen] = useState(false);
+  const [nbUnread, setNbUnread] = useState(0);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
+  useEffect(() => {
+    const load = () => setNotifs(readNotifs());
+    load();
+    window.addEventListener(NOTIF_EVENT, load);
+    window.addEventListener('storage', load);
+    return () => { window.removeEventListener(NOTIF_EVENT, load); window.removeEventListener('storage', load); };
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    void syncNotifs(user.id, true);
+    const off = subscribeTable('notifications', () => void syncNotifs(user.id, true));
+    const onFocus = () => void syncNotifs(user.id);
+    window.addEventListener('focus', onFocus);
+    return () => { off(); window.removeEventListener('focus', onFocus); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  const myNotifs = user ? notifs.filter(n => n.toUserId === user.id) : [];
+  const bellCount = myNotifs.filter(n => !n.read).length + nbUnread;
+
   // ── 상위 메뉴 펼침 — 독의 가로 스크롤 영역에 잘리지 않도록 화면 기준(fixed)으로 띄운다
   const [fly, setFly] = useState<Fly | null>(null);
   const toggleFly = (e: React.MouseEvent<HTMLButtonElement>, g: Extract<DockItem, { kind: 'group' }>) => {
@@ -328,8 +363,15 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
         </div>
         <div className="dsk-sys" ref={userRef}>
           {/* BGM 접힘 자리 — BgmPlayer가 접히면 소리 아이콘을 여기로 넣는다 */}
+          {user && (
+            <button className="dsk-bgm dsk-bell" data-n={String(Math.min(9, bellCount))} title="알림"
+              aria-label="알림 센터" aria-expanded={bellOpen}
+              onClick={() => { setUserOpen(false); setFly(null); setBellOpen(o => !o); }}>
+              <BellIcon />
+            </button>
+          )}
           <span id="dsk-bgm-slot" style={{ display: 'contents' }} />
-          <button className="dsk-user" onClick={() => setUserOpen(o => !o)}>
+          <button className="dsk-user" onClick={() => { setBellOpen(false); setUserOpen(o => !o); }}>
             <i className="dsk-live" />{nickname ?? 'GUEST'}
           </button>
           <span className="dsk-clock">{clock}</span>
@@ -348,6 +390,30 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
           )}
         </div>
       </footer>
+
+      {/* 알림 센터 — 독의 backdrop-filter 때문에 독 안에 두면 fixed 기준이 어긋나므로 독 밖(화면 기준)에 둔다 */}
+      {user && (
+        <>
+          {bellOpen && <div className="dsk-fly-back" onPointerDown={() => setBellOpen(false)} />}
+          <NeighborNotificationPanel
+            placement="dock"
+            open={bellOpen}
+            userId={user.id}
+            notifications={myNotifs}
+            isAdmin={isAdmin}
+            onClose={() => setBellOpen(false)}
+            onNeighborUnread={setNbUnread}
+            onNavigate={(href) => {
+              setBellOpen(false);
+              if (isExternal(href)) { window.open(href, '_blank'); return; }
+              const path = href.split(/[?#]/)[0];
+              const hit = dock.flatMap(d => d.kind === 'app' ? [d.app] : d.apps).find(a => a.href.split(/[?#]/)[0] === path);
+              openWin(href, hit?.label ?? '알림', hit?.group ?? '', hit?.glyph ?? glyphFor(path, ''));
+            }}
+            onSelfTest={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}
+          />
+        </>
+      )}
 
       {fly && (
         <>

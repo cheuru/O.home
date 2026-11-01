@@ -59,10 +59,11 @@ const fetchFeed = async (neighbor: Neighbor): Promise<Entry[]> => {
 };
 
 /** 기존 TopBar 종 내부에 삽입 — 기존 알림은 notifStore가 유일한 읽음 상태 원본이다. */
-export function NeighborNotificationPanel({ open, userId, notifications, isAdmin, onClose, onNavigate, onSelfTest, onNeighborUnread }: {
+export function NeighborNotificationPanel({ open, userId, notifications, isAdmin, onClose, onNavigate, onSelfTest, onNeighborUnread, placement }: {
   open: boolean; userId: string; notifications: Notif[]; isAdmin: boolean;
   onClose: () => void; onNavigate: (href: string) => void; onSelfTest: () => void;
   onNeighborUnread?: (n: number) => void;
+  placement?: 'top' | 'dock';   // dock = 데스크톱 작업표시줄 위로 펼침
 }) {
   const [tab, setTab] = useState<'all' | 'own' | 'neighbor'>('all');
   const [neighbors, setNeighbors] = useState<Neighbor[]>([]);
@@ -147,7 +148,7 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
     setRead(p => p.includes(e.key) ? p : [...p, e.key]);
     window.open(e.url, '_blank', 'noopener,noreferrer');
   };
-  return <div className={`oh-center-panel user-menu ${open ? 'open' : ''}`} onClick={e => e.stopPropagation()}>
+  return <div className={`oh-center-panel user-menu ${placement === 'dock' ? 'dock' : ''} ${open ? 'open' : ''}`} onClick={e => e.stopPropagation()}>
     <div className="oh-center-head"><strong>NOTIFICATION CENTER</strong><span>{counts} UNREAD</span><button onClick={onClose} aria-label="알림창 닫기">×</button></div>
     <div className="oh-center-tabs">{([['all','전체'],['own','내 홈'],['neighbor','이웃']] as const).map(([id,label]) => <button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</div>
     <div className="oh-center-actions"><button onClick={()=>{ markAllRead(userId);setRead(entries.map(x=>x.key)); }}>모두 읽음</button><button onClick={()=>setEditing(v=>!v)}>{editing?'알림 목록':'이웃 관리'}</button></div>

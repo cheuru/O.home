@@ -4,7 +4,8 @@
 - `src/components/shell/TopBar.tsx`: 종 아이콘은 기존 것을 사용하고, 내부 팝업만 교체.
 - `src/components/shell/NeighborNotificationPanel.tsx`: 통합 알림 UI와 이웃 JSON Feed 구독.
 - `src/components/shell/NeighborNotificationPanel.css`: 종 버튼 아래 팝업 위치, 모바일 위치.
-- 다른 R 터미널 및 DeskHome 파일은 수정하지 않음.
+- (v3) 데스크톱 모드(상단바 없음): `DesktopShell.tsx` 작업표시줄의 BGM 아이콘 왼쪽에 종 버튼 추가. 알림 수신(syncNotifs·실시간 구독·storage 이벤트)도 여기서 수행. 패널은 `placement="dock"`로 독 바깥(fixed)에 렌더링, 알림 클릭 시 해당 주소를 창으로 엶. `desktop.css`에 배지 스타일 추가.
+- DeskHome·R 터미널 파일은 수정하지 않음.
 
 ## 반영 내용
 1. 내 홈 링크는 기존 `TopBar.nav()`로 같은 탭에서 이동하며 편집 중 이동 방지 로직을 유지함. 이웃 외부 링크는 HTTPS만 허용, 도메인을 표시하고 새 탭으로 열음.
