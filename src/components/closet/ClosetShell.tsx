@@ -4,6 +4,7 @@
 //  · variant='room' (옷장 안): 스테이지 배경 장식(격자·큰 판·반짝이)만 — 스크롤해도 화면에 고정
 // 장식·틀 스타일은 globals.css의 .cs-deco / .rx-* 를 그대로 쓰고, 옷장 전용 배치만 여기 CSS에 둔다.
 import React from 'react';
+import { RxHud, RxCoord, RxBio } from '@/components/rels/RxHud';
 import { StageDeco } from '@/components/chars/StageDeco';
 import { useBgInk } from '@/lib/useBgInk';
 
@@ -50,13 +51,15 @@ export function ClosetShell({ head, variant, count = 0, children }: {
             <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
             <div className="rx-headline">
               <span className="rx-cap">CLOSET ARCHIVE // PAIR INDEX</span>
+              <RxCoord />
               <span className="rx-count"><em>CLOSET</em><b>{n}</b></span>
             </div>
-            <div className="rx-ghost" aria-hidden="true">CLOSET</div>
+            <RxHud />
             <div className="cl-rx-body">{children}</div>
             <div className="rx-foot">
               <span className="rx-bar" aria-hidden="true" />
               <span className="rx-cap">CLOSET FILE // {n}</span>
+              <RxBio />
               <span className="rx-chev" aria-hidden="true">›››</span>
             </div>
           </div>

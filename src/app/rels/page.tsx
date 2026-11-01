@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 import { relThemeColor } from '@/components/rels/PairThumb';
 import { RxCard } from '@/components/rels/RxCard';
+import { RxHud, RxCoord, RxBio } from '@/components/rels/RxHud';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
@@ -72,9 +73,10 @@ export default function RelsPage() {
         <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
         <div className="rx-headline">
           <span className="rx-cap">RELATION ARCHIVE // PAIR INDEX</span>
+          <RxCoord />
           <span className="rx-count"><em>PAIRS</em><b>{pad2(visible.length)}</b></span>
         </div>
-        <div className="rx-ghost" aria-hidden="true">PAIRS</div>
+        <RxHud />
         <div className="rx-grid">
           {visible.map((r, i) => {
             const memberLocked = r.visibility === 'member' && !user;
@@ -95,6 +97,7 @@ export default function RelsPage() {
         <div className="rx-foot">
           <span className="rx-bar" aria-hidden="true" />
           <span className="rx-cap">PAIR FILE // {pad2(visible.length)} PAIRS</span>
+          <RxBio />
           <span className="rx-chev" aria-hidden="true">›››</span>
         </div>
       </div>

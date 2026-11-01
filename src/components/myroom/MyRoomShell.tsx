@@ -3,6 +3,7 @@
 //  · variant='list' (방 목록): 머리줄·모서리 표식·큰 배경 글씨·바닥줄이 있는 「인덱스 틀」만
 //  · variant='room' (방 안): 캐릭터 상세와 같은 배경 장식(반원·눈금·반짝이)만 — 스크롤해도 화면에 고정
 import React from 'react';
+import { RxHud, RxCoord, RxBio } from '@/components/rels/RxHud';
 import { StageDeco } from '@/components/chars/StageDeco';
 import { useBgInk } from '@/lib/useBgInk';
 
@@ -51,13 +52,15 @@ export function MyRoomShell({ variant, head, count = 0, children }: {
             <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
             <div className="rx-headline">
               <span className="rx-cap">MY ROOM ARCHIVE // ROOM INDEX</span>
+              <RxCoord />
               <span className="rx-count"><em>ROOM</em><b>{n}</b></span>
             </div>
-            <div className="rx-ghost" aria-hidden="true">MY ROOM</div>
+            <RxHud />
             <div className="cl-rx-body">{children}</div>
             <div className="rx-foot">
               <span className="rx-bar" aria-hidden="true" />
               <span className="rx-cap">MY ROOM FILE // {n}</span>
+              <RxBio />
               <span className="rx-chev" aria-hidden="true">›››</span>
             </div>
           </div>
