@@ -14,6 +14,7 @@ import { CroppedBlobImg } from '@/components/ui/CropEditor';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 function CommListPageInner() {
   const router = useRouter();
@@ -62,6 +63,7 @@ function CommListPageInner() {
           </div>
         </div>
       </div>
+      <IndexFrame cap="COMMISSION ARCHIVE // SLOT INDEX" label="SLOTS" count={shown.length} foot="COMMISSION FILE">
 
       {/* 우측 스택이 translateY로 내려온 만큼 그리드를 더 내려 간격 유지
           (margin은 page-head margin-bottom과 상쇄되어 padding 사용) */}
@@ -122,6 +124,7 @@ function CommListPageInner() {
           </small>
         </div>
       </Modal>
+      </IndexFrame>
     </section>
   );
 }

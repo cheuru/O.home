@@ -1,0 +1,10 @@
+/* 목록 공통 인덱스 틀 (IndexFrame.tsx) — 선 색은 캐릭터·자관·옷장 목록과 같은 값 */
+.ixf{--rx-ln:color-mix(in srgb,var(--page-title,#222) 26%,transparent);position:relative;margin-top:10px}
+.ixf-body{position:relative;padding:22px 0 30px}
+.ixf-full .ixf-body{padding:44px 0 52px}
+/* 틀 안 첫 줄(검색·탭 줄)이 머리줄에 붙지 않게 하되, 기존 위쪽 여백은 겹치지 않게 */
+.ixf-body>:first-child{margin-top:0}
+@media (max-width:640px){
+.ixf-body{padding:16px 0 24px}
+.ixf-full .ixf-body{padding:30px 0 36px}
+}

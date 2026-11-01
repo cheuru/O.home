@@ -14,6 +14,7 @@ import {
 import { SearchBar, Pager } from '@/components/ui/Kit';
 import { CropImg } from '@/components/ui/CropEditor';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 const PER_PAGE = 10;
 
@@ -85,6 +86,7 @@ function BoardInner() {
         <PageTitle href={boardHref(board.id)}>{board.id === MAIN_BOARD_ID ? 'BOARD' : board.name}</PageTitle>
         <EditableDesc k={board.id === MAIN_BOARD_ID ? 'board-desc' : `board-desc-${board.id}`} def={board.desc} />
       </div>
+      <IndexFrame cap="BOARD ARCHIVE // POST INDEX" label="POSTS" count={visible.length} foot="BOARD FILE">
       <div className="toolrow">
         <div className="seg">
           {['전체', '공지', ...board.cats.map(x => x.label)].map(c => (
@@ -162,6 +164,7 @@ function BoardInner() {
         </div>
       )}
       <Pager page={page} total={totalPages} onChange={setPage} />
+      </IndexFrame>
     </section>
   );
 }

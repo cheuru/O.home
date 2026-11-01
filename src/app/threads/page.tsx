@@ -23,6 +23,7 @@ import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { Lightbox } from '@/components/ui/Lightbox';
 import { useToast } from '@/components/ui/Toast';
 import { pushNotif, notifyAdmins } from '@/lib/notifStore';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 // 접기 문구 (게시판 6.2와 동일)
 const FOLD_LABEL = { spoiler: '스포일러 주의', adult: '수위 주의' };
@@ -267,6 +268,7 @@ function ThreadsPageInner() {
         <PageTitle>{sec.id === 'main' ? 'THREADS' : sec.name}</PageTitle>
         <EditableDesc k="threads-desc" def="본 것, 읽은 것의 감상을 타래로" />
       </div>
+      <IndexFrame cap="THREADS ARCHIVE // WORK INDEX" label="WORKS" count={visible.length} foot="THREAD FILE">
 
       <div className="toolrow">
         {/* 분류 필터 (환경설정 관리 리스트) */}
@@ -541,6 +543,7 @@ function ThreadsPageInner() {
       )}
       {lb && <Lightbox srcs={lb.srcs} index={lb.idx} onClose={() => setLb(null)} />}
       {del.element}
+      </IndexFrame>
     </section>
   );
 }

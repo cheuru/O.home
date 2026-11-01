@@ -21,6 +21,7 @@ import { useMainStore } from '@/lib/mainStore';
 import { mergeOrder } from '@/lib/cardSort';
 import { DragList } from '@/components/ui/DragList';
 import { OrderMenu, orderNoOf, moveToOrder } from '@/components/ui/OrderMenu';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 function TrpgPageInner() {
   const router = useRouter();
@@ -275,6 +276,7 @@ function TrpgPageInner() {
           {isAdmin && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
         </div>
       </div>
+      <IndexFrame cap="TRPG ARCHIVE // LOG INDEX" label="LOGS" count={visible.length} foot="TRPG FILE">
       <div className="trpg-layout">
         <div>
           {ticketView
@@ -475,6 +477,7 @@ function TrpgPageInner() {
           onClose={() => setCropOpen(false)}
           onApply={c => { setNThumbCrop(c); setCropOpen(false); }} />
       )}
+      </IndexFrame>
     </section>
   );
 }

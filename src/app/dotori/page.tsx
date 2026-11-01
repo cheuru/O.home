@@ -15,6 +15,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 type Tab = 'all' | DotoriStatus;
 
@@ -84,6 +85,7 @@ function DotoriPageInner() {
         <PageTitle>{sec.id === 'main' ? 'DOTORI' : sec.name}</PageTitle>
         <EditableDesc k="dotori-desc" def="가고 싶은 시나리오 저장함 — 도토리처럼 모아두기" />
       </div>
+      <IndexFrame cap="DOTORI ARCHIVE // ITEM INDEX" label="ITEMS" count={shown.length} foot="DOTORI FILE">
 
       {/* 상태 필터 탭 + 검색·ADD — 필터 줄 오른쪽 정렬 (v1.9 사용자 요청) */}
       <div className="toolrow" style={{ marginBottom: 16 }}>
@@ -186,6 +188,7 @@ function DotoriPageInner() {
           { label: 'DELETE', kind: 'accent', onClick: () => { setItems(items.filter(x => x.id !== delFor!.id)); setDelFor(null); } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setDelFor(null) },
         ]} />
+      </IndexFrame>
     </section>
   );
 }

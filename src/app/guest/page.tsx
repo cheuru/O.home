@@ -12,6 +12,7 @@ import { Modal, useConfirmDelete } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import { pushNotif, notifyAdmins } from '@/lib/notifStore';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 export default function GuestbookPage() {
   const { user, isAdmin } = useAuth();
@@ -130,6 +131,7 @@ export default function GuestbookPage() {
   return (
     <section className="page">
       <div className="page-head"><PageTitle>GUESTBOOK</PageTitle><EditableDesc k="guest-desc" def="게스트 작성 허용 옵션 · 비밀글 · 관리자 답글" /></div>
+      <IndexFrame cap="GUESTBOOK ARCHIVE // ENTRY INDEX" label="ENTRIES" count={visible.length} foot="GUESTBOOK FILE">
 
       {/* 작성 */}
       <div className="panel" style={{ marginBottom: 16 }}>
@@ -217,6 +219,7 @@ export default function GuestbookPage() {
         </>}>
         <p style={{ fontSize: 13, color: 'var(--sub)' }}>이 방명록을 삭제할까요?</p>
       </Modal>
+      </IndexFrame>
     </section>
   );
 }

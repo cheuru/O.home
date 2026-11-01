@@ -13,6 +13,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { Lightbox } from '@/components/ui/Lightbox';
 import { BlobImg } from '@/lib/blobStore';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 const PAGE_SIZE = 10;
 
@@ -111,6 +112,7 @@ function DiaryPageInner() {
         <PageTitle>{sec.id === 'main' ? 'DIARY' : sec.name}</PageTitle>
         <EditableDesc k="diary-desc" def="무드 일기 — 클릭하면 그 자리에서 펼쳐집니다" />
       </div>
+      <IndexFrame cap="DIARY ARCHIVE // ENTRY INDEX" label="ENTRIES" count={visible.length} foot="DIARY FILE">
 
       {/* 무드 필터 + 달 필터 표시 + 검색·WRITE — 필터 줄 오른쪽 정렬 (v1.9 사용자 요청).
           그리드 밖(풀폭): 캘린더가 일기 패널과 같은 높이에서 시작 */}
@@ -223,6 +225,7 @@ function DiaryPageInner() {
         ]} />
       {/* 이미지 뷰어 — 썸네일 클릭 시 (v1.9 사용자 확정) */}
       {lb && <Lightbox srcs={lb.srcs} index={lb.idx} onClose={() => setLb(null)} />}
+      </IndexFrame>
     </section>
   );
 }

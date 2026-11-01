@@ -18,6 +18,7 @@ import { pushNotif } from '@/lib/notifStore';
 import { useMenuSettings, MenuPerm } from '@/lib/menuStore';
 import { GuestIdBar } from '@/components/ui/GuestId';
 import { fileDrop } from '@/lib/dnd';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 const PAGE_SIZE = 4;
 const FOLD_LABEL = { spoiler: '스포일러', adult: '수위 주의' };
@@ -295,6 +296,7 @@ function RoadviewPageInner() {
           <SearchBar onSearch={setQ} />
         </div>
       </div>
+      <IndexFrame cap="ROADVIEW ARCHIVE // VIEW INDEX" label="VIEWS" count={visible.length} foot="ROADVIEW FILE">
 
       {visible.slice(0, shown).map(it => (
         <RoadBlock key={it.id} item={it} comments={commentsFor(cmtRows, 'road', it.id, it.comments)} onComment={addComment}
@@ -355,6 +357,7 @@ function RoadviewPageInner() {
           } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setDelFor(null) },
         ]} />
+      </IndexFrame>
     </section>
   );
 }

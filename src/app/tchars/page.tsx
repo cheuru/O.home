@@ -11,6 +11,7 @@ import { useConfirmDelete } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 export default function TCharsPage() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function TCharsPage() {
           {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/tchars/new')}>＋ ADD</button>}
         </div>
       </div>
+      <IndexFrame cap="TRPG CHARACTER ARCHIVE // CHARACTER INDEX" label="CHARACTER" count={shown.length} foot="TRPG CHARACTER FILE">
 
       <div className="tc-grid">
         {shown.map((c, i) => {
@@ -85,6 +87,7 @@ export default function TCharsPage() {
         </div>
       )}
       {del.element}
+      </IndexFrame>
     </section>
   );
 }

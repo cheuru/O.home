@@ -15,6 +15,7 @@ import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
 import { useMenuSettings, canGalleryWrite } from '@/lib/menuStore';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 const FOLD_LABEL = { spoiler: '스포일러', adult: '수위 주의' };
 
@@ -82,6 +83,7 @@ function BackupPageInner() {
         <PageTitle>{sec.id === 'main' ? 'GALLERY' : sec.name}</PageTitle>
         <EditableDesc k="backup-desc" def="로그형(웹툰 스크롤) / 단일형(좌우 넘김) · 리스트/갤러리 보기 전환" />
       </div>
+      <IndexFrame cap="GALLERY ARCHIVE // IMAGE INDEX" label="ITEMS" count={visible.length} foot="GALLERY FILE">
       <div className="toolrow">
         <div className="seg">
           <button className={view === 'gal' ? 'on' : ''} onClick={() => setView('gal')}>갤러리</button>
@@ -187,6 +189,7 @@ function BackupPageInner() {
             setCropPost(null);
           }} />
       )}
+      </IndexFrame>
     </section>
   );
 }

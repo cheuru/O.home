@@ -13,6 +13,7 @@ import { KTextarea } from '@/components/ui/Kit';
 import { ColorField } from '@/components/ui/ColorField';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 export default function MemoPage() {
   const { user, isAdmin } = useAuth();
@@ -148,6 +149,7 @@ export default function MemoPage() {
         <PageTitle>STICKY NOTES</PageTitle>
         <EditableDesc k="memo-desc" def="드래그 자유 배치 · 색상/기울기 · 작성 권한 옵션" />
       </div>
+      <IndexFrame cap="MEMO ARCHIVE // NOTE INDEX" label="NOTES" count={sorted.length} foot="MEMO FILE">
       <div className="memo-layout">
         {/* 보드 — 배치·순서 저장, 모두에게 동일 (4.6) */}
         <div className="memoboard" ref={boardRef}
@@ -228,6 +230,7 @@ export default function MemoPage() {
         </div>
       </Modal>
       {del.element}
+      </IndexFrame>
     </section>
   );
 }

@@ -13,6 +13,7 @@ import { useCardSort, mergeOrder } from '@/lib/cardSort';
 import { SearchBar, Pager } from '@/components/ui/Kit';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
+import { IndexFrame } from '@/components/ui/IndexFrame';
 
 const PAGE_SIZE = 15;
 
@@ -90,6 +91,7 @@ function PlaylogPageInner() {
           {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/playlog/new' + secQuery('playlog', sec.id))}>＋ ADD RECORD</button>}
         </div>
       </div>
+      <IndexFrame cap="PLAYLOG ARCHIVE // RECORD INDEX" label="RECORDS" count={filtered.length} foot="PLAYLOG FILE">
 
       <div className="panel" style={{ padding: '10px 16px 16px', overflowX: 'auto' }}>
         <table className="pl-table">
@@ -179,6 +181,7 @@ function PlaylogPageInner() {
           { label: 'DELETE', kind: 'accent', onClick: () => { setRecords(records.filter(x => x.id !== delFor!.id)); setDelFor(null); } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setDelFor(null) },
         ]} />
+      </IndexFrame>
     </section>
   );
 }
