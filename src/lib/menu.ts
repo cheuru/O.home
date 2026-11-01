@@ -30,6 +30,7 @@ export const FEATURES: { href: string; label: string }[] = [
   { href: '/myroom', label: '마이룸' },
   { href: '/guest', label: '방명록' },
   { href: '/intro', label: '소개' },
+  { href: '/aegis', label: 'AEGIS-NET' }
 ];
 
 export const DEFAULT_MENU: MenuItem[] = [
