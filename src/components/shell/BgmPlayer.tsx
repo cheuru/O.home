@@ -109,7 +109,8 @@ export function BgmPlayer() {
     mq.addEventListener('change', wd);
     return () => { mo.disconnect(); mq.removeEventListener('change', wd); };
   }, []);
-  const inTray = folded && !!slot && wide;
+  const hasTray = !!slot && wide;          // 작업표시줄 자리가 있으면 아이콘은 펼쳤을 때도 계속 보인다
+  const inTray = folded && hasTray;        // 접힌 상태 — 플레이어 본체는 화면 밖으로
   const setFold = (v: boolean) => {
     setFolded(v);
     setListOpen(false);
@@ -334,10 +335,11 @@ export function BgmPlayer() {
           </div>
         </>
       )}
-      {/* 접힌 상태 — 작업표시줄 닉네임 옆 소리 아이콘 (누르면 다시 펼침). 플레이어 본체(유튜브)는 그대로 남아 계속 재생된다 */}
-      {inTray && slot && createPortal(
-        <button type="button" className={`dsk-bgm ${playing ? 'on' : ''}`} data-tip="BGM 펼치기" aria-label="BGM 펼치기"
-          onClick={() => setFold(false)}>
+      {/* 작업표시줄 닉네임 옆 소리 아이콘 — 펼쳤을 때도 계속 있고, 누를 때마다 접기/펼치기. 접어도 유튜브 플레이어는 그대로 남아 계속 재생된다 */}
+      {hasTray && slot && createPortal(
+        <button type="button" className={`dsk-bgm ${playing ? 'on' : ''} ${folded ? '' : 'open'}`}
+          data-tip={folded ? 'BGM 펼치기' : 'BGM 접기'} aria-label={folded ? 'BGM 펼치기' : 'BGM 접기'} aria-pressed={!folded}
+          onClick={e => { e.stopPropagation(); setFold(!folded); }}>
           <SoundIcon />
         </button>, slot)}
     </div>

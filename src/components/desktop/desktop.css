@@ -214,6 +214,7 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 .dsk-bgm { background: none; border: 0; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--top-fg); transition: .15s; }
 .dsk-bgm:hover { background: var(--dd-hv); color: var(--top-hv); }
 .dsk-bgm svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.dsk-bgm.open { background: var(--dd-hv); color: var(--top-hv); }   /* 펼쳐진 상태 표시 */
 .dsk-bgm.on { color: var(--accent-soft, var(--top-hv)); }
 .dsk-bgm.on .w1 { animation: dsk-wave 1.2s ease-in-out infinite; }
 .dsk-bgm.on .w2 { animation: dsk-wave 1.2s ease-in-out .3s infinite; }
