@@ -445,7 +445,7 @@ function CharDetailInner() {
         style={{ fontFamily: familyOf(eff.bodyFontId), '--char-theme': eff.color, ...(customInk ? { '--cs-body': customInk } : {}) } as React.CSSProperties}>
         {/* 배경 장식 — 그림보다 뒤. 이미지를 등록하면 기본은 이미지 전체 + 흰색/검은색 장식, 「장식 안에 이미지」면 띠 안에 이미지 + 포인트색 */}
         {decoOn && (
-          <StageDeco variant="orbit" mode={bgUrl && !decoBand ? 'mono' : 'accent'} tone={bgInk === 'dark' ? 'light' : 'dark'}
+          <StageDeco variant="tech" mode={bgUrl && !decoBand ? 'mono' : 'accent'} tone={bgInk === 'dark' ? 'light' : 'dark'}
             ink={bgInk === 'dark' ? 'dark' : 'light'} image={decoBand ? bgUrl : undefined} blur={bgBlur}
             ghost={eff.altName?.trim() || undefined} ghostFont={familyOf(eff.decoFontId || eff.fontId) ?? undefined}
             ghostPos={eff.decoGhost ?? undefined}

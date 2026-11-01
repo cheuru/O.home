@@ -84,7 +84,9 @@ const ORB_CSS = `@keyframes dcOrb{to{transform:rotate(360deg)}}
 @keyframes dcSlide{0%,100%{transform:translateX(calc(var(--amp,260px) * -1))}50%{transform:translateX(var(--amp,260px))}}
 .cs-deco .dc-orb{transform-box:view-box;animation:dcOrb var(--t,90s) linear infinite}
 .cs-deco .dc-orb.rev{animation-direction:reverse}
-.cs-deco .dc-slide{animation:dcSlide 22s ease-in-out infinite}`;
+.cs-deco .dc-slide{animation:dcSlide 22s ease-in-out infinite}
+@keyframes dcCur{50%{fill-opacity:0}}
+.cs-deco .dc-cur{animation:dcCur 1s steps(1) infinite}`;
 /** 짧은 직선 세 줄이 차례로 깜빡이는 작은 표식 (쉐브론 대신) — 변환 없이 좌표를 직접 계산해 그린다 */
 function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: number; d?: number; acc: string }) {
   const q = (rot * Math.PI) / 180, co = Math.cos(q), si = Math.sin(q);
@@ -101,6 +103,130 @@ function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: numbe
     </g>
   );
 }
+/* ── 터미널(tech) 변형 — 자캐 상세: 원 대신 타이핑되는 터미널·코드 창 + 뷰파인더 프레임·치수선·성좌 (우주 × 컴퓨터 × 공학) ── */
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+const FLAVOR = [
+  'scanning deep space ........ 3 objects',
+  'signal received ✦ 안녕, 우주',
+  'ping andromeda ........ 2.5M ly',
+  'compiling memories ........ 100%',
+  'git commit -m "still alive"',
+  'orbit stable · all systems nominal',
+  'listening on 0.0.0.0:∞',
+  'star map synced',
+];
+const reduceMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** 부팅 줄을 한 글자씩 친 뒤, 가끔 한 줄씩 더 흘려 보낸다 (가장 아래 max 줄만 남긴다) */
+function useFeed(boot: string[], more: string[], max: number) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [typing, setTyping] = useState('');
+  const key = boot.join('\n');
+  useEffect(() => {
+    setLines([]); setTyping('');
+    if (reduceMotion()) { setLines(boot.slice(-max)); return; }
+    let alive = true, timer = 0, fi = 0;
+    const q = [...boot];
+    const push = (l: string) => setLines(p => [...p, l].slice(-max));
+    const typeLine = (text: string, done: () => void) => {
+      let i = 0;
+      const step = () => {
+        if (!alive) return;
+        i++; setTyping(text.slice(0, i));
+        if (i < text.length) timer = window.setTimeout(step, 22 + Math.random() * 30);
+        else timer = window.setTimeout(() => { setTyping(''); push(text); done(); }, 160);
+      };
+      step();
+    };
+    const next = () => {
+      if (!alive) return;
+      if (q.length) { const l = q.shift()!; timer = window.setTimeout(() => typeLine(l, next), 240); }
+      else timer = window.setTimeout(() => typeLine(more[fi++ % more.length], next), 3800 + Math.random() * 3000);
+    };
+    timer = window.setTimeout(next, 700);
+    return () => { alive = false; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, max]);
+  return { lines, typing };
+}
+/** 코드 조각을 한 줄씩 쳐 내려가고, 다 치면 잠시 보여 준 뒤 지우고 다음 조각을 친다 */
+function useSnippets(snips: string[][]) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [typing, setTyping] = useState('');
+  const key = snips.map(x => x.join('\n')).join('\u0001');
+  useEffect(() => {
+    setLines([]); setTyping('');
+    if (reduceMotion()) { setLines(snips[0]); return; }
+    let alive = true, timer = 0, si = 0, li = 0;
+    const typeLine = (text: string, done: () => void) => {
+      let i = 0;
+      const step = () => {
+        if (!alive) return;
+        i++; setTyping(text.slice(0, i));
+        if (i < text.length) timer = window.setTimeout(step, 26 + Math.random() * 40);
+        else timer = window.setTimeout(() => { setTyping(''); setLines(p => [...p, text]); done(); }, 140);
+      };
+      step();
+    };
+    const nextLine = () => {
+      if (!alive) return;
+      const sn = snips[si % snips.length];
+      if (li < sn.length) { const l = sn[li++]; timer = window.setTimeout(() => typeLine(l, nextLine), 120); }
+      else timer = window.setTimeout(() => { if (!alive) return; setLines([]); li = 0; si++; nextLine(); }, 5200);
+    };
+    timer = window.setTimeout(nextLine, 900);
+    return () => { alive = false; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return { lines, typing };
+}
+/** 터미널 창 — 윗줄(점 셋 + 제목) + 타이핑되는 줄들 + 깜빡이는 커서 */
+function TermWin({ x, y, w, h, title, lines, typing, prompt, lh = 22 }: { x: number; y: number; w: number; h: number; title: string; lines: string[]; typing: string; prompt?: string; lh?: number }) {
+  const maxCh = Math.floor((w - 36) / 8.4);
+  const cut = (t: string) => (t.length > maxCh ? t.slice(0, maxCh) : t);
+  const pre = { whiteSpace: 'pre' } as React.CSSProperties;
+  return (
+    <g fontFamily={MONO}>
+      <rect x={x} y={y} width={w} height={h} rx="10" fill="var(--d-base, transparent)" fillOpacity=".72" stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <line x1={x} y1={y + 28} x2={x + w} y2={y + 28} stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".7" />
+      {[0, 1, 2].map(i => <circle key={i} cx={x + 18 + i * 14} cy={y + 14} r="3.5" fill={i === 0 ? 'var(--d-acc)' : 'var(--d-line)'} />)}
+      <text x={x + 68} y={y + 18} fontSize="11" letterSpacing="1" fill="var(--d-line)">{title}</text>
+      {lines.map((l, i) => (
+        <text key={i} x={x + 18} y={y + 56 + i * lh} fontSize="14" fill="var(--d-line)" style={pre} xmlSpace="preserve">
+          {prompt && <tspan fill="var(--d-acc)">{prompt} </tspan>}{cut(l)}
+        </text>
+      ))}
+      <text x={x + 18} y={y + 56 + lines.length * lh} fontSize="14" fill="var(--d-line)" style={pre} xmlSpace="preserve">
+        {prompt && <tspan fill="var(--d-acc)">{prompt} </tspan>}{cut(typing)}<tspan className="dc-cur" fill="var(--d-acc)">▌</tspan>
+      </text>
+    </g>
+  );
+}
+function TermFeed({ x, y, w, h, name, hex }: { x: number; y: number; w: number; h: number; name: string; hex: string }) {
+  const boot = [
+    'boot archive.sys ........ OK',
+    `mount /characters/${name} ... OK`,
+    'load profile.dat ........ OK',
+    `theme.color = #${hex}`,
+    'render fullart ........ OK',
+    'system ready ✦',
+  ];
+  const { lines, typing } = useFeed(boot, FLAVOR, 6);
+  return <TermWin x={x} y={y} w={w} h={h} title={`terminal — ${name.toLowerCase()}@archive`} lines={lines} typing={typing} prompt=">" />;
+}
+function TermCode({ x, y, w, h, name, hex }: { x: number; y: number; w: number; h: number; name: string; hex: string }) {
+  const snips = [
+    ['struct Character {', `  name:  "${name}",`, `  theme: 0x${hex},`, '  orbit: Stable,', '}'],
+    [`$ ./scan --deep-space --target ${name}`, '> 3 objects detected', '> signal received ✦ 안녕, 우주', '> status: OK'],
+    ['fn main() {', `  load("${name}");`, '  render(fullart);', '  loop { orbit(); }', '}'],
+  ];
+  const { lines, typing } = useSnippets(snips);
+  return <TermWin x={x} y={y} w={w} h={h} title="profile.rs — read only" lines={lines} typing={typing} />;
+}
+// 성좌 — 점 몇 개를 가는 선으로 잇는다 (메인의 별자리 배경과 같은 말투)
+const CONSTS: { pts: [number, number][]; edges: [number, number][] }[] = [
+  { pts: [[470, 150], [560, 205], [640, 150], [700, 260], [600, 330]], edges: [[0, 1], [1, 2], [1, 3], [3, 4]] },
+  { pts: [[1480, 330], [1560, 400], [1640, 350], [1720, 430], [1660, 520]], edges: [[0, 1], [1, 2], [2, 3], [1, 3], [3, 4]] },
+];
 function TagText({ text }: { text: string }) {
   const out = useScramble(text, 700, 7000);
   return <>{out}</>;
@@ -115,8 +241,8 @@ interface Props {
   mode: DecoMode;
   /** 뒤쪽 큰 도형 모양 — 비우면 반원 */
   shape?: DecoShape;
-  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선) */
-  variant?: 'classic' | 'orbit';
+  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선 — 자관) · 'tech'(타이핑 터미널·코드 창 + 뷰파인더 프레임 — 자캐) */
+  variant?: 'classic' | 'orbit' | 'tech';
   /** true면 뒤쪽 큰 도형(반원·판)과 그 윤곽선을 그리지 않는다 */
   noShape?: boolean;
   /** true면 CHARACTER FILE 표식과 STATUS 눈금(캐릭터 전용 장식)을 그리지 않는다 — 자관 게시판용 */
@@ -215,9 +341,14 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
   }, []);
   const tile = shape === 'tile';
   const orb = variant === 'orbit';
+  const tech = variant === 'tech';
   // 궤도 중심·기준 반지름 — 반원 자리에는 화면 가운데 높이, 판 자리에는 판의 중심
   const O = tile ? { x: 954, y: 470, R: 320 } : { x: 960, y: Math.round(fy * 0.52), R: 300 };
   const bq = (BEAM_DEG * Math.PI) / 180;
+  // 뷰파인더 프레임 (tech) — 그림 뒤에 서는 큰 직사각형
+  const F = { x: 700, y: O.y - 390, w: 520, h: 780 };
+  const nm = ((name ?? '').trim() || 'CHARACTER').slice(0, 12);
+  const hex6 = (colorHex ?? '').replace('#', '').toUpperCase().slice(0, 6) || '------';
   const FAN = tile ? TILE : fanPath(fy);
   const mono = mode === 'mono';
   const band = mode === 'accent' && !!image && !noShape;
@@ -240,7 +371,7 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
 
   return (
     <div ref={root} className="cs-deco" aria-hidden="true" style={style} data-mode={mode} data-tone={tone}>
-      {orb && <style>{ORB_CSS}</style>}
+      {(orb || tech) && <style>{ORB_CSS}</style>}
       <div ref={probe} className="cs-deco-floor" />
       {/* CHARACTER FILE 표식 — 화면 비율에 따라 위가 잘리지 않게 viewBox가 아니라 화면 기준(BACK 줄 왼쪽)에 둔다 */}
       {!noChrome && <div className="cs-deco-tag dc-i" style={I(0.3, 90, 0)}><TagText text={tag ?? 'CHARACTER FILE'} /></div>}
@@ -256,6 +387,19 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             <stop offset="0" style={{ stopColor: 'color-mix(in srgb,var(--accent,#7fd6d0) 70%,#fff)' }} />
             <stop offset="1" style={{ stopColor: 'color-mix(in srgb,var(--accent,#7fd6d0) 88%,#000)' }} />
           </linearGradient>
+          {tech && (
+            <linearGradient id="dc-frame" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--d-acc)" stopOpacity=".2" />
+              <stop offset="1" stopColor="var(--d-acc)" stopOpacity=".05" />
+            </linearGradient>
+          )}
+          {(orb || tech) && (
+            <linearGradient id="dc-beam" gradientUnits="userSpaceOnUse" x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}>
+              <stop offset="0" stopColor="var(--d-line)" stopOpacity=".12" />
+              <stop offset=".5" stopColor="var(--d-line)" stopOpacity=".9" />
+              <stop offset="1" stopColor="var(--d-line)" stopOpacity=".12" />
+            </linearGradient>
+          )}
           {orb && (
             <>
               <radialGradient id="dc-disc" cx="40%" cy="34%" r="78%">
@@ -263,11 +407,6 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
                 <stop offset="0.7" stopColor="var(--d-acc)" stopOpacity={tile ? 0.36 : 0.1} />
                 <stop offset="1" stopColor="var(--d-acc)" stopOpacity={tile ? 0.24 : 0.05} />
               </radialGradient>
-              <linearGradient id="dc-beam" gradientUnits="userSpaceOnUse" x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}>
-                <stop offset="0" stopColor="var(--d-line)" stopOpacity=".12" />
-                <stop offset=".5" stopColor="var(--d-line)" stopOpacity=".9" />
-                <stop offset="1" stopColor="var(--d-line)" stopOpacity=".12" />
-              </linearGradient>
             </>
           )}
           <linearGradient id="dc-tag" x1="0" x2="1" y1="0" y2="0">
@@ -281,7 +420,7 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
                   filter={blur > 0 ? 'url(#dc-blur)' : undefined} />
                 <rect width="1920" height="1080" fill="var(--d-acc)" opacity=".35" />
               </pattern>
-              <clipPath id="dc-fan">{orb ? <circle cx={O.x} cy={O.y} r={O.R} /> : <path d={FAN} />}</clipPath>
+              <clipPath id="dc-fan">{tech ? <rect x={F.x} y={F.y} width={F.w} height={F.h} /> : orb ? <circle cx={O.x} cy={O.y} r={O.R} /> : <path d={FAN} />}</clipPath>
               {blur > 0 && <filter id="dc-blur" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation={blur} /></filter>}
             </>
           )}
@@ -316,6 +455,8 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
               filter={blur > 0 ? 'url(#dc-blur)' : undefined} />
             <rect width="1920" height="1080" fill="var(--d-acc)" opacity=".35" />
           </g>
+        ) : tech ? (
+          <rect x={F.x} y={F.y} width={F.w} height={F.h} fill="url(#dc-frame)" />
         ) : orb ? (
           <circle cx={O.x} cy={O.y} r={O.R} fill="url(#dc-disc)" />
         ) : tile ? (
@@ -331,6 +472,36 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
               x={(geo.W * (ghostPos?.x ?? 50) / 100 - geo.ox) / geo.sc} y={(geo.H * (ghostPos?.y ?? 30) / 100 - geo.oy) / geo.sc}
               fontSize={(gsize * (ghostPos?.scale ?? 100) / 100) * geo.W / 100 / geo.sc} fontWeight={800} letterSpacing="-0.02em"
               style={{ fontFamily: ghostFont ?? 'var(--serif)' }}>{g}</text>
+          </g>
+        )}
+        {!noShape && tech && (
+          <g className="dc-i" style={I(0.25, 0, 40)}>
+            {/* 점선 십자축 */}
+            <g stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="3 7" opacity=".4">
+              <line x1={O.x - 1500} y1={O.y} x2={O.x + 1500} y2={O.y} />
+              <line x1={O.x} y1={O.y - 1500} x2={O.x} y2={O.y + 1500} />
+            </g>
+            {/* 뷰파인더 — 네 모서리 괄호 + 옅은 테두리 */}
+            <rect x={F.x} y={F.y} width={F.w} height={F.h} fill="none" stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".5" />
+            <path fill="none" stroke="var(--d-acc)" strokeWidth="2.2" strokeLinecap="square" opacity=".9"
+              d={`M${F.x} ${F.y + 40}V${F.y}H${F.x + 40}M${F.x + F.w - 40} ${F.y}H${F.x + F.w}V${F.y + 40}M${F.x} ${F.y + F.h - 40}V${F.y + F.h}H${F.x + 40}M${F.x + F.w - 40} ${F.y + F.h}H${F.x + F.w}V${F.y + F.h - 40}`} />
+            {/* 치수선 — 아래(가로)·왼쪽(세로). 양 끝 화살표 + 가운데 숫자 */}
+            <g stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" fill="none" opacity=".75">
+              <path d={`M${F.x} ${F.y + F.h + 26}H${F.x + F.w / 2 - 34}M${F.x + F.w / 2 + 34} ${F.y + F.h + 26}H${F.x + F.w}M${F.x + 9} ${F.y + F.h + 22}L${F.x} ${F.y + F.h + 26}L${F.x + 9} ${F.y + F.h + 30}M${F.x + F.w - 9} ${F.y + F.h + 22}L${F.x + F.w} ${F.y + F.h + 26}L${F.x + F.w - 9} ${F.y + F.h + 30}M${F.x} ${F.y + F.h + 18}V${F.y + F.h + 34}M${F.x + F.w} ${F.y + F.h + 18}V${F.y + F.h + 34}`} />
+              <path d={`M${F.x - 26} ${F.y}V${F.y + F.h / 2 - 34}M${F.x - 26} ${F.y + F.h / 2 + 34}V${F.y + F.h}M${F.x - 30} ${F.y + 9}L${F.x - 26} ${F.y}L${F.x - 22} ${F.y + 9}M${F.x - 30} ${F.y + F.h - 9}L${F.x - 26} ${F.y + F.h}L${F.x - 22} ${F.y + F.h - 9}M${F.x - 34} ${F.y}H${F.x - 18}M${F.x - 34} ${F.y + F.h}H${F.x - 18}`} />
+            </g>
+            <Scr text={`W ${F.w}`} delay={1000} period={7000} x={F.x + F.w / 2} y={F.y + F.h + 30} fontSize="11" letterSpacing="2" fill="var(--d-line)" textAnchor="middle" fontFamily={MONO} />
+            <text x={F.x - 26} y={F.y + F.h / 2 + 4} fontSize="11" letterSpacing="2" fill="var(--d-line)" textAnchor="middle" fontFamily={MONO}
+              transform={`rotate(-90 ${F.x - 26} ${F.y + F.h / 2})`}>{`H ${F.h}`}</text>
+            {/* 화면 끝까지 뻗는 직선 + 그 위를 오가는 점 */}
+            <line x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}
+              stroke="url(#dc-beam)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+            <g transform={`rotate(${BEAM_DEG} ${O.x} ${O.y})`}>
+              <g className="dc-slide" style={{ '--amp': '520px' } as React.CSSProperties}>
+                <circle cx={O.x} cy={O.y} r="11" fill="var(--d-acc)" opacity=".22" />
+                <circle cx={O.x} cy={O.y} r="4.5" fill="var(--d-acc)" />
+              </g>
+            </g>
           </g>
         )}
         {!noShape && orb && (
@@ -366,7 +537,7 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             ))}
           </g>
         )}
-        {!noShape && !orb && <g className="dc-i" style={I(0.25, 0, 40)}>
+        {!noShape && !orb && !tech && <g className="dc-i" style={I(0.25, 0, 40)}>
           {!tile && <path d={FAN} fill="none" stroke="var(--d-acc)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity=".75" />}
           {tile ? (
             /* 판 바깥쪽에 한 칸 어긋난 가는 윤곽선 — 도형이 떠 있는 느낌 */
@@ -395,8 +566,8 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
         </g>
 
         {/* 점 격자 · 십자 표식 · 반짝이 */}
-        <g className="dc-i" style={I(0.45, -50, 20)}><rect x="46" y="640" width="168" height="96" fill="url(#dc-dots)" opacity=".65" /></g>
-        <g className="dc-i" style={I(0.5, 60, 20)}><rect x="1700" y="560" width="168" height="96" fill="url(#dc-dots)" opacity=".5" /></g>
+        {!tech && <g className="dc-i" style={I(0.45, -50, 20)}><rect x="46" y="640" width="168" height="96" fill="url(#dc-dots)" opacity=".65" /></g>}
+        {!tech && <g className="dc-i" style={I(0.5, 60, 20)}><rect x="1700" y="560" width="168" height="96" fill="url(#dc-dots)" opacity=".5" /></g>}
         {([[96, 560], [1264, 1010], [716, 112], [1856, 420], [330, 800]] as const).map(([x, y], i) => (
           <g key={x + '-' + y} className="dc-i" style={I(0.55 + i * 0.06, 0, 30)}>
             <path className="dc-flash" style={{ animationDelay: `${i * 1.3}s` }} stroke="var(--d-line)" strokeWidth="1.4" vectorEffect="non-scaling-stroke"
@@ -412,13 +583,13 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             </g>
           );
         })}
-        {!orb && ([[1180, 220, 15], [560, 330, 10], [1440, 760, 12], [440, 760, 9], [1110, 150, 8], [1660, 330, 10]] as const).map(([x, y, r], i) => (
+        {!orb && !tech && ([[1180, 220, 15], [560, 330, 10], [1440, 760, 12], [440, 760, 9], [1110, 150, 8], [1660, 330, 10]] as const).map(([x, y, r], i) => (
           <g key={x + '-' + y} className="dc-i" style={I(0.6 + i * 0.07, (i % 2 ? 40 : -40), -30)}>
             <path className="dc-tw" style={{ animationDelay: `${i * 0.6}s` }} fill={acc}
               d={`M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r}Z`} />
           </g>
         ))}
-        {orb ? (
+        {orb || tech ? (
           <>
             <Bars x={1730} y={380} rot={0} d={0.7} acc={acc} />
             <Bars x={110} y={470} rot={90} d={0.8} acc={acc} />
@@ -431,6 +602,26 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             <Chev x={1040} y={1010} rot={180} d={0.9} acc={acc} />
           </>
         )}
+
+        {tech && (
+          <g className="dc-i" style={I(0.5, 0, 20)}>
+            {CONSTS.map((c, ci) => (
+              <g key={ci}>
+                <g stroke="var(--d-line)" strokeWidth="0.8" vectorEffect="non-scaling-stroke" opacity=".5">
+                  {c.edges.map(([a, b], i) => <line key={i} x1={c.pts[a][0]} y1={c.pts[a][1]} x2={c.pts[b][0]} y2={c.pts[b][1]} />)}
+                </g>
+                {c.pts.map(([px, py], i) => (
+                  <g key={i}>
+                    <circle className="dc-tw" style={{ animationDelay: `${(ci * 5 + i) * 0.5}s` }} cx={px} cy={py} r="7" fill="var(--d-acc)" opacity=".16" />
+                    <circle cx={px} cy={py} r="2.6" fill="var(--d-acc)" />
+                  </g>
+                ))}
+              </g>
+            ))}
+          </g>
+        )}
+        {tech && <g className="dc-i" style={I(0.6, -60, 0)}><TermFeed x={50} y={640} w={470} h={232} name={nm} hex={hex6} /></g>}
+        {tech && <g className="dc-i" style={I(0.65, 60, 0)}><TermCode x={1330} y={690} w={520} h={196} name={nm} hex={hex6} /></g>}
 
         {/* 하단 라벨 — 점선으로 이어진 이름표. 하단 독·BGM 플레이어에 가리지 않게 화면 맨 아래에서 30px 위(독 바로 위 줄)에 둔다 */}
         <g className="dc-i" style={I(0.6, 90, 0)} fontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" fontSize="12" letterSpacing="3">
