@@ -27,7 +27,7 @@ import { RelTab } from '@/components/chars/RelTab';
 import { StageWindow, type StageWindowItem } from '@/components/chars/StageWindow';
 import type { BackupPost } from '@/lib/galleryStore';
 import { SpecsDisplay, PlainSpecRow } from '@/components/chars/SpecsDisplay';
-import { useBgInk } from '@/lib/useBgInk';
+import { useStageInk } from '@/lib/useBgInk';
 import { StageDeco } from '@/components/chars/StageDeco';
 
 /** 우측 정보 패널에서 「기본 정보」·탭 다음으로 쓰는 세 번째 특수 탭 값 — TRPG 버튼(EDIT·DELETE·
@@ -216,7 +216,7 @@ function CharDetailInner() {
   });
   const [artIdx, setArtIdx] = useState(0);
   // 스테이지 소개 본문 글자색 — 캐릭터마다 배경이 다르므로 지금 깔린 배경의 밝기를 재서 자동으로 (밝은 배경 → 어두운 글자)
-  const bgInk = useBgInk();
+  const bgInk = useStageInk();
   const [delAsk, setDelAsk] = useState(false);   // 캐릭터 삭제 확인
   const infoRef = useRef<HTMLDivElement>(null);
 

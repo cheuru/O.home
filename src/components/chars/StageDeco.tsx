@@ -213,7 +213,9 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
   useEffect(() => {
     const el = root.current, pr = probe.current; if (!el || !pr) return;
     const calc = () => {
-      const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return;
+      const W = el.clientWidth, H = el.clientHeight;
+      // 좁은 화면에선 장식이 숨겨져(display:none) 크기가 0 — 넓었을 때 남은 --art-dy를 치워야 그림이 글자와 겹치지 않는다
+      if (!W || !H) { el.parentElement?.style.removeProperty('--art-dy'); return; }
       const sc = Math.max(W / 1920, H / 1080), offX = (W - 1920 * sc) / 2, offY = (H - 1080 * sc) / 2;   // xMidYMid slice
       const v = Math.round((pr.offsetTop - offY) / sc);
       if (Number.isFinite(v)) {

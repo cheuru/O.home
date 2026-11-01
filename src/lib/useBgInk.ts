@@ -170,3 +170,22 @@ export function useBgInk(): BgInk {
   }, []);
   return ink;
 }
+
+/** 캐릭터 상세 스테이지용 글자색 — 좁은 화면(≤960px)에서는 배경 장식(.cs-deco)이 숨겨져
+ *  우주 배경(어두움)이 그대로 비치는데, useBgInk는 테마 변수(밝은 색)만 재서 어두운 글자를 돌려준다.
+ *  그 경우(우주 배경이 실제로 보이는 중)에는 밝은 글자로 바꾼다. */
+export function useStageInk(): BgInk {
+  const base = useBgInk();
+  const [spaceNarrow, setSpaceNarrow] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const calc = () => setSpaceNarrow(
+      window.innerWidth <= 960 && root.hasAttribute('data-space') && !root.hasAttribute('data-skin-bg') && !root.hasAttribute('data-bg-img'));
+    calc();
+    const mo = new MutationObserver(calc);
+    mo.observe(root, { attributes: true, attributeFilter: ['data-space', 'data-skin-bg', 'data-bg-img'] });
+    window.addEventListener('resize', calc);
+    return () => { mo.disconnect(); window.removeEventListener('resize', calc); };
+  }, []);
+  return spaceNarrow ? 'light' : base;
+}
