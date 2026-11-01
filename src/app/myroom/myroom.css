@@ -779,3 +779,4 @@
 /* 윗줄(ROOM VIEWPORT / LIVE ROOM CANVAS)을 없애서, 방 영역이 위쪽도 둥글게 닫히도록 */
 .mr-lab-room .mr-layout{border-radius:12px;border-top:1px solid var(--os-line)}
 .mr-lab-room a.mr-os-nav{text-decoration:none;box-sizing:border-box}
+.mr-lab-room .mr-os-brand{max-width:45%;overflow:hidden;text-overflow:ellipsis}

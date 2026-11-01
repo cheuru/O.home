@@ -340,6 +340,9 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', fit);
     fit();
+    // 방 영역 크기가 나중에 확정/변경돼도(헤더 제거 등) 다시 꽉 채우도록 재계산
+    const ro = typeof ResizeObserver !== 'undefined' && roomEl ? new ResizeObserver(() => fit()) : null;
+    if (ro && roomEl) ro.observe(roomEl);
     if (canEdit) enterEdit();   // 방 주인/관리자는 들어오면 바로 꾸미기 화면
     return () => {
       outer.removeEventListener('wheel', onWheel); zc?.removeEventListener('wheel', stopWheel);
@@ -348,6 +351,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
       outer.removeEventListener('mousedown', md);
       document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', mu);
       document.removeEventListener('keydown', onKey); window.removeEventListener('resize', fit);
+      ro?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
@@ -517,7 +521,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   return (
     <MyRoomShell variant="room">
       <div className="myroom-wrap mr-lab-room" ref={wrapRef} style={{ maxWidth: wrapMax }}>
-        <div className="mr-os-chrome"><span className="mr-os-brand">✧ CH-REU <small>PERSONAL SYSTEM</small></span><span className="mr-os-version">INTRANET / ROOM MANAGER v2.1</span><span className="mr-os-session">● ONLINE <span>·</span> {canEdit ? 'OWNER' : 'VISITOR'} <span>·</span> ROOM {room.id.slice(0, 6).toUpperCase()}</span></div>
+        <div className="mr-os-chrome"><span className="mr-os-brand" id="room-title-display">✧ {titleShown} <small>PERSONAL SYSTEM</small></span><span className="mr-os-version">INTRANET / ROOM MANAGER v2.1</span><span className="mr-os-session">● ONLINE <span>·</span> {canEdit ? 'OWNER' : 'VISITOR'} <span>·</span> ROOM {room.id.slice(0, 6).toUpperCase()}</span></div>
         <div className="mr-os-workspace" ref={wsRef}>
           <aside className="mr-os-sidebar" aria-label="마이룸 도구 메뉴">
             <div className="mr-os-sidebar-head"><small>PERSONAL QUARTERS</small><strong>마이룸</strong><span>MY ROOM / A-07</span></div>
