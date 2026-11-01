@@ -1,7 +1,7 @@
 'use client';
-// 옷장 화면 틀 — 자관·캐릭터 화면과 같은 느낌으로 감싼다.
-//  · 화면 가로 전체를 쓰고, 뒤에 스테이지 배경 장식(격자·큰 판·반짝이)을 깐다 (스크롤해도 화면에 고정)
-//  · 머리줄·모서리 표식·큰 배경 글씨·바닥줄이 있는 「인덱스 틀」 안에 내용이 놓인다
+// 옷장 화면 틀 — 자관·캐릭터 화면과 같은 느낌으로 감싼다. 둘 다 화면 가로 전체를 쓴다.
+//  · variant='list' (옷장 목록): 머리줄·모서리 표식·큰 배경 글씨·바닥줄이 있는 「인덱스 틀」만
+//  · variant='room' (옷장 안): 스테이지 배경 장식(격자·큰 판·반짝이)만 — 스크롤해도 화면에 고정
 // 장식·틀 스타일은 globals.css의 .cs-deco / .rx-* 를 그대로 쓰고, 옷장 전용 배치만 여기 CSS에 둔다.
 import React from 'react';
 import { StageDeco } from '@/components/chars/StageDeco';
@@ -22,43 +22,45 @@ const CSS = `
 }
 `;
 
-export function ClosetShell({ head, caption, countLabel, count, ghost, foot, children }: {
+export function ClosetShell({ head, variant, count = 0, children }: {
   head: React.ReactNode;          // 맨 위 제목줄(.page-head)
-  caption: string;                // 머리줄 왼쪽 작은 글씨
-  countLabel: string;             // 머리줄 오른쪽 라벨 (예: CLOSET)
-  count: number;                  // 머리줄 오른쪽 숫자
-  ghost: string;                  // 뒤에 크게 깔리는 글씨
-  foot: string;                   // 바닥줄 글씨
+  variant: 'list' | 'room';       // list = 큰 배경 글씨 틀만 · room = 배경 장식만
+  count?: number;                 // list 머리줄 오른쪽 숫자
   children: React.ReactNode;
 }) {
   const bgInk = useBgInk();       // 배경이 밝으면 장식도 밝은 쪽으로 (캐릭터·자관 상세와 같은 규칙)
   const light = bgInk === 'dark';
   const n = String(count).padStart(2, '0');
+  const list = variant === 'list';
   return (
     <section className="page cl-stage-page">
       <style>{CSS}</style>
-      <div className="cl-deco-wrap" aria-hidden="true">
-        <div className="cl-deco">
-          <StageDeco mode="accent" shape="tile" noChrome tone={light ? 'light' : 'dark'} ink={light ? 'dark' : 'light'}
-            name="CLOSET" />
+      {!list && (
+        <div className="cl-deco-wrap" aria-hidden="true">
+          <div className="cl-deco">
+            <StageDeco mode="accent" shape="tile" noChrome tone={light ? 'light' : 'dark'} ink={light ? 'dark' : 'light'}
+              name="CLOSET" />
+          </div>
         </div>
-      </div>
+      )}
       <div className="cl-content">
         {head}
-        <div className="cl-rx">
-          <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
-          <div className="rx-headline">
-            <span className="rx-cap">{caption}</span>
-            <span className="rx-count"><em>{countLabel}</em><b>{n}</b></span>
+        {list ? (
+          <div className="cl-rx">
+            <i className="rx-fr tl" /><i className="rx-fr tr" /><i className="rx-fr bl" /><i className="rx-fr br" />
+            <div className="rx-headline">
+              <span className="rx-cap">CLOSET ARCHIVE // PAIR INDEX</span>
+              <span className="rx-count"><em>CLOSET</em><b>{n}</b></span>
+            </div>
+            <div className="rx-ghost" aria-hidden="true">CLOSET</div>
+            <div className="cl-rx-body">{children}</div>
+            <div className="rx-foot">
+              <span className="rx-bar" aria-hidden="true" />
+              <span className="rx-cap">CLOSET FILE // {n}</span>
+              <span className="rx-chev" aria-hidden="true">›››</span>
+            </div>
           </div>
-          <div className="rx-ghost" aria-hidden="true">{ghost}</div>
-          <div className="cl-rx-body">{children}</div>
-          <div className="rx-foot">
-            <span className="rx-bar" aria-hidden="true" />
-            <span className="rx-cap">{foot} // {n}</span>
-            <span className="rx-chev" aria-hidden="true">›››</span>
-          </div>
-        </div>
+        ) : children}
       </div>
     </section>
   );

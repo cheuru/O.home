@@ -41,15 +41,15 @@ function ClosetPageInner() {
     return (
       <ClosetShell
         head={<div className="page-head"><PageTitle href="/closet">CLOSET</PageTitle><p><Link href="/closet">← 옷장 목록</Link></p></div>}
-        caption="CLOSET ARCHIVE // PAIR WARDROBE" countLabel="CLOSET" count={1} ghost="CLOSET" foot="CLOSET FILE">
+        variant="room">
         <Room room={room} book={book} save={save} isAdmin={isAdmin} loaded={loaded} />
       </ClosetShell>
     );
   }
   return (
-    <ClosetShell
+    <ClosetShell variant="list"
       head={<div className="page-head"><PageTitle>CLOSET</PageTitle><p>{roomId ? '없는 옷장이에요. 목록에서 골라 주세요' : '페어의 옷장을 골라 들어가세요'}</p></div>}
-      caption="CLOSET ARCHIVE // PAIR INDEX" countLabel="CLOSET" count={book.rooms.length} ghost="CLOSET" foot="CLOSET FILE">
+      count={book.rooms.length}>
       <ClosetLobby book={book} isAdmin={isAdmin}
         onCreate={name => save({ rooms: [...book.rooms, newRoom(newId(), name)] })}
         onDelete={id => save({ rooms: book.rooms.filter(r => r.id !== id) })} />
