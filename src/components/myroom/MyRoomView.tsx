@@ -93,6 +93,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   const [snapOn, setSnapOn] = useState(true);
   const [grid, setGrid] = useState('10');
   const [zoomPct, setZoomPct] = useState(100);
+  const [zoomMin, setZoomMin] = useState(50);
   const [panOn, setPanOn] = useState(false);
   const [status, setStatus] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -184,8 +185,12 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     const ed = edRef.current as Ed;
     const outer = outerRef.current, roomEl = roomElRef.current, wrap = wrapRef.current, layout = layoutRef.current, zc = zoomCtlRef.current;
     if (!outer) return;
-    const Z = { fit: 1, user: 1 };
-    const ZMIN = 0.5, ZMAX = 3;
+    const Z = { fit: 1, user: 1, over: false };
+    let ZMIN = 0.5;
+    const ZMAX = 3;
+    // 마이룸 창(데스크톱)에서는 방이 작은 상자로 들어가는 대신, 방 영역 전체를 방으로 채운다(cover)
+    let fillView: { w: number; h: number } | null = null;
+    const labFill = () => !!wrap && !!roomEl && wrap.classList.contains('mr-lab-room') && wrap.classList.contains('mr-fullscreen') && window.innerWidth > 700;
 
     const updateBigCanvasHeight = () => {
       if (!layout || !wrap || !wrap.classList.contains('mr-fullscreen')) return;
@@ -211,8 +216,15 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     const place = () => {
       if (!zc) return;
       zc.style.transform = '';
+      const pt = outer.querySelector('#btn-pan-toggle') as HTMLElement | null;
+      if (pt) pt.style.transform = '';
       const rp = remoteRef.current;
       if (!remoteVisRef.current || !rp || rp.style.display === 'none') return;
+      if (wrap && wrap.classList.contains('mr-lab-room') && window.innerWidth > 700) {
+        // 마이룸 창: 리모콘이 왼쪽에 떠 있으므로 왼쪽 아래 화면이동 버튼만 비켜 준다
+        if (pt) { const o = rp.getBoundingClientRect().right - pt.getBoundingClientRect().left; if (o > 0) pt.style.transform = `translateX(${Math.ceil(o + 10)}px)`; }
+        return;
+      }
       const overlap = zc.getBoundingClientRect().right - rp.getBoundingClientRect().left;
       if (overlap > 0) zc.style.transform = `translateX(-${Math.ceil(overlap + 10)}px)`;
     };
@@ -220,13 +232,14 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     const applyZoom = (recenter: boolean, syncSlider?: boolean) => {
       const W = ed.canvasW, H = ed.canvasH;
       const scale = Z.fit * Z.user;
-      const viewW = Math.round(W * Z.fit), viewH = Math.round(H * Z.fit);
+      const viewW = fillView ? fillView.w : Math.round(W * Z.fit), viewH = fillView ? fillView.h : Math.round(H * Z.fit);
+      Z.over = fillView ? (scale * W > viewW + 1 || scale * H > viewH + 1) : Z.user > 1.001;
       outer.style.width = viewW + 'px'; outer.style.height = viewH + 'px';
       if (recenter) { ed.panX = Math.round((viewW - W * scale) / 2); ed.panY = Math.round((viewH - H * scale) / 2); }
       ed.setViewScaleLight(scale);
       if (syncSlider !== false) setZoomPct(Math.round(Z.user * 100));
       zc?.classList.toggle('mr-zoom-active', Z.user > 1.001);
-      outer.classList.toggle('mr-zoomed', Z.user > 1.001 && !ed.editable);
+      outer.classList.toggle('mr-zoomed', Z.over && !ed.editable);
     };
 
     const setZoomAtPoint = (target: number, cx?: number | null, cy?: number | null, sync?: boolean) => {
@@ -247,6 +260,20 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
       const W = ed.canvasW, H = ed.canvasH;
       const availW = (roomEl ? roomEl.clientWidth : 0) || outer.clientWidth || W;
       const big = !!wrap && wrap.classList.contains('mr-fullscreen');
+      fillView = null;
+      if (labFill()) {
+        const aw = roomEl!.clientWidth, ah = roomEl!.clientHeight;
+        if (aw > 0 && ah > 0) {
+          const cover = Math.max(aw / W, ah / H), contain = Math.min(aw / W, ah / H);
+          Z.fit = cover; fillView = { w: aw, h: ah };
+          ZMIN = Math.min(0.5, Math.max(0.1, contain / cover));
+          setZoomMin(Math.floor(ZMIN * 100));
+          Z.user = Math.min(ZMAX, Math.max(ZMIN, Z.user));
+          applyZoom(true); place();
+          return;
+        }
+      }
+      ZMIN = 0.5; setZoomMin(50);
       let raw: number;
       if (big && roomEl) raw = Math.min(availW / W, (roomEl.clientHeight || H) / H);
       else raw = availW / W;
@@ -282,7 +309,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     // 보기 전용일 때: 확대한 상태에서 드래그로 화면 옮기기
     let pan: { x: number; y: number; px: number; py: number } | null = null;
     const md = (e: MouseEvent) => {
-      if (ed.editable || Z.user <= 1.001) return;
+      if (ed.editable || !Z.over) return;
       if (e.target !== outer && e.target !== ed.canvasEl) return;
       pan = { x: e.clientX, y: e.clientY, px: ed.panX, py: ed.panY };
       outer.classList.add('mr-panning');
@@ -290,6 +317,12 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
     const mv = (e: MouseEvent) => {
       if (!pan) return;
       ed.panX = pan.px + (e.clientX - pan.x); ed.panY = pan.py + (e.clientY - pan.y);
+      if (fillView) {
+        // 마이룸 창(보기): 방 가장자리가 창 밖으로 벗어나 빈 공간이 보이지 않게 막는다
+        const sc = Z.fit * Z.user, vw = fillView.w, vh = fillView.h, cw2 = ed.canvasW * sc, ch2 = ed.canvasH * sc;
+        ed.panX = cw2 <= vw ? Math.round((vw - cw2) / 2) : Math.min(0, Math.max(vw - cw2, ed.panX));
+        ed.panY = ch2 <= vh ? Math.round((vh - ch2) / 2) : Math.min(0, Math.max(vh - ch2, ed.panY));
+      }
       ed.canvasEl.style.transform = ed._panScaleTransform();
     };
     const mu = () => { if (pan) { pan = null; outer.classList.remove('mr-panning'); } };
@@ -523,7 +556,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
                   <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><line x1="14.7" y1="14.7" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="10" y1="7" x2="10" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
                 </button>
                 <div className="mr-zoom-slider-wrap">
-                  <input type="range" className="mr-zoom-slider" min={50} max={300} step={5} value={zoomPct} onChange={e => apiRef.current?.setPct(parseInt(e.target.value, 10) || 100)} />
+                  <input type="range" className="mr-zoom-slider" min={zoomMin} max={300} step={1} value={zoomPct} onChange={e => apiRef.current?.setPct(parseInt(e.target.value, 10) || 100)} />
                 </div>
                 <button type="button" className="mr-zoom-btn" title="축소" onClick={() => apiRef.current?.zoomBy(-0.1)}>
                   <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><line x1="14.7" y1="14.7" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
