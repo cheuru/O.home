@@ -260,7 +260,7 @@ export function SpaceBackground() {
     }
     function onLeave() { m.x = m.y = -9999; m.nx = m.ny = 0; }
     function onDown(e: PointerEvent) {
-      pulses.push({ x: e.clientX, y: e.clientY, t: 0 });
+      // 클릭 링은 전역 ClickFx(components/shell/ClickFx.tsx)가 모든 페이지에서 그린다 — 여기선 유성만
       if (!reduce) spawnMeteor(e.clientX + rnd(-40, 160), e.clientY - rnd(60, 160));
     }
     function onScroll(e: Event) {
