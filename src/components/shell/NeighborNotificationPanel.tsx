@@ -149,11 +149,9 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
     ...(tab!=='neighbor' ? notifications.map(n => ({ kind: 'own' as const, n, t: n.date })) : []),
     ...(tab!=='own' ? entries.map(e => ({ kind: 'nb' as const, e, t: e.date })) : []),
   ].sort((a, b) => (Date.parse(b.t) || 0) - (Date.parse(a.t) || 0)) as Array<{ kind: 'own'; n: Notif; t: string } | { kind: 'nb'; e: Entry; t: string }>;
-  // 내 홈 알림도 새 탭으로 연다 (이웃 글과 동일)
-  const openOwn = (n: Notif) => {
-    markRead(n.id);
-    try { window.open(new URL(n.href, window.location.origin).href, '_blank', 'noopener,noreferrer'); }
-    catch { setNotice('링크를 열 수 없습니다.'); }
+  // 링크는 진짜 <a target="_blank">로 연다 — window.open은 팝업 차단·미리보기 창에서 조용히 막힐 수 있다.
+  const ownHref = (n: Notif) => {
+    try { const u = new URL(n.href, window.location.origin); return /^https?:$/.test(u.protocol) ? u.href : '#'; } catch { return '#'; }
   };
   const delEntry = (key: string) => {
     setHidden(p => p.includes(key) ? p : [...p, key]);
@@ -169,10 +167,14 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
     clearReadNotifs(userId);
     setNotice(keys.length + ownRead ? `읽은 알림 ${keys.length + ownRead}개를 삭제했습니다.` : '삭제할 읽은 알림이 없습니다.');
   };
-  const openEntry = (e: Entry) => {
-    setRead(p => p.includes(e.key) ? p : [...p, e.key]);
-    window.open(e.url, '_blank', 'noopener,noreferrer');
-  };
+  const markEntryRead = (key: string) => setRead(p => p.includes(key) ? p : [...p, key]);
+  // 안내 문구는 잠시 뒤 저절로 사라진다 (실패 안내는 읽을 시간을 더 준다)
+  useEffect(() => {
+    if (!notice) return;
+    const fail = /못했|없습니다|확인할 수|저장하지|입력해|이미|최대/.test(notice) && !/삭제할 읽은/.test(notice);
+    const t = window.setTimeout(() => setNotice(''), fail ? 7000 : 3000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
   return <div className={`oh-center-panel user-menu ${placement === 'dock' ? 'dock' : ''} ${open ? 'open' : ''}`} onClick={e => e.stopPropagation()}>
     <div className="oh-center-head"><strong>NOTIFICATION CENTER</strong><span>{counts} UNREAD</span><button onClick={onClose} aria-label="알림창 닫기">×</button></div>
     <div className="oh-center-tabs">{([['all','전체'],['own','내 홈'],['neighbor','이웃']] as const).map(([id,label]) => <button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</div>
@@ -182,8 +184,8 @@ export function NeighborNotificationPanel({ open, userId, notifications, isAdmin
       {neighbors.map(n=><div className="oh-center-neighbor" key={n.id}><span><b>{n.name}</b><small>{host(n.feedUrl)}</small></span><button onClick={()=>{setNeighbors(p=>p.filter(x=>x.id!==n.id));setEntries(p=>p.filter(x=>x.neighborId!==n.id));setRead(p=>p.filter(k=>!k.startsWith(`${n.id}:`)));setHidden(p=>p.filter(k=>!k.startsWith(`${n.id}:`)));}}>삭제</button></div>)}
     </div> : <div className="oh-center-list">
       {merged.map(row => row.kind==='own'
-        ? <div className="oh-center-row" key={`o-${row.n.id}`}><button className={`oh-center-item ${row.n.read?'is-read':''}`} onClick={()=>openOwn(row.n)}><strong>{row.n.title}</strong><small>{row.n.body||NOTIF_TYPE_LABEL[row.n.type]}</small><time>{fmt(row.n.date)} · 내 홈페이지(새 탭)</time></button><button className="oh-center-del" title="삭제" aria-label="알림 삭제" onClick={()=>removeNotif(row.n.id)}>×</button></div>
-        : <div className="oh-center-row" key={`n-${row.e.key}`}><button className={`oh-center-item ${read.includes(row.e.key)?'is-read':''}`} onClick={()=>openEntry(row.e)}><strong>{row.e.title}</strong><small>{row.e.neighborName} · {host(row.e.url)}</small><time>{fmt(row.e.date)} · 외부 사이트(새 탭)</time></button><button className="oh-center-del" title="삭제" aria-label="알림 삭제" onClick={()=>delEntry(row.e.key)}>×</button></div>)}
+        ? <div className="oh-center-row" key={`o-${row.n.id}`}><a className={`oh-center-item ${row.n.read?'is-read':''}`} href={ownHref(row.n)} target="_blank" rel="noopener noreferrer" onClick={()=>markRead(row.n.id)}><strong>{row.n.title}</strong><small>{row.n.body||NOTIF_TYPE_LABEL[row.n.type]}</small><time>{fmt(row.n.date)} · 내 홈페이지(새 탭)</time></a><button className="oh-center-del" title="삭제" aria-label="알림 삭제" onClick={()=>removeNotif(row.n.id)}>×</button></div>
+        : <div className="oh-center-row" key={`n-${row.e.key}`}><a className={`oh-center-item ${read.includes(row.e.key)?'is-read':''}`} href={row.e.url} target="_blank" rel="noopener noreferrer" onClick={()=>markEntryRead(row.e.key)}><strong>{row.e.title}</strong><small>{row.e.neighborName} · {host(row.e.url)}</small><time>{fmt(row.e.date)} · 외부 사이트(새 탭)</time></a><button className="oh-center-del" title="삭제" aria-label="알림 삭제" onClick={()=>delEntry(row.e.key)}>×</button></div>)}
       {!merged.length&&<p className="oh-center-empty">표시할 알림이 없습니다.</p>}
     </div>}
     {tab!=='neighbor' && <details className="oh-center-settings"><summary>내 홈 알림 설정</summary>{(Object.keys(NOTIF_TYPE_LABEL) as NotifType[]).filter(k=>k!=='guest'||isAdmin).map(k=><label key={k}>{NOTIF_TYPE_LABEL[k]}<KToggle checked={mySettings[k]} onChange={value=>{setNotifSetting(userId,k,value);setSettingsVersion(v=>v+1);}} /></label>)}<button onClick={onSelfTest}>내 홈 알림 전달 확인</button></details>}

@@ -6,6 +6,7 @@
 - `src/components/shell/NeighborNotificationPanel.css`: 종 버튼 아래 팝업 위치, 모바일 위치.
 - (v3) 데스크톱 모드(상단바 없음): `DesktopShell.tsx` 작업표시줄의 BGM 아이콘 왼쪽에 종 버튼 추가. 알림 수신(syncNotifs·실시간 구독·storage 이벤트)도 여기서 수행. 패널은 `placement="dock"`로 독 바깥(fixed)에 렌더링, 알림 클릭 시 해당 주소를 창으로 엶. `desktop.css`에 배지 스타일 추가.
 - (v4) 알림 개별 삭제(×)와 '읽은 알림 삭제' 추가. 이웃 글은 삭제 후 피드에 남아 있어도 다시 뜨지 않도록 hidden 목록 저장. 내 홈 알림 삭제는 서버에도 반영(removeNotif 수정). 내 홈 알림 클릭도 새 탭으로 열림(onNavigate 제거).
+- (v5) 알림 항목을 `<a target="_blank">` 링크로 변경(window.open은 일부 환경에서 막힘). 안내 문구는 3초(실패 안내는 7초) 뒤 자동 소멸.
 - DeskHome·R 터미널 파일은 수정하지 않음.
 
 ## 반영 내용
