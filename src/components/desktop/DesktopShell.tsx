@@ -333,6 +333,8 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
           })}
         </div>
         <div className="dsk-sys" ref={userRef}>
+          {/* BGM 접힘 자리 — BgmPlayer가 접히면 소리 아이콘을 여기로 넣는다 */}
+          <span id="dsk-bgm-slot" style={{ display: 'contents' }} />
           <button className="dsk-user" onClick={() => setUserOpen(o => !o)}>
             <i className="dsk-live" />{nickname ?? 'GUEST'}
           </button>

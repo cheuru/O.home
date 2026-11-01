@@ -207,3 +207,15 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 @keyframes dskBlink { 50% { opacity: 0; } }
 @media (max-width: 900px) { .dsk-term { display: none; } }
 @media (prefers-reduced-motion: reduce) { .dsk-orbit .spin, .dsk-orbit .rot, .dsk-term-body p.cur u { animation: none; } }
+
+/* BGM — 접으면 레코드판 대신 작업표시줄(닉네임 옆) 소리 아이콘으로 들어간다.
+   플레이어 본체는 화면 밖에 그대로 두어 유튜브 재생이 끊기지 않게 한다 */
+.bgm.tray { position: fixed; left: -9999px; right: auto; bottom: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; padding: 0; border: 0; }
+.dsk-bgm { background: none; border: 0; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--top-fg); transition: .15s; }
+.dsk-bgm:hover { background: var(--dd-hv); color: var(--top-hv); }
+.dsk-bgm svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.dsk-bgm.on { color: var(--accent-soft, var(--top-hv)); }
+.dsk-bgm.on .w1 { animation: dsk-wave 1.2s ease-in-out infinite; }
+.dsk-bgm.on .w2 { animation: dsk-wave 1.2s ease-in-out .3s infinite; }
+@keyframes dsk-wave { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .dsk-bgm.on .w1, .dsk-bgm.on .w2 { animation: none; } }

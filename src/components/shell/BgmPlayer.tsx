@@ -3,6 +3,7 @@
 // 기본 위치 오른쪽 아래 · 곡 리스트 팝업 (v1.9) · 페이지 이동에도 유지(레이아웃 상주)
 // 브라우저 정책상 소리 재생은 사용자의 첫 클릭부터 시작
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useBgm } from '@/lib/bgmStore';
 
 /** 흐르는 글씨 — 재생 중이고 글자가 넘칠 때만 무한 스크롤, 평소엔 말줄임.
@@ -59,6 +60,15 @@ const ListIcon = () => (
   </svg>
 );
 
+// 작업표시줄 트레이용 스피커 아이콘 — 재생 중이면 소리결이 깜빡인다
+const SoundIcon = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M4 9.5v5h3.6L12 18.5v-13L7.6 9.5H4z" />
+    <path className="w1" d="M15.4 9.2a4 4 0 0 1 0 5.6" />
+    <path className="w2" d="M18 6.8a7.4 7.4 0 0 1 0 10.4" />
+  </svg>
+);
+
 export function BgmPlayer() {
   const { state, source } = useBgm();
   const { settings } = state;
@@ -70,6 +80,9 @@ export function BgmPlayer() {
   const [volume, setVolume] = useState(settings.volume);
   // 접기 상태 — 방문자별 기억 (4.1)
   const [folded, setFolded] = useState(false);
+  // 데스크톱 작업표시줄의 닉네임 옆 자리(#dsk-bgm-slot) — 있으면 접었을 때 레코드판 대신 거기로 소리 아이콘이 들어간다
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [wide, setWide] = useState(true);
   const playerRef = useRef<YTPlayer | null>(null);
   const readyRef = useRef(false);       // onReady 이후에만 playVideo가 실제 동작 (그 전엔 무시됨)
   const startedRef = useRef(false);     // 한 번이라도 실제 재생 시작됨 — 첫 재생은 loadVideoById 경로 필수
@@ -85,6 +98,18 @@ export function BgmPlayer() {
   useEffect(() => {
     try { setFolded(localStorage.getItem('ohome.bgm.fold') === '1'); } catch { /* 무시 */ }
   }, []);
+  useEffect(() => {
+    const find = () => setSlot(document.getElementById('dsk-bgm-slot'));
+    find();
+    const mo = new MutationObserver(find);
+    mo.observe(document.body, { childList: true, subtree: true });
+    const mq = window.matchMedia('(min-width:621px)');
+    const wd = () => setWide(mq.matches);
+    wd();
+    mq.addEventListener('change', wd);
+    return () => { mo.disconnect(); mq.removeEventListener('change', wd); };
+  }, []);
+  const inTray = folded && !!slot && wide;
   const setFold = (v: boolean) => {
     setFolded(v);
     setListOpen(false);
@@ -264,7 +289,7 @@ export function BgmPlayer() {
   return (
     <div
       ref={rootRef}
-      className={`bgm ${folded ? 'folded' : ''} ${settings.position === 'bl' ? 'bgm-left' : ''}`}
+      className={`bgm ${folded ? 'folded' : ''} ${inTray ? 'tray' : ''} ${settings.position === 'bl' ? 'bgm-left' : ''}`}
       style={settings.position === 'bl' ? { right: 'auto', left: 20 } : undefined}
       onClick={() => { if (folded) setFold(false); }}
       data-tip={folded ? '펼치기' : undefined}
@@ -309,6 +334,12 @@ export function BgmPlayer() {
           </div>
         </>
       )}
+      {/* 접힌 상태 — 작업표시줄 닉네임 옆 소리 아이콘 (누르면 다시 펼침). 플레이어 본체(유튜브)는 그대로 남아 계속 재생된다 */}
+      {inTray && slot && createPortal(
+        <button type="button" className={`dsk-bgm ${playing ? 'on' : ''}`} data-tip="BGM 펼치기" aria-label="BGM 펼치기"
+          onClick={() => setFold(false)}>
+          <SoundIcon />
+        </button>, slot)}
     </div>
   );
 }
