@@ -7,8 +7,11 @@
 //  · 비밀글·수위(adult) 접힘 글은 제목도 내보내지 않는다. 본문은 절대 내보내지 않는다
 //    (Firestore에서는 제목·날짜·작성자 필드만 골라 읽는다).
 //  · CDN 캐시 — 구독자가 많아도 DB 조회는 캐시 시간당 한 번 수준.
-//  · 게시판 글(posts) + 자캐(characters) + 자관(relations) 을 한 피드에 합친다.
-//    자캐·자관은 제목/날짜 칸이 없어 이름·생성 시각으로 대신하고, 리스트에 노출되는 자캐(own)만 담는다.
+//  · 게시판·갤러리·로드뷰·TRPG 로그·도토리·플레이기록·커미션·다이어리·감상타래·자캐·자관·TRPG 캐릭터·마이룸을
+//    한 피드에 합친다. 글마다 제목/날짜 칸이 달라 아래 SOURCES 표에서 종류별로 뽑는 방법을 정해 둔다.
+//  · 담지 않는 것: 방명록·메모·역극·신청자·옷입히기·댓글·알림 (방문자·회원이 남긴 것이거나 개인 정보라서)
+//  · 감상타래는 타래글 하나하나를 담는다. 타래글 본문은 내보내지 않는다 (Firestore는 배열 안의 칸만 골라
+//    읽을 수 없어 서버가 읽되 응답에 싣지 않는다).
 // 지원: Firebase(Firestore) · Supabase
 import { NextResponse } from 'next/server';
 
@@ -54,27 +57,124 @@ const noStore = { 'Cache-Control': 'no-store' };
 
 export function OPTIONS() { return new NextResponse(null, { status: 204, headers: CORS }); }
 
-/** 읽어 온 글 한 줄 */
-type Row = { id: string; title: string; date: string; author: string; secret: boolean; adult: boolean; path: string };
+/** 피드 한 줄 */
+type Row = { id: string; title: string; date: string; created: string; author: string; secret: boolean; adult: boolean; path: string };
+type Plain = Record<string, unknown>;
+type Doc = { id: string; data: Plain; created: string };
 
-/** 자캐·자관 같은 「글 아닌 항목」을 피드에 담는 방법 */
-const EXTRA = [
-  { coll: 'characters', tag: '자캐', idPrefix: 'char:', base: '/chars/', needOwn: true },
-  { coll: 'relations',  tag: '자관', idPrefix: 'rel:',  base: '/rels/',  needOwn: false },
-] as const;
-
-/* ── Firestore REST 값 풀기 ── */
+/* ── Firestore REST 값 → 일반 값 ── */
 type FsVal = {
   stringValue?: string; booleanValue?: boolean; integerValue?: string; doubleValue?: number; timestampValue?: string;
-  nullValue?: null; mapValue?: { fields?: Record<string, FsVal> };
+  nullValue?: null; mapValue?: { fields?: Record<string, FsVal> }; arrayValue?: { values?: FsVal[] };
 };
-const fsStr = (v?: FsVal) => (typeof v?.stringValue === 'string' ? v.stringValue : '');
-const fsMap = (v?: FsVal) => v?.mapValue?.fields ?? {};
+function fsPlain(v?: FsVal): unknown {
+  if (!v) return undefined;
+  if (v.stringValue !== undefined) return v.stringValue;
+  if (v.booleanValue !== undefined) return v.booleanValue;
+  if (v.integerValue !== undefined) return Number(v.integerValue);
+  if (v.doubleValue !== undefined) return v.doubleValue;
+  if (v.timestampValue !== undefined) return v.timestampValue;
+  if (v.arrayValue) return (v.arrayValue.values ?? []).map(fsPlain);
+  if (v.mapValue) return Object.fromEntries(Object.entries(v.mapValue.fields ?? {}).map(([k, x]) => [k, fsPlain(x)]));
+  return null;
+}
 
-type FsDoc = { name: string; createTime?: string; fields?: Record<string, FsVal> };
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+const isAdult = (fold: unknown) => (fold as { type?: unknown } | null | undefined)?.type === 'adult';
+/** 섹션을 여러 개로 만든 목록은 ?s=섹션 으로 열린다 (기본 섹션은 그냥 주소) */
+const secPath = (base: string, secId: unknown) => (typeof secId === 'string' && secId && secId !== 'main' ? `${base}?s=${encodeURIComponent(secId)}` : base);
 
-/** 한 컬렉션에서 「전체공개」 문서를 필요한 칸만 읽는다 */
-async function runFirebase(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: string, coll: string, fields: string[]): Promise<FsDoc[]> {
+/** 종류별로 「무엇을 읽고, 어떤 줄로 만들지」 */
+type Source = { coll: string; keys: string[]; map: (id: string, d: Plain, created: string) => Row[] };
+
+/** 제목 하나·주소 하나로 끝나는 흔한 종류 */
+const simple = (o: {
+  coll: string; tag: string; keys: string[];
+  title: (d: Plain) => string; path: (id: string, d: Plain) => string;
+  dateKey?: string;      // 글에 적힌 등록일 칸 — 비우면 문서 생성 시각 (세션 날짜처럼 지난 날짜일 수 있는 칸은 쓰지 않는다)
+  fold?: boolean;        // 수위(adult) 접힘 글 제외
+  idPrefix?: string;
+}): Source => ({
+  coll: o.coll, keys: o.keys,
+  map: (id, d, created) => {
+    const t = o.title(d);
+    if (!t) return [];
+    return [{
+      id: (o.idPrefix ?? `${o.coll}:`) + id, title: `[${o.tag}] ${t}`,
+      date: (o.dateKey ? str(d[o.dateKey]) : '') || created, created,
+      author: '', secret: false, adult: !!o.fold && isAdult(d.fold), path: o.path(id, d),
+    }];
+  },
+});
+
+/** 감상타래 작품 하나 → 타래글마다 한 줄 (글이 없으면 작품 하나가 한 줄) */
+const THREAD_POSTS_PER_WORK = 10;
+const threadSource: Source = {
+  coll: 'threads', keys: ['title', 'secId', 'created', 'posts'],
+  map: (id, d, createdAt) => {
+    const title = str(d.title);
+    if (!title) return [];
+    const path = secPath('/threads', d.secId);
+    const tag = `[감상타래] ${title}`;
+    const created = str(d.created) || createdAt;
+    const base = { created, author: '', secret: false, path };
+    const posts = (Array.isArray(d.posts) ? d.posts : []).flatMap(x => {
+      const p = (x ?? {}) as Plain;
+      return typeof p.id === 'string' && p.id ? [{ id: p.id, date: str(p.date), adult: isAdult(p.fold) }] : [];
+    });
+    if (!posts.length) return [{ ...base, id: `thread:${id}`, title: tag, date: created, adult: false }];
+    return posts
+      .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0))
+      .slice(0, THREAD_POSTS_PER_WORK)
+      .map(p => ({ ...base, id: `thread:${id}:${p.id}`, title: `${tag} · 새 글`, date: p.date || created, adult: p.adult }));
+  },
+};
+
+const SOURCES: Source[] = [
+  // 게시판 — 제목 그대로 (여러 게시판이어도 같은 /board/글 주소)
+  {
+    coll: 'posts', keys: ['title', 'date', 'author', 'secret', 'fold'],
+    map: (id, d, created) => [{
+      id, title: str(d.title), date: str(d.date) || created, created, author: str(d.author),
+      secret: d.secret === true, adult: isAdult(d.fold), path: `/board/${encodeURIComponent(id)}`,
+    }],
+  },
+  simple({ coll: 'gallery', tag: '갤러리', keys: ['title', 'date', 'fold'], title: d => str(d.title), dateKey: 'date', fold: true,
+    path: id => `/gallery/${encodeURIComponent(id)}` }),
+  simple({ coll: 'roadview', tag: '로드뷰', keys: ['title', 'no', 'date', 'fold', 'secId'], dateKey: 'date', fold: true,
+    title: d => (typeof d.no === 'number' && d.no > 0 ? `#${d.no}` : str(d.title) || '새 그림'),
+    path: (_id, d) => secPath('/roadview', d.secId) }),
+  simple({ coll: 'trpg_logs', tag: 'TRPG 로그', keys: ['title'], title: d => str(d.title),
+    path: id => `/trpg/${encodeURIComponent(id)}` }),
+  simple({ coll: 'dotori', tag: '도토리', keys: ['name', 'date', 'secId'], title: d => str(d.name), dateKey: 'date',
+    path: (_id, d) => secPath('/dotori', d.secId) }),
+  simple({ coll: 'playlog', tag: '플레이기록', keys: ['scenario', 'secId'], title: d => str(d.scenario),
+    path: (_id, d) => secPath('/playlog', d.secId) }),
+  simple({ coll: 'commissions', tag: '커미션', keys: ['name', 'date'], title: d => str(d.name), dateKey: 'date',
+    path: id => `/comm/${encodeURIComponent(id)}` }),
+  simple({ coll: 'diary', tag: '다이어리', keys: ['title', 'secId'], title: d => str(d.title),
+    path: (_id, d) => secPath('/diary', d.secId) }),
+  threadSource,
+  // 자캐 — 목록에 뜨는 것(own)만. 주소는 별명(slug)이 있으면 별명
+  {
+    coll: 'characters', keys: ['name', 'own', 'slug'],
+    map: (id, d, created) => {
+      const name = str(d.name);
+      if (d.own !== true || !name) return [];
+      return [{ id: `char:${id}`, title: `[자캐] ${name}`, date: created, created, author: '', secret: false, adult: false,
+        path: `/chars/${encodeURIComponent(str(d.slug) || id)}` }];
+    },
+  },
+  simple({ coll: 'relations', tag: '자관', keys: ['name', 'slug'], title: d => str(d.name), idPrefix: 'rel:',
+    path: (id, d) => `/rels/${encodeURIComponent(str(d.slug) || id)}` }),
+  simple({ coll: 'trpg_chars', tag: 'TRPG 캐릭터', keys: ['name'], title: d => str(d.name),
+    path: id => `/tchars/${encodeURIComponent(id)}` }),
+  simple({ coll: 'myrooms', tag: '마이룸', keys: ['title', 'date'], title: d => str(d.title), dateKey: 'date',
+    path: id => `/myroom/${encodeURIComponent(id)}` }),
+];
+
+/** 한 컬렉션에서 「전체공개」 문서를 필요한 칸만 읽는다 (Firestore) */
+async function fbDocs(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: string, src: Source): Promise<Doc[]> {
   const db = encodeURIComponent(cfg.databaseId);
   const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(cfg.projectId)}/databases/${db}/documents:runQuery?key=${encodeURIComponent(cfg.apiKey)}`;
   const r = await fetch(url, {
@@ -83,10 +183,10 @@ async function runFirebase(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: stri
     headers: { 'Content-Type': 'application/json', Referer: `${origin}/` },
     body: JSON.stringify({
       structuredQuery: {
-        from: [{ collectionId: coll }],
+        from: [{ collectionId: src.coll }],
         where: { fieldFilter: { field: { fieldPath: 'visibility' }, op: 'EQUAL', value: { stringValue: 'public' } } },
-        // 본문은 가져오지 않는다 — 필요한 칸만
-        select: { fields: fields.map(fieldPath => ({ fieldPath })) },
+        // 필요한 칸만 (게시판 본문 등은 가져오지 않는다)
+        select: { fields: src.keys.map(k => ({ fieldPath: `data.${k}` })) },
         limit: MAX_ROWS,
       },
     }),
@@ -94,90 +194,31 @@ async function runFirebase(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: stri
   });
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    throw new Error(`Firestore(${coll}) 응답 오류 (${r.status}) ${t.slice(0, 160)}`);
+    throw new Error(`Firestore(${src.coll}) 응답 오류 (${r.status}) ${t.slice(0, 160)}`);
   }
-  const out = await r.json() as { document?: FsDoc }[];
-  return out.flatMap(x => (x.document ? [x.document] : []));
-}
-
-async function readFirebase(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: string): Promise<Row[]> {
-  const docs = await runFirebase(cfg, origin, 'posts', ['data.title', 'data.date', 'data.author', 'data.secret', 'data.fold']);
-  return docs.map((doc): Row => {
-    const d = fsMap(doc.fields?.data);
-    const id = doc.name.split('/').pop() ?? '';
-    return {
-      id,
-      title: fsStr(d.title).trim(),
-      date: fsStr(d.date) || doc.createTime || '',
-      author: fsStr(d.author),
-      secret: d.secret?.booleanValue === true,
-      adult: fsStr(fsMap(d.fold).type) === 'adult',
-      path: `/board/${encodeURIComponent(id)}`,
-    };
+  const out = await r.json() as { document?: { name: string; createTime?: string; fields?: Record<string, FsVal> } }[];
+  return out.flatMap((x): Doc[] => {
+    if (!x.document) return [];
+    const data = fsPlain({ mapValue: { fields: x.document.fields?.data?.mapValue?.fields } }) as Plain;
+    return [{ id: x.document.name.split('/').pop() ?? '', data: data ?? {}, created: x.document.createTime ?? '' }];
   });
 }
 
-async function readFirebaseExtra(cfg: Extract<Cfg, { kind: 'firebase' }>, origin: string, ex: typeof EXTRA[number]): Promise<Row[]> {
-  const docs = await runFirebase(cfg, origin, ex.coll, ['data.name', 'data.own', 'data.slug']);
-  return docs.flatMap((doc): Row[] => {
-    const d = fsMap(doc.fields?.data);
-    if (ex.needOwn && d.own?.booleanValue !== true) return [];   // 상대 캐릭터는 목록에 안 뜨므로 알리지 않는다
-    const id = doc.name.split('/').pop() ?? '';
-    const name = fsStr(d.name).trim();
-    const slug = fsStr(d.slug).trim();
-    return [{
-      id: ex.idPrefix + id,
-      title: name ? `[${ex.tag}] ${name}` : '',
-      date: doc.createTime || '',
-      author: '', secret: false, adult: false,
-      path: ex.base + encodeURIComponent(slug || id),
-    }];
-  });
-}
-
-async function readSupabase(cfg: Extract<Cfg, { kind: 'supabase' }>): Promise<Row[]> {
-  const rows = await supaRows(cfg, 'posts');
-  return rows.map(row => {
-    const d = row.data ?? {};
-    const fold = d.fold as { type?: string } | null | undefined;
-    return {
-      id: row.id,
-      title: typeof d.title === 'string' ? d.title.trim() : '',
-      date: typeof d.date === 'string' ? d.date : row.created_at,
-      author: typeof d.author === 'string' ? d.author : '',
-      secret: d.secret === true,
-      adult: fold?.type === 'adult',
-      path: `/board/${encodeURIComponent(row.id)}`,
-    };
-  });
-}
-
-type SupaRow = { id: string; data: Record<string, unknown> | null; created_at: string };
-async function supaRows(cfg: Extract<Cfg, { kind: 'supabase' }>, table: string): Promise<SupaRow[]> {
-  const q = `${cfg.url.replace(/\/$/, '')}/rest/v1/${table}?select=id,data,created_at&visibility=eq.public&order=created_at.desc&limit=80`;
+/** 같은 일을 Supabase로 */
+async function supaDocs(cfg: Extract<Cfg, { kind: 'supabase' }>, src: Source): Promise<Doc[]> {
+  const q = `${cfg.url.replace(/\/$/, '')}/rest/v1/${src.coll}?select=id,data,created_at&visibility=eq.public&order=created_at.desc&limit=80`;
   const r = await fetch(q, {
     headers: { apikey: cfg.anonKey, Authorization: `Bearer ${cfg.anonKey}` },
     cache: 'no-store', signal: AbortSignal.timeout(8000),
   });
-  if (!r.ok) throw new Error(`DB(${table}) 응답 오류 (${r.status})`);
-  return await r.json() as SupaRow[];
+  if (!r.ok) throw new Error(`DB(${src.coll}) 응답 오류 (${r.status})`);
+  const rows = await r.json() as { id: string; data: Plain | null; created_at: string }[];
+  return rows.map(row => ({ id: row.id, data: row.data ?? {}, created: row.created_at }));
 }
 
-async function readSupabaseExtra(cfg: Extract<Cfg, { kind: 'supabase' }>, ex: typeof EXTRA[number]): Promise<Row[]> {
-  const rows = await supaRows(cfg, ex.coll);
-  return rows.flatMap((row): Row[] => {
-    const d = row.data ?? {};
-    if (ex.needOwn && d.own !== true) return [];
-    const name = typeof d.name === 'string' ? d.name.trim() : '';
-    const slug = typeof d.slug === 'string' ? d.slug.trim() : '';
-    return [{
-      id: ex.idPrefix + row.id,
-      title: name ? `[${ex.tag}] ${name}` : '',
-      date: row.created_at,
-      author: '', secret: false, adult: false,
-      path: ex.base + encodeURIComponent(slug || row.id),
-    }];
-  });
+async function readSource(cfg: NonNullable<Cfg>, origin: string, src: Source): Promise<Row[]> {
+  const docs = cfg.kind === 'firebase' ? await fbDocs(cfg, origin, src) : await supaDocs(cfg, src);
+  return docs.flatMap(d => src.map(d.id, d.data, d.created));
 }
 
 export async function GET(req: Request) {
@@ -185,11 +226,8 @@ export async function GET(req: Request) {
   const cfg = await loadConfig(origin);
   if (!cfg) return json({ error: '서버 설정(ohome.config.json)을 찾지 못했습니다.' }, 503, noStore);
 
-  // 게시판·자캐·자관을 따로 읽는다 — 한쪽이 실패해도 나머지는 담는다
-  const jobs = cfg.kind === 'firebase'
-    ? [readFirebase(cfg, origin), ...EXTRA.map(ex => readFirebaseExtra(cfg, origin, ex))]
-    : [readSupabase(cfg), ...EXTRA.map(ex => readSupabaseExtra(cfg, ex))];
-  const results = await Promise.allSettled(jobs);
+  // 종류별로 따로 읽는다 — 한 곳이 실패해도 나머지는 담는다
+  const results = await Promise.allSettled(SOURCES.map(src => readSource(cfg, origin, src)));
   const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (failed.length === results.length) {
     const why = failed[0].reason;
@@ -199,7 +237,9 @@ export async function GET(req: Request) {
 
   const rows = results.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   const items = rows.flatMap(row => {
-    const t = Date.parse(row.date);
+    // 글에 적힌 날짜가 날짜로 읽히지 않으면 문서 생성 시각으로 대신한다
+    let t = Date.parse(row.date);
+    if (!Number.isFinite(t)) t = Date.parse(row.created);
     if (!row.id || !row.title || row.secret || row.adult || !Number.isFinite(t)) return [];
     return [{
       id: row.id,
