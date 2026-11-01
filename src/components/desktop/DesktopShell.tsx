@@ -147,6 +147,15 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
     });
   }, []);
 
+  // 데스크톱이 처음 뜰 때 홈 창을 바로 열어 둔다 — 빈 바탕 대신 홈 화면이 메인으로 보이게
+  // (닫으면 빈 바탕으로 돌아가고, 다시 열려면 왼쪽 로고를 누른다)
+  const homeOpened = useRef(false);
+  useEffect(() => {
+    if (homeOpened.current) return;
+    homeOpened.current = true;
+    openWin(home.href, home.label, home.group, home.glyph);
+  }, [openWin, home]);
+
   const clickApp = (a: App) => {
     if (isExternal(a.href)) { window.open(a.href, '_blank'); return; }
     const w = wins.find(x => x.id === a.href);
