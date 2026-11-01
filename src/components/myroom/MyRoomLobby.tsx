@@ -99,7 +99,7 @@ export default function MyRoomLobby() {
 
   return (
     <MyRoomShell variant="list" count={sorted.length}
-      head={<div className="page-head"><PageTitle>MY ROOM</PageTitle><p>방을 꾸미고 구경하는 마이룸</p>{actions}</div>}>
+      head={<div className="page-head"><PageTitle>MY ROOM</PageTitle>{actions}</div>}>
       <div className="myroom-wrap">
         {!user && <p className="mr-guest-hint">로그인하면 내 방을 만들 수 있어요.</p>}
 
