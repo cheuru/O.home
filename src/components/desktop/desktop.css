@@ -8,6 +8,10 @@
 html[data-embed] .topbar,
 html[data-embed] .bgm { display: none !important; }
 
+/* 창 안에서는 상단바(58px)가 없다 — 자관 스테이지의 높이 calc(100vh - 58px)는 상단바가 있을 때의 값이라
+   그대로 두면 창 아래에 58px 빈 띠가 생겨 화면이 떠 보인다. 창 높이까지 채운다. */
+html[data-embed] .page-rel-detail.rs-on .rs { height: 100vh; }
+
 /* 데스크톱 화면에서는 BGM 플레이어가 작업표시줄 위로 */
 html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 
