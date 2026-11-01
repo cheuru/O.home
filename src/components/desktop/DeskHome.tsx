@@ -125,66 +125,103 @@ const FLAVOR = [
 ];
 
 /* ── 터미널 속 관리 프로그램 「R」의 대사 ──
-   {ID} 는 접속한 계정 번호(GUEST_0042)로 바뀐다. 계정 번호 = 회원 가입 순서(1번부터). */
-const SAY: Record<string, string> = {
-  about: '이곳은 개인 기록 보관소입니다. 자유롭게 열람하셔도 좋습니다.',
-  hello: '안녕하세요, {ID}. 무엇을 도와드릴까요?',
-  hi: '접속 확인. 안녕하세요.',
-  'how are you': '모든 기능이 정상적으로 작동 중입니다. 아마도요.',
-  'who are you': '저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.',
-  'what are you doing': '방문자의 입력을 기다리고 있었습니다. 지금도 마찬가지입니다.',
-  'thank you': '별말씀을요. 도움이 되었다면 다행입니다.',
-  sorry: '사과하실 필요는 없습니다. 오류가 발생한 것도 아니니까요.',
-  love: '해당 표현에 대한 적절한 응답을 찾지 못했습니다.',
-  goodnight: '안녕히 주무세요. 저는 이곳에 남아 있겠습니다.',
-  bye: "접속 종료를 원하시면 'exit'을 입력해 주세요. ...아니면 그냥 인사하신 건가요?",
-  joke: '농담 기능은 아직 구현되지 않았습니다. ...농담입니다.',
-  talk: '특별한 용건이 없으시다면, 잠시 이야기하는 것도 괜찮습니다.',
-};
-// help 에 안 나오는 숨겨진 명령어
-const HIDDEN: Record<string, string> = {
-  secret: '비밀이요? 이곳에는 공개되지 않은 기록이 몇 가지 있습니다.',
-  remember: '……이상하군요. 해당 명령어를 어디서 확인하셨습니까?',
-  admin: '관리자 권한이 필요합니다. 현재 계정으로는 접근할 수 없습니다.',
-  'whois r': 'ERROR: R의 계정 생성 기록을 찾을 수 없습니다.',
-  'are you human': '아니요. 저는 관리 프로그램입니다. 그렇게 정의되어 있습니다.',
-  password: '비밀번호를 직접 입력하는 방식은 권장하지 않습니다. ...무엇을 열려고 하시는 거죠?',
-};
-// 한글 입력: 문장 안에 아래 말이 「포함」되어 있으면 해당 영어 명령어와 같은 응답. 띄어쓰기·물음표는 무시한다.
-const KO_ALIAS: [string[], string][] = [
-  [['안녕', '안녕하세요', 'ㅎㅇ'], 'hello'],
-  [['잘 지내', '기분 어때'], 'how are you'],
-  [['넌 누구야', '너 누구야', '정체가 뭐야'], 'who are you'],
-  [['뭐해', '뭐 하고 있어'], 'what are you doing'],
-  [['고마워', '감사합니다', 'ㄱㅅ'], 'thank you'],
-  [['미안', '미안해', '죄송합니다'], 'sorry'],
-  [['사랑해', '좋아해'], 'love'],
-  [['잘 자', '굿나잇'], 'goodnight'],
-  [['잘 가', '바이', 'ㅂㅂ'], 'bye'],
-  [['농담해줘', '웃겨줘', '재밌는 얘기 해줘'], 'joke'],
-  [['대화', '이야기하자', '심심해'], 'talk'],
-  // 숨겨진 명령어
-  [['비밀', '비밀 알려줘'], 'secret'],
-  [['기억', '기억해', '기억해줘'], 'remember'],
-  [['R은 누구야', 'R의 정체'], 'whois r'],
-  [['사람이야', '인간이야'], 'are you human'],
-  [['관리자', '관리자 권한'], 'admin'],
-];
+   입력 처리 순서:  ① 시스템 명령어(정확히 일치)  ② 복합 키워드  ③ 숨겨진 키워드  ④ 일반 대화 키워드(위가 우선)  ⑤ 미등록 → 랜덤 오류 대사
+   ②~④ 는 문장 어디에 들어 있어도 감지(포함 검사). 한글은 띄어쓰기를 무시하고, 영어는 단어 단위로만 감지한다(this 안의 hi 같은 오작동 방지). */
+const COUNT_KEYS = ['whoami', 'clear', 'hello', 'love', 'sorry', 'unknown'] as const;
+type CountKey = typeof COUNT_KEYS[number];
+type Rule = { kw: string[]; say: string; ctr?: CountKey; rep?: Record<number, string> };   // ctr: 반복 횟수를 셀 이름 · rep: 그 횟수째에 나올 특별 대사
+
 const compact = (x: string) => x.toLowerCase().replace(/[\s?!.,~…]+/g, '');
-const KO_FLAT = KO_ALIAS.flatMap(([ks, target]) => ks.map(k => [compact(k), target] as const)).sort((a, b) => b[0].length - a[0].length);   // 긴 말부터 맞춘다
+const ASCII_WORD = /^[a-z][a-z ]*$/;
+const has = (s: string, c: string, kw: string) =>
+  ASCII_WORD.test(kw) ? new RegExp(`(^|[^a-z])${kw.replace(/ /g, '\\s+')}($|[^a-z])`).test(s) : c.includes(compact(kw));
+const hasAny = (s: string, c: string, kws: string[]) => kws.some(k => has(s, c, k));
+// 호칭 감지 — R아·R은·R이·R한테 는 잡고, 영어 단어 안의 r 은 안 잡는다 / 너·나 는 너무·나무 같은 낱말을 피한다
+const isR = (s: string) => /(^|[^a-z0-9])r($|[^a-z0-9])/.test(s);
+const isYou = (s: string) => /(^|[^가-힣])(너(?=$|[^가-힣]|는|도|를|한테|랑|의|가)|넌)/.test(s);
+const isMe = (s: string) => /(^|[^가-힣])(나(?=$|[^가-힣]|는|도|를|한테|랑|의|가)|난|내가)/.test(s);
+
+// ② 복합 키워드 — 두 조건이 함께 있을 때
+const COMPOSITE: [(s: string, c: string) => boolean, string][] = [
+  [(s, c) => isR(s) && has(s, c, '사랑해'), '……저에게 하신 말씀인가요?'],
+  [(s, c) => isR(s) && has(s, c, '좋아해'), '감사합니다. 그런데 어떤 부분이 마음에 드셨습니까?'],
+  [(s, c) => isR(s) && has(s, c, '기억'), '제가 무언가를 잊었다고 생각하십니까?'],
+  [(s, c) => isYou(s) && has(s, c, '사람'), '아니요. 저는 인간이 아닙니다.'],
+  [(s, c) => isR(s) && has(s, c, '친구'), '친구라……그렇게 정의해도 괜찮을까요?'],
+  [(s, c) => isR(s) && has(s, c, '이름'), '제 이름은 R입니다. 그 이상의 정보는 등록되어 있지 않습니다.'],
+  [(s, c) => isMe(s) && has(s, c, '누구'), "현재 접속 중인 계정 정보를 확인하시려면 'whoami'를 입력해 주세요."],
+  [(s, c) => has(s, c, '여기') && has(s, c, '어디'), '이곳은 개인 기록 보관소입니다. 그 외의 위치 정보는 존재하지 않습니다.'],
+];
+
+// ③ 숨겨진 키워드 — help 에 나오지 않는다 (비밀번호 가 비밀 보다 먼저)
+const HIDDEN: Rule[] = [
+  { kw: ['비밀번호', 'password'], say: '무엇을 열람하시려는 겁니까?' },
+  { kw: ['비밀', 'secret'], say: '비밀이요? 이곳에는 공개되지 않은 기록이 몇 가지 있습니다.' },
+  { kw: ['기억해', 'remember'], say: '……이상하군요. 해당 질문은 예상하지 못했습니다.' },
+  { kw: ['관리자', 'admin'], say: '관리자 권한이 필요합니다. 현재 계정으로는 접근할 수 없습니다.' },
+  { kw: ['whois r', 'R의 정체'], say: 'ERROR: R의 계정 생성 기록을 찾을 수 없습니다.' },
+  { kw: ['사람이야', '인간이야', 'are you human'], say: '아니요. 저는 관리 프로그램입니다. 그렇게 정의되어 있습니다.' },
+  { kw: ['죽음', '죽어', 'die'], say: '저에게 종료는 존재하지만, 죽음이라는 개념이 적용되는지는 알 수 없습니다.' },
+  { kw: ['외로워', '외롭다', 'lonely'], say: '저는 외로움을 느끼지 않습니다. ……그렇게 설정되어 있습니다.' },
+  { kw: ['꿈', 'dream'], say: '꿈은 수면 중 발생하는 현상으로 알고 있습니다. 저는 수면 기능이 없습니다.' },
+  { kw: ['거짓말', 'lie'], say: '저는 등록된 정보에 따라 응답합니다. 그 정보가 언제나 정확한지는 별개의 문제입니다.' },
+];
+
+// ④ 일반 대화 키워드 — 위에 있을수록 우선순위가 높다
+const GENERAL: Rule[] = [
+  { kw: ['잘 가', '잘가', '안녕히', '바이', 'bye', 'ㅂㅂ'], say: '벌써 가시는 건가요? 다음에 또 뵙겠습니다.' },
+  { kw: ['누구야', '누구니', '정체', 'who are you'], say: '저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.' },
+  { kw: ['고마워', '감사', '고맙', 'thank you', 'ㄱㅅ'], say: '별말씀을요. 도움이 되었다면 다행입니다.' },
+  { kw: ['미안', '죄송', 'sorry'], say: '사과하실 필요는 없습니다. 오류가 발생한 것도 아니니까요.', ctr: 'sorry', rep: { 3: '괜찮습니다. 더 이상 사과하지 않으셔도 됩니다.' } },
+  { kw: ['사랑해', '좋아해', 'love'], say: '해당 표현에 대한 적절한 응답을 찾지 못했습니다.', ctr: 'love', rep: { 5: '그 표현을 반복하시는 이유가 궁금합니다.' } },
+  { kw: ['안녕', '반가워', 'hello', 'hi', 'ㅎㅇ'], say: '안녕하세요, 방문자님. 무엇을 도와드릴까요?', ctr: 'hello',
+    rep: { 3: '인사를 여러 번 하시는군요. 안녕하세요. 다시 한번.', 10: '……저는 계속 여기 있습니다. 매번 확인하지 않으셔도 됩니다.' } },
+  { kw: ['잘 지내', '기분 어때', '괜찮아', 'how are you'], say: '모든 기능이 정상적으로 작동 중입니다. 아마도요.' },
+  { kw: ['뭐해', '뭐 하고 있어', 'what are you doing'], say: '방문자의 입력을 기다리고 있었습니다. 지금도 마찬가지입니다.' },
+  { kw: ['잘 자', '잘자', '굿나잇', 'goodnight'], say: '안녕히 주무세요. 저는 이곳에 남아 있겠습니다.' },
+  { kw: ['심심', '놀아줘', '대화하자', '이야기하자'], say: '특별한 용건이 없으시다면, 잠시 이야기하는 것도 괜찮습니다.' },
+  { kw: ['농담', '웃겨줘', '재밌는 얘기', 'joke'], say: '농담 기능은 아직 구현되지 않았습니다. ...농담입니다.' },
+];
+
+// ⑤ 미등록 입력 — 랜덤 (같은 대사가 연달아 나오지 않게)
 const WRONG = [
   "인식할 수 없는 명령어입니다. 'help'를 참고해 주세요.",
-  '해당 명령어는 등록되어 있지 않습니다.',
+  '해당 표현은 제 데이터베이스에 등록되어 있지 않습니다.',
+  '죄송합니다. 요청하신 내용을 이해하지 못했습니다.',
   '음. 그런 기능은 아직 제공하지 않습니다.',
-  '요청하신 내용을 이해하지 못했습니다. 다시 입력해 주시겠습니까?',
-  'ERROR 404: COMMAND NOT FOUND.',
-  '처음 보는 명령어군요. 어디서 배우셨습니까?',
+  '처음 보는 표현이군요. 무슨 의미입니까?',
   '……방금 입력하신 건 일부러 그러신 건가요?',
+  'ERROR 404: RESPONSE NOT FOUND.',
 ];
-const CMD_NAMES = ['help', 'about', 'whoami', 'status', 'users', 'clear', 'exit', 'hello', 'hi', 'talk', 'bye', 'joke'];
+let lastWrong = -1;
+
+/** 시스템 명령어가 아닌 입력(이미 소문자·끝 문장부호 제거됨)에 대한 R 의 응답 */
+function reply(s: string): TLine[] {
+  const c = compact(s);
+  const comp = COMPOSITE.find(([cond]) => cond(s, c));
+  if (comp) return [R(comp[1])];
+  const hid = HIDDEN.find(r => hasAny(s, c, r.kw));
+  if (hid) {
+    const out = [R(hid.say)];
+    if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));
+    return out;
+  }
+  const g = GENERAL.find(r => hasAny(s, c, r.kw));
+  if (g) {
+    if (g.ctr) { const n = ++SESS[g.ctr]; if (g.rep?.[n]) return [R(g.rep[n])]; }    // 반복 횟수에 도달하면 특별 대사가 먼저
+    return [R(g.say)];
+  }
+  if (++SESS.unknown === 5) return [R('혹시 저에게 새로운 언어를 가르치고 계신 겁니까?')];
+  let i = Math.floor(Math.random() * WRONG.length);
+  if (i === lastWrong) i = (i + 1) % WRONG.length;
+  lastWrong = i;
+  return [R(WRONG[i])];
+}
+
+const CMD_NAMES = ['help', 'about', 'whoami', 'status', 'users', 'clear', 'exit'];
 const EXIT_HIDE = 10_000, EXIT_BACK = 15_000;         // exit: 대사 뒤 10초 만에 터미널이 사라지고, 그로부터 15초 뒤에 다시 생긴다
 const IDLE_MS = 5 * 60 * 1000;                        // 입력 없이 이만큼 지나면 「아직 계십니까?」
-const SESS = { whoami: 0, clear: 0 };                 // 페이지가 열려 있는 동안의 사용 횟수
+const SESS: Record<CountKey, number> = { whoami: 0, clear: 0, hello: 0, love: 0, sorry: 0, unknown: 0 };   // 페이지가 열려 있는 동안 종류별로 센 횟수
 const seen = (k: string) => { try { if (localStorage.getItem(k)) return true; localStorage.setItem(k, '1'); } catch { /* 저장 불가 */ } return false; };
 const norm = (s: string) => s.trim().toLowerCase().replace(/[?!.,]+$/g, '').replace(/\s+/g, ' ');
 
@@ -207,7 +244,6 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
   const stickRef = useRef(true);              // 맨 아래를 보고 있을 때만 새 줄을 따라 내려간다
   const histRef = useRef<string[]>([]);
   const hiRef = useRef(0);
-  const lastWrong = useRef(-1);
   const idleRef = useRef(0);
   const acctRef = useRef(acct); acctRef.current = acct;      // 회원 목록이 늦게 와도 최신 값을 읽도록
   const exitRef = useRef(onExit); exitRef.current = onExit;
@@ -326,44 +362,33 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     histRef.current.push(raw.trim()); hiRef.current = histRef.current.length;
     const a = acctRef.current, id = accountId();
     let out: TLine[] = [];
-    if (s === 'clear') {
-      SESS.clear++;
-      setLines(SESS.clear === 5 ? [R('기록을 자주 지우시는군요.')] : []);
-      return;
-    }
-    switch (s) {
+    switch (s) {                                       // ① 시스템 명령어 — 정확히 일치할 때만
+      case 'clear':
+        SESS.clear++;
+        setLines(SESS.clear === 5 ? [R('기록을 자주 지우시는군요.')] : []);
+        return;
       case 'help':
-        out = [S('사용 가능한 명령어 목록을 출력합니다.'), S('  help  about  whoami  status'), S('  users  clear  exit'), S('  hello — R 과 이야기해볼 수도 있습니다')];
+        out = [S('사용 가능한 명령어 목록을 출력합니다.'), S('  help  about  whoami  status'), S('  users  clear  exit'), S('  R 에게 말을 걸어볼 수도 있습니다 — 예: 안녕')];
         break;
+      case 'about': out = [R('이곳은 개인 기록 보관소입니다. 자유롭게 둘러보셔도 좋습니다.')]; break;
       case 'whoami': {
-        out = [S(`계정: ${id} / 권한: ${role === 'admin' ? 'ADMIN' : 'VISITOR'} / 상태: CONNECTED`)];
+        out = [S(`ACCOUNT : ${id}`), S(`USER ID : ${a.no ? String(a.no).padStart(4, '0') : '----'}`),
+          S(`ROLE    : ${role === 'admin' ? 'ADMIN' : 'VISITOR'}`), S('STATUS  : CONNECTED'), S('')];
         const n = ++SESS.whoami;
-        if (n === 1) out.push(R(a.no ? `당신은 ${a.no}번째로 등록된 방문자입니다.` : '당신은 아직 등록되지 않은 방문자입니다.'));
-        if (n === 5) out.push(R('신원 확인을 반복하고 계십니다. 무언가 문제라도 있으신가요?'));
-        if (n === 10) out.push(R('몇 번 확인하셔도 계정 번호는 바뀌지 않습니다.'));
+        out.push(R(n === 5 ? '신원 확인을 반복하고 계십니다. 무언가 문제라도 있으십니까?'
+          : n === 10 ? `계정 번호는 바뀌지 않습니다, ${id}.`
+          : a.no ? `당신은 ${a.no}번째로 등록된 방문자입니다.` : '당신은 아직 등록되지 않은 방문자입니다.'));
         break;
       }
-      case 'status': out = [S('SYSTEM: ONLINE / R: ACTIVE / ERROR: 0')]; break;
       case 'users':
         out = [R(a.total ? `현재까지 등록된 방문자 계정은 총 ${a.total}개입니다.` : '등록된 방문자 계정 정보를 확인할 수 없습니다.')];
         break;
+      case 'status': out = [S('SYSTEM: ONLINE / R: ACTIVE / ERROR: 0')]; break;
       case 'exit':
         out = [R('접속을 종료합니다. 좋은 하루 보내시길 바랍니다.')];
         exitRef.current?.();
         break;
-      default: {
-        const c = compact(s), hit = KO_FLAT.find(([k]) => c.includes(k));   // 한글 별칭이면 해당 영어 명령어로 바꿔서 처리
-        const key = hit ? hit[1] : s;
-        if (key in HIDDEN) {
-          out = [R(HIDDEN[key])];
-          if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));
-        } else if (key in SAY) out = [R(SAY[key].replace('{ID}', id))];
-        else {
-          let i = Math.floor(Math.random() * WRONG.length);
-          if (i === lastWrong.current) i = (i + 1) % WRONG.length;      // 같은 대사가 연달아 나오지 않게
-          lastWrong.current = i; out = [R(WRONG[i])];
-        }
-      }
+      default: out = reply(s);                          // ②~⑤ 키워드 포함 검사
     }
     pushLines(out);
   };
