@@ -15,6 +15,7 @@ import {
 } from '@/lib/myroomStore';
 import { useToast } from '@/components/ui/Toast';
 import '../../app/myroom/myroom.css';
+import { MyRoomShell } from '@/components/myroom/MyRoomShell';
 
 type Ed = any;
 
@@ -433,7 +434,7 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
   const wrapMax = Math.min(1900, Math.max(700, cw + 300));
 
   return (
-    <section className="page">
+    <MyRoomShell variant="room">
       <div className="myroom-wrap" ref={wrapRef} style={{ maxWidth: wrapMax }}>
         <div className="mr-topbar">
           <div className="mr-topbar-title" id="room-title-display">{titleShown}</div>
@@ -634,6 +635,6 @@ function RoomView({ room, rooms, setRooms, catalog, setCatalog, cats, setCats, c
           </div>
         </div>
       )}
-    </section>
+    </MyRoomShell>
   );
 }

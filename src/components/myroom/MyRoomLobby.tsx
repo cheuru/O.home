@@ -7,6 +7,8 @@ import { useLocalList, newId } from '@/lib/postStore';
 import { useBlobUrl } from '@/lib/blobStore';
 import { ROOM_KEY, ROOM_SEED, DEFAULT_CANVAS_W, DEFAULT_CANVAS_H, type MyRoom, type RoomItem } from '@/lib/myroomStore';
 import { useToast } from '@/components/ui/Toast';
+import { PageTitle } from '@/components/ui/PageText';
+import { MyRoomShell } from '@/components/myroom/MyRoomShell';
 import '../../app/myroom/myroom.css';
 
 const FRAME_W = 200;
@@ -81,25 +83,26 @@ export default function MyRoomLobby() {
     toast('삭제했어요');
   };
 
+  const actions = (
+    <div className="head-actions mr-toolbar-icons">
+      {user
+        ? <button className="mr-icon-btn" type="button" title="새 방 추가" onClick={() => setNewOpen(true)}>✎</button>
+        : <span className="mr-icon-btn mr-icon-btn-disabled" title="로그인하면 방을 만들 수 있어요">✎</span>}
+      <button className="mr-icon-btn" type="button" title="선택 삭제" onClick={e => { e.stopPropagation(); setMenu(m => !m); }}>⋮</button>
+      <div className="mr-room-more-menu" ref={menuRef} style={{ display: menu ? 'flex' : 'none' }}>
+        <button type="button" onClick={() => {
+          setMenu(false);
+          if (!picked.length) return toast('삭제할 방을 먼저 선택해 주세요');
+          setConfirm(true);
+        }}>선택 삭제</button>
+      </div>
+    </div>
+  );
+
   return (
-    <section className="page">
+    <MyRoomShell variant="list" count={sorted.length}
+      head={<div className="page-head"><PageTitle>MY ROOM</PageTitle><p>방을 꾸미고 구경하는 마이룸</p>{actions}</div>}>
       <div className="myroom-wrap">
-        <div className="myroom-toolbar">
-          <h2>마이룸</h2>
-          <div className="mr-toolbar-icons">
-            {user
-              ? <button className="mr-icon-btn" type="button" title="새 방 추가" onClick={() => setNewOpen(true)}>✎</button>
-              : <span className="mr-icon-btn mr-icon-btn-disabled" title="로그인하면 방을 만들 수 있어요">✎</span>}
-            <button className="mr-icon-btn" type="button" title="선택 삭제" onClick={e => { e.stopPropagation(); setMenu(m => !m); }}>⋮</button>
-            <div className="mr-room-more-menu" ref={menuRef} style={{ display: menu ? 'flex' : 'none' }}>
-              <button type="button" onClick={() => {
-                setMenu(false);
-                if (!picked.length) return toast('삭제할 방을 먼저 선택해 주세요');
-                setConfirm(true);
-              }}>선택 삭제</button>
-            </div>
-          </div>
-        </div>
         {!user && <p className="mr-guest-hint">로그인하면 내 방을 만들 수 있어요.</p>}
 
         {sorted.length === 0 ? (
@@ -151,6 +154,6 @@ export default function MyRoomLobby() {
           </div>
         )}
       </div>
-    </section>
+    </MyRoomShell>
   );
 }
