@@ -14,7 +14,7 @@ const SOUND_KEY = 'ohome-click-sound';
 function accentRgb(): [number, number, number] {
   try {
     const cs = getComputedStyle(document.documentElement);
-    const v = (cs.getPropertyValue('--accent-soft').trim() || cs.getPropertyValue('--accent').trim());
+    const v = (cs.getPropertyValue('--accent').trim() || cs.getPropertyValue('--accent-soft').trim());
     const c = document.createElement('canvas').getContext('2d');
     if (c && v) {
       c.fillStyle = '#ff8fd0'; c.fillStyle = v;                 // 못 읽으면 앞의 기본색이 남는다
@@ -72,17 +72,28 @@ export function ClickFx() {
     };
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
       ctx.clearRect(0, 0, W, H);
       for (let i = rings.length - 1; i >= 0; i--) {
         const p = rings[i]; p.t += dt;
         if (p.t > LIFE) { rings.splice(i, 1); continue; }
-        const k = p.t / LIFE, e = 1 - Math.pow(1 - k, 3);      // 처음엔 빠르게, 끝에서 천천히
-        ctx.lineWidth = 1.4;
-        ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(1 - k) * 0.75})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 8 + e * 90, 0, 6.2832); ctx.stroke();
-        ctx.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.5})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4 + e * 55, 0, 6.2832); ctx.stroke();
+        const k = p.t / LIFE, e = 1 - Math.pow(1 - k, 3), a = 1 - k;   // 처음엔 빠르게, 끝에서 천천히
+        const R1 = 10 + e * 96, R2 = 5 + e * 58;
+        // 바깥 링 — 밝은 바탕에서도 보이도록 어두운 밑줄을 한 겹 깔고 포인트색을 얹는다
+        ctx.lineWidth = 3.4; ctx.strokeStyle = `rgba(10,10,30,${a * 0.28})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, R1, 0, 6.2832); ctx.stroke();
+        ctx.lineWidth = 2; ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a * 0.95})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, R1, 0, 6.2832); ctx.stroke();
+        // 안쪽 링 — 흰색(어두운 바탕에서 반짝) + 얇은 어두운 밑줄(밝은 바탕)
+        ctx.lineWidth = 2.6; ctx.strokeStyle = `rgba(10,10,30,${a * 0.2})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, R2, 0, 6.2832); ctx.stroke();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = `rgba(255,255,255,${a * 0.9})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, R2, 0, 6.2832); ctx.stroke();
+        // 클릭한 자리 — 작은 점이 잠깐 번쩍
+        if (k < 0.35) {
+          ctx.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(1 - k / 0.35) * 0.9})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 6.2832); ctx.fill();
+        }
       }
       raf = rings.length ? requestAnimationFrame(frame) : 0;
       if (!raf) ctx.clearRect(0, 0, W, H);
@@ -92,7 +103,7 @@ export function ClickFx() {
       if (e.button > 0) return;                                  // 왼쪽 클릭·터치만
       beep();
       if (reduce) return;
-      rgb = accentRgb();
+      { const c = accentRgb(); rgb = [0, 1, 2].map(i => Math.round(c[i] * 0.75 + 255 * 0.25)) as [number, number, number]; }   // 어두운 포인트색도 우주 바탕에서 보이게 살짝 밝힌다
       rings.push({ x: e.clientX, y: e.clientY, t: 0 });
       if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
     };
