@@ -453,7 +453,7 @@ function CharDetailInner() {
             script={eff.decoScript ? { ...eff.decoScript, text: eff.decoScript.text?.trim() || eff.altName?.trim() || '', font: familyOf(eff.decoScript.fontId) ?? undefined } : undefined} />
         )}
         {/* 배경 — 등록한 그림 그대로 (추가 탭에 전용 그림이 있으면 그 탭을 여는 동안 그 그림) */}
-        <div className="cs-bg">
+        <div className="cs-bg" style={{ translate: '0 var(--art-dy, 0px)' }}>
           {stageArtRef
             ? <StageArt key={stageArtRef} fileRef={stageArtRef} onClick={stageArts.length > 1 ? () => setFacesOff(v => !v) : undefined} />
             : <div className={`cs-ph ph ${ch.thumbClass}`}><span>CHARACTER FULL ART</span></div>}

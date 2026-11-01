@@ -79,14 +79,15 @@ const ORBITS = [
 ];
 // 궤도 위에 놓인 가만한 점들 — [반지름 배수, 각도(rad), 크기]
 const ORB_DOTS = [[1.5, -0.5, 5.5], [2.05, 0.9, 4.5], [1.0, 2.4, 4], [2.05, -2.3, 5], [1.5, 2.9, 3.5], [2.65, 0.2, 4]] as const;
+// tech(자캐 상세) 프레임 중심 높이 비율 — 기본 0.52보다 큰 만큼 프레임과 그림이 같이 내려간다
+const TECH_Y = 0.56;
 const BEAM_DEG = -15.5;   // 기운 직선의 각도
 const ORB_CSS = `@keyframes dcOrb{to{transform:rotate(360deg)}}
 @keyframes dcSlide{0%,100%{transform:translateX(calc(var(--amp,260px) * -1))}50%{transform:translateX(var(--amp,260px))}}
 .cs-deco .dc-orb{transform-box:view-box;animation:dcOrb var(--t,90s) linear infinite}
 .cs-deco .dc-orb.rev{animation-direction:reverse}
 .cs-deco .dc-slide{animation:dcSlide 22s ease-in-out infinite}
-@keyframes dcCur{50%{fill-opacity:0}}
-.cs-deco .dc-cur{animation:dcCur 1s steps(1) infinite}`;
+`;
 /** 짧은 직선 세 줄이 차례로 깜빡이는 작은 표식 (쉐브론 대신) — 변환 없이 좌표를 직접 계산해 그린다 */
 function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: number; d?: number; acc: string }) {
   const q = (rot * Math.PI) / 180, co = Math.cos(q), si = Math.sin(q);
@@ -103,125 +104,8 @@ function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: numbe
     </g>
   );
 }
-/* ── 터미널(tech) 변형 — 자캐 상세: 원 대신 타이핑되는 터미널·코드 창 + 뷰파인더 프레임·치수선·성좌 (우주 × 컴퓨터 × 공학) ── */
+/* ── tech 변형 — 자캐 상세: 원 대신 뷰파인더 프레임·치수선·성좌 (우주 × 컴퓨터 × 공학) ── */
 const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-const FLAVOR = [
-  'scanning deep space ........ 3 objects',
-  'signal received ✦ 안녕, 우주',
-  'ping andromeda ........ 2.5M ly',
-  'compiling memories ........ 100%',
-  'git commit -m "still alive"',
-  'orbit stable · all systems nominal',
-  'listening on 0.0.0.0:∞',
-  'star map synced',
-];
-const reduceMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-/** 부팅 줄을 한 글자씩 친 뒤, 가끔 한 줄씩 더 흘려 보낸다 (가장 아래 max 줄만 남긴다) */
-function useFeed(boot: string[], more: string[], max: number) {
-  const [lines, setLines] = useState<string[]>([]);
-  const [typing, setTyping] = useState('');
-  const key = boot.join('\n');
-  useEffect(() => {
-    setLines([]); setTyping('');
-    if (reduceMotion()) { setLines(boot.slice(-max)); return; }
-    let alive = true, timer = 0, fi = 0;
-    const q = [...boot];
-    const push = (l: string) => setLines(p => [...p, l].slice(-max));
-    const typeLine = (text: string, done: () => void) => {
-      let i = 0;
-      const step = () => {
-        if (!alive) return;
-        i++; setTyping(text.slice(0, i));
-        if (i < text.length) timer = window.setTimeout(step, 22 + Math.random() * 30);
-        else timer = window.setTimeout(() => { setTyping(''); push(text); done(); }, 160);
-      };
-      step();
-    };
-    const next = () => {
-      if (!alive) return;
-      if (q.length) { const l = q.shift()!; timer = window.setTimeout(() => typeLine(l, next), 240); }
-      else timer = window.setTimeout(() => typeLine(more[fi++ % more.length], next), 3800 + Math.random() * 3000);
-    };
-    timer = window.setTimeout(next, 700);
-    return () => { alive = false; clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, max]);
-  return { lines, typing };
-}
-/** 코드 조각을 한 줄씩 쳐 내려가고, 다 치면 잠시 보여 준 뒤 지우고 다음 조각을 친다 */
-function useSnippets(snips: string[][]) {
-  const [lines, setLines] = useState<string[]>([]);
-  const [typing, setTyping] = useState('');
-  const key = snips.map(x => x.join('\n')).join('\u0001');
-  useEffect(() => {
-    setLines([]); setTyping('');
-    if (reduceMotion()) { setLines(snips[0]); return; }
-    let alive = true, timer = 0, si = 0, li = 0;
-    const typeLine = (text: string, done: () => void) => {
-      let i = 0;
-      const step = () => {
-        if (!alive) return;
-        i++; setTyping(text.slice(0, i));
-        if (i < text.length) timer = window.setTimeout(step, 26 + Math.random() * 40);
-        else timer = window.setTimeout(() => { setTyping(''); setLines(p => [...p, text]); done(); }, 140);
-      };
-      step();
-    };
-    const nextLine = () => {
-      if (!alive) return;
-      const sn = snips[si % snips.length];
-      if (li < sn.length) { const l = sn[li++]; timer = window.setTimeout(() => typeLine(l, nextLine), 120); }
-      else timer = window.setTimeout(() => { if (!alive) return; setLines([]); li = 0; si++; nextLine(); }, 5200);
-    };
-    timer = window.setTimeout(nextLine, 900);
-    return () => { alive = false; clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return { lines, typing };
-}
-/** 터미널 창 — 윗줄(점 셋 + 제목) + 타이핑되는 줄들 + 깜빡이는 커서 */
-function TermWin({ x, y, w, h, title, lines, typing, prompt, lh = 22 }: { x: number; y: number; w: number; h: number; title: string; lines: string[]; typing: string; prompt?: string; lh?: number }) {
-  const maxCh = Math.floor((w - 36) / 8.4);
-  const cut = (t: string) => (t.length > maxCh ? t.slice(0, maxCh) : t);
-  const pre = { whiteSpace: 'pre' } as React.CSSProperties;
-  return (
-    <g fontFamily={MONO}>
-      <rect x={x} y={y} width={w} height={h} rx="10" fill="var(--d-base, transparent)" fillOpacity=".72" stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <line x1={x} y1={y + 28} x2={x + w} y2={y + 28} stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".7" />
-      {[0, 1, 2].map(i => <circle key={i} cx={x + 18 + i * 14} cy={y + 14} r="3.5" fill={i === 0 ? 'var(--d-acc)' : 'var(--d-line)'} />)}
-      <text x={x + 68} y={y + 18} fontSize="11" letterSpacing="1" fill="var(--d-line)">{title}</text>
-      {lines.map((l, i) => (
-        <text key={i} x={x + 18} y={y + 56 + i * lh} fontSize="14" fill="var(--d-line)" style={pre} xmlSpace="preserve">
-          {prompt && <tspan fill="var(--d-acc)">{prompt} </tspan>}{cut(l)}
-        </text>
-      ))}
-      <text x={x + 18} y={y + 56 + lines.length * lh} fontSize="14" fill="var(--d-line)" style={pre} xmlSpace="preserve">
-        {prompt && <tspan fill="var(--d-acc)">{prompt} </tspan>}{cut(typing)}<tspan className="dc-cur" fill="var(--d-acc)">▌</tspan>
-      </text>
-    </g>
-  );
-}
-function TermFeed({ x, y, w, h, name, hex }: { x: number; y: number; w: number; h: number; name: string; hex: string }) {
-  const boot = [
-    'boot archive.sys ........ OK',
-    `mount /characters/${name} ... OK`,
-    'load profile.dat ........ OK',
-    `theme.color = #${hex}`,
-    'render fullart ........ OK',
-    'system ready ✦',
-  ];
-  const { lines, typing } = useFeed(boot, FLAVOR, 6);
-  return <TermWin x={x} y={y} w={w} h={h} title={`terminal — ${name.toLowerCase()}@archive`} lines={lines} typing={typing} prompt=">" />;
-}
-function TermCode({ x, y, w, h, name, hex }: { x: number; y: number; w: number; h: number; name: string; hex: string }) {
-  const snips = [
-    ['struct Character {', `  name:  "${name}",`, `  theme: 0x${hex},`, '  orbit: Stable,', '}'],
-    [`$ ./scan --deep-space --target ${name}`, '> 3 objects detected', '> signal received ✦ 안녕, 우주', '> status: OK'],
-    ['fn main() {', `  load("${name}");`, '  render(fullart);', '  loop { orbit(); }', '}'],
-  ];
-  const { lines, typing } = useSnippets(snips);
-  return <TermWin x={x} y={y} w={w} h={h} title="profile.rs — read only" lines={lines} typing={typing} />;
-}
 // 성좌 — 점 몇 개를 가는 선으로 잇는다 (메인의 별자리 배경과 같은 말투)
 const CONSTS: { pts: [number, number][]; edges: [number, number][] }[] = [
   { pts: [[470, 150], [560, 205], [640, 150], [700, 260], [600, 330]], edges: [[0, 1], [1, 2], [1, 3], [3, 4]] },
@@ -241,7 +125,7 @@ interface Props {
   mode: DecoMode;
   /** 뒤쪽 큰 도형 모양 — 비우면 반원 */
   shape?: DecoShape;
-  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선 — 자관) · 'tech'(타이핑 터미널·코드 창 + 뷰파인더 프레임 — 자캐) */
+  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선 — 자관) · 'tech'(뷰파인더 프레임·치수선·성좌 — 자캐) */
   variant?: 'classic' | 'orbit' | 'tech';
   /** true면 뒤쪽 큰 도형(반원·판)과 그 윤곽선을 그리지 않는다 */
   noShape?: boolean;
@@ -333,22 +217,24 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
       const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return;
       const sc = Math.max(W / 1920, H / 1080), offX = (W - 1920 * sc) / 2, offY = (H - 1080 * sc) / 2;   // xMidYMid slice
       const v = Math.round((pr.offsetTop - offY) / sc);
-      if (Number.isFinite(v)) setGeo({ fy: Math.min(1075, Math.max(700, v)), sc, ox: offX, oy: offY, W, H });
+      if (Number.isFinite(v)) {
+        const f = Math.min(1075, Math.max(700, v));
+        setGeo({ fy: f, sc, ox: offX, oy: offY, W, H });
+        if (variant === 'tech') el.parentElement?.style.setProperty('--art-dy', `${Math.round((TECH_Y - 0.52) * f * sc)}px`);
+      }
     };
     calc();
     const ro = new ResizeObserver(calc); ro.observe(el);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); el.parentElement?.style.removeProperty('--art-dy'); };
   }, []);
   const tile = shape === 'tile';
   const orb = variant === 'orbit';
   const tech = variant === 'tech';
   // 궤도 중심·기준 반지름 — 반원 자리에는 화면 가운데 높이, 판 자리에는 판의 중심
-  const O = tile ? { x: 954, y: 470, R: 320 } : { x: 960, y: Math.round(fy * 0.52), R: 300 };
+  const O = tile ? { x: 954, y: 470, R: 320 } : { x: 960, y: Math.round(fy * (tech ? TECH_Y : 0.52)), R: 300 };
   const bq = (BEAM_DEG * Math.PI) / 180;
   // 뷰파인더 프레임 (tech) — 그림 뒤에 서는 큰 직사각형
   const F = { x: 700, y: O.y - 390, w: 520, h: 780 };
-  const nm = ((name ?? '').trim() || 'CHARACTER').slice(0, 12);
-  const hex6 = (colorHex ?? '').replace('#', '').toUpperCase().slice(0, 6) || '------';
   const FAN = tile ? TILE : fanPath(fy);
   const mono = mode === 'mono';
   const band = mode === 'accent' && !!image && !noShape;
@@ -620,8 +506,6 @@ export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, n
             ))}
           </g>
         )}
-        {tech && <g className="dc-i" style={I(0.6, -60, 0)}><TermFeed x={50} y={640} w={470} h={232} name={nm} hex={hex6} /></g>}
-        {tech && <g className="dc-i" style={I(0.65, 60, 0)}><TermCode x={1330} y={690} w={520} h={196} name={nm} hex={hex6} /></g>}
 
         {/* 하단 라벨 — 점선으로 이어진 이름표. 하단 독·BGM 플레이어에 가리지 않게 화면 맨 아래에서 30px 위(독 바로 위 줄)에 둔다 */}
         <g className="dc-i" style={I(0.6, 90, 0)} fontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" fontSize="12" letterSpacing="3">
