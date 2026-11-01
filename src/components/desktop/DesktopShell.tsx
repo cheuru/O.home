@@ -403,13 +403,6 @@ function Desktop({ title, nickname, isAdmin, onLogout, onLogin }: {
             isAdmin={isAdmin}
             onClose={() => setBellOpen(false)}
             onNeighborUnread={setNbUnread}
-            onNavigate={(href) => {
-              setBellOpen(false);
-              if (isExternal(href)) { window.open(href, '_blank'); return; }
-              const path = href.split(/[?#]/)[0];
-              const hit = dock.flatMap(d => d.kind === 'app' ? [d.app] : d.apps).find(a => a.href.split(/[?#]/)[0] === path);
-              openWin(href, hit?.label ?? '알림', hit?.group ?? '', hit?.glyph ?? glyphFor(path, ''));
-            }}
             onSelfTest={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}
           />
         </>

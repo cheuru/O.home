@@ -245,7 +245,6 @@ export function TopBar() {
             isAdmin={isAdmin}
             onClose={() => setNotifOpen(false)}
             onNeighborUnread={setNbUnread}
-            onNavigate={(href) => { setNotifOpen(false); nav(href); }}
             onSelfTest={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}
           />
           <div className={`user-menu ${menuOpen ? 'open' : ''}`}>

@@ -5,10 +5,11 @@
 - `src/components/shell/NeighborNotificationPanel.tsx`: 통합 알림 UI와 이웃 JSON Feed 구독.
 - `src/components/shell/NeighborNotificationPanel.css`: 종 버튼 아래 팝업 위치, 모바일 위치.
 - (v3) 데스크톱 모드(상단바 없음): `DesktopShell.tsx` 작업표시줄의 BGM 아이콘 왼쪽에 종 버튼 추가. 알림 수신(syncNotifs·실시간 구독·storage 이벤트)도 여기서 수행. 패널은 `placement="dock"`로 독 바깥(fixed)에 렌더링, 알림 클릭 시 해당 주소를 창으로 엶. `desktop.css`에 배지 스타일 추가.
+- (v4) 알림 개별 삭제(×)와 '읽은 알림 삭제' 추가. 이웃 글은 삭제 후 피드에 남아 있어도 다시 뜨지 않도록 hidden 목록 저장. 내 홈 알림 삭제는 서버에도 반영(removeNotif 수정). 내 홈 알림 클릭도 새 탭으로 열림(onNavigate 제거).
 - DeskHome·R 터미널 파일은 수정하지 않음.
 
 ## 반영 내용
-1. 내 홈 링크는 기존 `TopBar.nav()`로 같은 탭에서 이동하며 편집 중 이동 방지 로직을 유지함. 이웃 외부 링크는 HTTPS만 허용, 도메인을 표시하고 새 탭으로 열음.
+1. (v4 변경) 내 홈 링크도 새 탭으로 엶. 이웃 외부 링크는 HTTPS만 허용, 도메인을 표시하고 새 탭으로 열음.
 2. 내 홈 알림의 목록·읽음·설정·서버 동기화는 `notifStore`만 사용. 알림 종은 기존 하나만 유지. `rp/comment/guest` 타입 보존.
 3. 이웃은 **공개 JSON Feed가 있을 때의 새 글만** 확인. 다른 O.HOME과 댓글·멘션·회원정보 연동은 미구현. 별도의 피드 게시 API를 O.HOME에 추가해야 실제 상호 구독 가능.
 4. 구독 등록 시점 이전 게시물은 표시하지 않음. 등록 시 피드 주소를 조회해 접근을 검사함.
