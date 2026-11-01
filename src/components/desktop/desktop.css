@@ -174,6 +174,13 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 .dsk-orbit .halo.mn { fill: rgba(170,175,255,.75); } .dsk-orbit .halo.hr { fill: rgba(200,150,255,.75); }
 .dsk-orbit .pl.hr { fill: #e4c9ff; } .dsk-orbit .pl.mn { fill: #c9ccff; }
 .dsk-orbit .spin { transform-origin: 250px 250px; animation: dskSpin 140s linear infinite; }
+.dsk-orbit .rot { transform-origin: 250px 250px; }
+.dsk-orbit .rot.r1 { animation: dskSpin 90s linear infinite; }
+.dsk-orbit .rot.r2 { animation: dskSpin 70s linear infinite reverse; }
+.dsk-orbit .rot.r3 { animation: dskSpin 55s linear infinite; }
+.dsk-orbit .rot.r4 { animation: dskSpin 40s linear infinite reverse; }
+.dsk-orbit .arc { fill: none; stroke: rgba(225,215,255,.55); stroke-width: 1.7; stroke-linecap: round; }
+.dsk-orbit .arc.dim { stroke: rgba(225,215,255,.32); stroke-width: 1.3; }
 .dsk-orbit-core { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; }
 .dsk-orbit-core b { font-family: var(--serif); font-weight: 600; font-size: clamp(18px, 3.4vh, 30px); letter-spacing: .5em; padding-left: .5em; color: #fff3f8; text-shadow: 0 0 18px rgba(255,170,215,.55); }
 .dsk-orbit-core time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: clamp(26px, 5.6vh, 50px); letter-spacing: .08em; color: #f4efff; font-weight: 300; text-shadow: 0 0 22px rgba(170,150,255,.6); }
@@ -199,4 +206,4 @@ html[data-desktop] .bgm { bottom: calc(var(--dsk-dock-h) + 14px); }
 @keyframes dskSpin { to { transform: rotate(360deg); } }
 @keyframes dskBlink { 50% { opacity: 0; } }
 @media (max-width: 900px) { .dsk-term { display: none; } }
-@media (prefers-reduced-motion: reduce) { .dsk-orbit .spin, .dsk-term-body p.cur u { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dsk-orbit .spin, .dsk-orbit .rot, .dsk-term-body p.cur u { animation: none; } }

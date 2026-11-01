@@ -69,6 +69,38 @@ function Chev({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: numbe
     </g>
   );
 }
+/* ── 궤도(orbit) 변형 — 메인 화면(궤도 시계·행성)과 같은 말투: 가는 동심 궤도 · 끊어진 호(천천히 회전) · 화면 끝까지 뻗는 직선 · 궤도 위의 점 ── */
+const arcsOf = (r: number, pat: number[]) => { const c = 2 * Math.PI * r; return pat.map(f => (f * c).toFixed(1)).join(' '); };
+// 도는 궤도 — f: 반지름 배수 · pat: 호의 켜짐/꺼짐 비율(합=1) · dur: 한 바퀴(초) · rev: 반시계 · ang/r: 궤도 위 점의 위치(rad)·크기
+const ORBITS = [
+  { f: 1.25, pat: [0.22, 0.08, 0.06, 0.06, 0.3, 0.1, 0.18], dur: 110, rev: false, ang: -1.2, r: 5 },
+  { f: 1.78, pat: [0.3, 0.1, 0.12, 0.08, 0.25, 0.15], dur: 80, rev: true, ang: 2.0, r: 4 },
+  { f: 2.3, pat: [0.14, 0.06, 0.4, 0.1, 0.2, 0.1], dur: 140, rev: false, ang: 0.5, r: 3 },
+];
+// 궤도 위에 놓인 가만한 점들 — [반지름 배수, 각도(rad), 크기]
+const ORB_DOTS = [[1.5, -0.5, 5.5], [2.05, 0.9, 4.5], [1.0, 2.4, 4], [2.05, -2.3, 5], [1.5, 2.9, 3.5], [2.65, 0.2, 4]] as const;
+const BEAM_DEG = -15.5;   // 기운 직선의 각도
+const ORB_CSS = `@keyframes dcOrb{to{transform:rotate(360deg)}}
+@keyframes dcSlide{0%,100%{transform:translateX(calc(var(--amp,260px) * -1))}50%{transform:translateX(var(--amp,260px))}}
+.cs-deco .dc-orb{transform-box:view-box;animation:dcOrb var(--t,90s) linear infinite}
+.cs-deco .dc-orb.rev{animation-direction:reverse}
+.cs-deco .dc-slide{animation:dcSlide 22s ease-in-out infinite}`;
+/** 짧은 직선 세 줄이 차례로 깜빡이는 작은 표식 (쉐브론 대신) — 변환 없이 좌표를 직접 계산해 그린다 */
+function Bars({ x, y, rot = 0, d = 0, acc }: { x: number; y: number; rot?: number; d?: number; acc: string }) {
+  const q = (rot * Math.PI) / 180, co = Math.cos(q), si = Math.sin(q);
+  const P = (ux: number, uy: number) => `${(x + ux * co - uy * si).toFixed(1)}`, Q = (ux: number, uy: number) => `${(y + ux * si + uy * co).toFixed(1)}`;
+  return (
+    <g className="dc-i" style={{ '--d': `${d}s`, '--dx': '40px', '--dy': '-30px' } as React.CSSProperties}>
+      <g fill="none" strokeWidth="2.5" strokeLinecap="round">
+        {[0, 1, 2].map(i => {
+          const len = i === 1 ? 38 : 24, off = i * 9;
+          return <line key={i} className="dc-blink" x1={P(0, off)} y1={Q(0, off)} x2={P(len, off)} y2={Q(len, off)}
+            stroke={i === 1 ? 'var(--d-line)' : acc} style={{ animationDelay: `${i * 0.18}s` }} />;
+        })}
+      </g>
+    </g>
+  );
+}
 function TagText({ text }: { text: string }) {
   const out = useScramble(text, 700, 7000);
   return <>{out}</>;
@@ -83,6 +115,8 @@ interface Props {
   mode: DecoMode;
   /** 뒤쪽 큰 도형 모양 — 비우면 반원 */
   shape?: DecoShape;
+  /** 장식 말투 — 'classic'(기본: 반원·반짝이·쉐브론) · 'orbit'(메인과 같은 궤도선·점·직선) */
+  variant?: 'classic' | 'orbit';
   /** true면 뒤쪽 큰 도형(반원·판)과 그 윤곽선을 그리지 않는다 */
   noShape?: boolean;
   /** true면 CHARACTER FILE 표식과 STATUS 눈금(캐릭터 전용 장식)을 그리지 않는다 — 자관 게시판용 */
@@ -160,7 +194,7 @@ export function ScriptWrite({ t, vb }: { t: NonNullable<Props['script']>; vb?: {
 const TILE = 'M636 440 A290 290 0 0 1 926 150 H1272 V790 H636 Z';
 const fanPath = (fy: number) => `M350 ${fy} A610 610 0 0 1 1570 ${fy} Z`;
 
-export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, ink, image, blur = 0, ghost, ghostFont, ghostPos, name, colorHex, script }: Props) {
+export function StageDeco({ mode, shape = 'fan', variant = 'classic', noShape, noChrome, tag, tone, ink, image, blur = 0, ghost, ghostFont, ghostPos, name, colorHex, script }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const probe = useRef<HTMLDivElement>(null);
   const [geo, setGeo] = useState({ fy: 1015, sc: 1, ox: 0, oy: 0, W: 1920, H: 1080 });
@@ -180,6 +214,10 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
     return () => ro.disconnect();
   }, []);
   const tile = shape === 'tile';
+  const orb = variant === 'orbit';
+  // 궤도 중심·기준 반지름 — 반원 자리에는 화면 가운데 높이, 판 자리에는 판의 중심
+  const O = tile ? { x: 954, y: 470, R: 320 } : { x: 960, y: Math.round(fy * 0.52), R: 300 };
+  const bq = (BEAM_DEG * Math.PI) / 180;
   const FAN = tile ? TILE : fanPath(fy);
   const mono = mode === 'mono';
   const band = mode === 'accent' && !!image && !noShape;
@@ -202,6 +240,7 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
 
   return (
     <div ref={root} className="cs-deco" aria-hidden="true" style={style} data-mode={mode} data-tone={tone}>
+      {orb && <style>{ORB_CSS}</style>}
       <div ref={probe} className="cs-deco-floor" />
       {/* CHARACTER FILE 표식 — 화면 비율에 따라 위가 잘리지 않게 viewBox가 아니라 화면 기준(BACK 줄 왼쪽)에 둔다 */}
       {!noChrome && <div className="cs-deco-tag dc-i" style={I(0.3, 90, 0)}><TagText text={tag ?? 'CHARACTER FILE'} /></div>}
@@ -217,6 +256,20 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
             <stop offset="0" style={{ stopColor: 'color-mix(in srgb,var(--accent,#7fd6d0) 70%,#fff)' }} />
             <stop offset="1" style={{ stopColor: 'color-mix(in srgb,var(--accent,#7fd6d0) 88%,#000)' }} />
           </linearGradient>
+          {orb && (
+            <>
+              <radialGradient id="dc-disc" cx="40%" cy="34%" r="78%">
+                <stop offset="0" stopColor="var(--d-acc)" stopOpacity={tile ? 0.66 : 0.26} />
+                <stop offset="0.7" stopColor="var(--d-acc)" stopOpacity={tile ? 0.36 : 0.1} />
+                <stop offset="1" stopColor="var(--d-acc)" stopOpacity={tile ? 0.24 : 0.05} />
+              </radialGradient>
+              <linearGradient id="dc-beam" gradientUnits="userSpaceOnUse" x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}>
+                <stop offset="0" stopColor="var(--d-line)" stopOpacity=".12" />
+                <stop offset=".5" stopColor="var(--d-line)" stopOpacity=".9" />
+                <stop offset="1" stopColor="var(--d-line)" stopOpacity=".12" />
+              </linearGradient>
+            </>
+          )}
           <linearGradient id="dc-tag" x1="0" x2="1" y1="0" y2="0">
             <stop offset="0" stopColor="var(--d-acc)" stopOpacity=".9" />
             <stop offset="1" stopColor="var(--d-acc)" stopOpacity=".08" />
@@ -228,7 +281,7 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
                   filter={blur > 0 ? 'url(#dc-blur)' : undefined} />
                 <rect width="1920" height="1080" fill="var(--d-acc)" opacity=".35" />
               </pattern>
-              <clipPath id="dc-fan"><path d={FAN} /></clipPath>
+              <clipPath id="dc-fan">{orb ? <circle cx={O.x} cy={O.y} r={O.R} /> : <path d={FAN} />}</clipPath>
               {blur > 0 && <filter id="dc-blur" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation={blur} /></filter>}
             </>
           )}
@@ -263,6 +316,8 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
               filter={blur > 0 ? 'url(#dc-blur)' : undefined} />
             <rect width="1920" height="1080" fill="var(--d-acc)" opacity=".35" />
           </g>
+        ) : orb ? (
+          <circle cx={O.x} cy={O.y} r={O.R} fill="url(#dc-disc)" />
         ) : tile ? (
           <path d={FAN} fill="url(#dc-tile)" opacity=".96" />
         ) : (
@@ -278,7 +333,40 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
               style={{ fontFamily: ghostFont ?? 'var(--serif)' }}>{g}</text>
           </g>
         )}
-        {!noShape && <g className="dc-i" style={I(0.25, 0, 40)}>
+        {!noShape && orb && (
+          <g className="dc-i" style={I(0.25, 0, 40)}>
+            {/* 점선 십자축 */}
+            <g stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="3 7" opacity=".4">
+              <line x1={O.x - O.R * 3.3} y1={O.y} x2={O.x + O.R * 3.3} y2={O.y} />
+              <line x1={O.x} y1={O.y - O.R * 3.3} x2={O.x} y2={O.y + O.R * 3.3} />
+            </g>
+            {/* 동심 궤도 */}
+            <g fill="none" vectorEffect="non-scaling-stroke">
+              <circle cx={O.x} cy={O.y} r={O.R} stroke="var(--d-acc)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity=".75" />
+              <circle cx={O.x} cy={O.y} r={O.R * 1.5} stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".6" />
+              <circle cx={O.x} cy={O.y} r={O.R * 2.05} stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" opacity=".38" />
+              <circle cx={O.x} cy={O.y} r={O.R * 2.65} stroke="var(--d-line)" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="1 8" strokeLinecap="round" opacity=".5" />
+            </g>
+            {/* 화면 끝까지 뻗는 직선 + 그 위를 오가는 점 */}
+            <line x1={O.x - Math.cos(bq) * 1500} y1={O.y - Math.sin(bq) * 1500} x2={O.x + Math.cos(bq) * 1500} y2={O.y + Math.sin(bq) * 1500}
+              stroke="url(#dc-beam)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+            <g transform={`rotate(${BEAM_DEG} ${O.x} ${O.y})`}>
+              <g className="dc-slide" style={{ '--amp': `${Math.round(O.R * 1.7)}px` } as React.CSSProperties}>
+                <circle cx={O.x} cy={O.y} r="11" fill="var(--d-acc)" opacity=".22" />
+                <circle cx={O.x} cy={O.y} r="4.5" fill="var(--d-acc)" />
+              </g>
+            </g>
+            {/* 천천히 도는 끊어진 호 + 궤도 위의 점 */}
+            {ORBITS.map((o, i) => (
+              <g key={i} className={`dc-orb${o.rev ? ' rev' : ''}`} style={{ transformOrigin: `${O.x}px ${O.y}px`, '--t': `${o.dur}s` } as React.CSSProperties}>
+                <circle cx={O.x} cy={O.y} r={O.R * o.f} fill="none" stroke="var(--d-acc)" strokeWidth="1.6" strokeLinecap="round" strokeDasharray={arcsOf(O.R * o.f, o.pat)} opacity=".5" />
+                <circle cx={O.x + Math.cos(o.ang) * O.R * o.f} cy={O.y + Math.sin(o.ang) * O.R * o.f} r={o.r * 2.6} fill="var(--d-acc)" opacity=".2" />
+                <circle cx={O.x + Math.cos(o.ang) * O.R * o.f} cy={O.y + Math.sin(o.ang) * O.R * o.f} r={o.r} fill="var(--d-acc)" />
+              </g>
+            ))}
+          </g>
+        )}
+        {!noShape && !orb && <g className="dc-i" style={I(0.25, 0, 40)}>
           {!tile && <path d={FAN} fill="none" stroke="var(--d-acc)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity=".75" />}
           {tile ? (
             /* 판 바깥쪽에 한 칸 어긋난 가는 윤곽선 — 도형이 떠 있는 느낌 */
@@ -315,15 +403,34 @@ export function StageDeco({ mode, shape = 'fan', noShape, noChrome, tag, tone, i
               d={`M${x - 8} ${y}h16M${x} ${y - 8}v16`} />
           </g>
         ))}
-        {([[1180, 220, 15], [560, 330, 10], [1440, 760, 12], [440, 760, 9], [1110, 150, 8], [1660, 330, 10]] as const).map(([x, y, r], i) => (
+        {orb && ORB_DOTS.map(([f, a, r], i) => {
+          const x = O.x + Math.cos(a) * O.R * f, y = O.y + Math.sin(a) * O.R * f;
+          return (
+            <g key={i} className="dc-i" style={I(0.6 + i * 0.07, (i % 2 ? 40 : -40), -30)}>
+              <circle className="dc-tw" style={{ animationDelay: `${i * 0.6}s` }} cx={x} cy={y} r={r * 2.4} fill={acc} opacity=".16" />
+              <circle className="dc-tw" style={{ animationDelay: `${i * 0.6}s` }} cx={x} cy={y} r={r} fill={acc} />
+            </g>
+          );
+        })}
+        {!orb && ([[1180, 220, 15], [560, 330, 10], [1440, 760, 12], [440, 760, 9], [1110, 150, 8], [1660, 330, 10]] as const).map(([x, y, r], i) => (
           <g key={x + '-' + y} className="dc-i" style={I(0.6 + i * 0.07, (i % 2 ? 40 : -40), -30)}>
             <path className="dc-tw" style={{ animationDelay: `${i * 0.6}s` }} fill={acc}
               d={`M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r}Z`} />
           </g>
         ))}
-        <Chev x={1730} y={380} rot={0} d={0.7} acc={acc} />
-        <Chev x={110} y={470} rot={90} d={0.8} acc={acc} />
-        <Chev x={1040} y={1010} rot={180} d={0.9} acc={acc} />
+        {orb ? (
+          <>
+            <Bars x={1730} y={380} rot={0} d={0.7} acc={acc} />
+            <Bars x={110} y={470} rot={90} d={0.8} acc={acc} />
+            <Bars x={1040} y={1010} rot={180} d={0.9} acc={acc} />
+          </>
+        ) : (
+          <>
+            <Chev x={1730} y={380} rot={0} d={0.7} acc={acc} />
+            <Chev x={110} y={470} rot={90} d={0.8} acc={acc} />
+            <Chev x={1040} y={1010} rot={180} d={0.9} acc={acc} />
+          </>
+        )}
 
         {/* 하단 라벨 — 점선으로 이어진 이름표. 하단 독·BGM 플레이어에 가리지 않게 화면 맨 아래에서 30px 위(독 바로 위 줄)에 둔다 */}
         <g className="dc-i" style={I(0.6, 90, 0)} fontFamily="ui-monospace,SFMono-Regular,Menlo,monospace" fontSize="12" letterSpacing="3">

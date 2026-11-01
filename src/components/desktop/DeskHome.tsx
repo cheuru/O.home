@@ -12,6 +12,13 @@ const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const C = 250;                 // viewBox 중심 (500x500)
 const R_SEC = 222, R_MIN = 176, R_HR = 130;
 
+// 돌아가는 궤도 호 — 원은 그냥 돌려선 티가 안 나서, 끊어진 호(켜짐/꺼짐 비율, 합 = 1)를 겹쳐 돌린다
+const arcs = (r: number, pat: number[]) => { const c = 2 * Math.PI * r; return pat.map(f => (f * c).toFixed(1)).join(' '); };
+const A_SEC = [0.18, 0.07, 0.06, 0.05, 0.3, 0.1, 0.1, 0.14];
+const A_MIN = [0.22, 0.08, 0.04, 0.06, 0.25, 0.1, 0.15, 0.1];
+const A_HR = [0.3, 0.1, 0.12, 0.08, 0.25, 0.15];
+const A_IN = [0.4, 0.12, 0.2, 0.1, 0.08, 0.1];
+
 function OrbitClock({ title }: { title: string }) {
   const secRef = useRef<SVGGElement>(null);
   const minRef = useRef<SVGGElement>(null);
@@ -74,6 +81,11 @@ function OrbitClock({ title }: { title: string }) {
         <circle cx={C} cy={C} r={R_MIN} className="ring" />
         <circle cx={C} cy={C} r={R_HR} className="ring" />
         <circle cx={C} cy={C} r={R_HR - 34} className="ring faint" />
+        {/* 천천히 도는 호 — 바깥은 시계 방향, 안쪽으로 갈수록 번갈아 반대 방향 */}
+        <g className="rot r1"><circle cx={C} cy={C} r={R_SEC} className="arc" strokeDasharray={arcs(R_SEC, A_SEC)} /></g>
+        <g className="rot r2"><circle cx={C} cy={C} r={R_MIN} className="arc" strokeDasharray={arcs(R_MIN, A_MIN)} /></g>
+        <g className="rot r3"><circle cx={C} cy={C} r={R_HR} className="arc" strokeDasharray={arcs(R_HR, A_HR)} /></g>
+        <g className="rot r4"><circle cx={C} cy={C} r={R_HR - 34} className="arc dim" strokeDasharray={arcs(R_HR - 34, A_IN)} /></g>
         {/* 시 */}
         <g ref={hrRef}>
           <circle cx={C} cy={C - R_HR} r="11" className="halo hr" filter="url(#dskGlow)" />

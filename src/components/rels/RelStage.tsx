@@ -143,7 +143,7 @@ export function RelStage({ name, fontFamily, catchphrase, cpLabel, members, hero
         {/* 캐릭터 스테이지와 같은 배경 장식 — 가는 선·눈금·라벨·반짝이·뒤쪽 큰 판. 바탕색은 지금 테마에 맞춘다 */}
         {!deco?.off && (
           <div className="rs-deco" style={{ ['--accent' as string]: tc } as React.CSSProperties}>
-            <StageDeco mode={deco?.image && !deco.band ? 'mono' : 'accent'} shape="tile" noChrome noShape={hid('tile')} tone={light ? 'light' : 'dark'} ink={light ? 'dark' : 'light'}
+            <StageDeco variant="orbit" mode={deco?.image && !deco.band ? 'mono' : 'accent'} shape="tile" noChrome noShape={hid('tile')} tone={light ? 'light' : 'dark'} ink={light ? 'dark' : 'light'}
               name={name} colorHex={tc} image={deco?.band ? deco.image : undefined} blur={deco?.blur ?? 0} />
           </div>
         )}
