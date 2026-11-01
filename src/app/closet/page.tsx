@@ -1,7 +1,7 @@
 'use client';
 // 페어의 옷장 — /closet 은 방 목록, /closet?room=<id> 는 그 방의 옷장
 // (원본: 우초맨 제작 dressup 일반 버전을 React로 이식)
-import React, { Suspense, useCallback } from 'react';
+import React, { Suspense, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
@@ -34,6 +34,7 @@ function ClosetPageInner() {
   const { isAdmin } = useAuth();
   const [book, save, loaded] = useClosetBook();
   const roomId = useSearchParams().get('room');
+  const [asking, setAsking] = useState(false);     // 새 옷장 만들기 모달 — ＋ ADD(제목 옆)와 목록이 같이 쓴다
   const room = roomId ? book.rooms.find(r => r.id === roomId) : undefined;
 
   if (!loaded) return <section className="page" />;
@@ -48,9 +49,11 @@ function ClosetPageInner() {
   }
   return (
     <ClosetShell variant="list"
-      head={<div className="page-head"><PageTitle>CLOSET</PageTitle><p>{roomId ? '없는 옷장이에요. 목록에서 골라 주세요' : '페어의 옷장을 골라 들어가세요'}</p></div>}
+      head={<div className="page-head"><PageTitle>CLOSET</PageTitle><p>{roomId ? '없는 옷장이에요. 목록에서 골라 주세요' : '페어의 옷장을 골라 들어가세요'}</p>
+        {isAdmin && <div className="head-actions"><button className="btn btn-dark" onClick={() => setAsking(true)}>＋ ADD</button></div>}
+      </div>}
       count={book.rooms.length}>
-      <ClosetLobby book={book} isAdmin={isAdmin}
+      <ClosetLobby book={book} isAdmin={isAdmin} asking={asking} onAsk={() => setAsking(true)} onAskClose={() => setAsking(false)}
         onCreate={name => save({ rooms: [...book.rooms, newRoom(newId(), name)] })}
         onDelete={id => save({ rooms: book.rooms.filter(r => r.id !== id) })} />
     </ClosetShell>

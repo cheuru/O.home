@@ -184,7 +184,7 @@ export default function CommApplyPage() {
                     {statusLabel ? `「${statusLabel}」 ` : ''}{shown.length}건 휴지통으로
                   </button>
                 )}
-                <button className="btn btn-dark" onClick={() => router.push('/comm-apply/new')}>＋ ADD APPLICANT</button>
+                <button className="btn btn-dark" onClick={() => router.push('/comm-apply/new')}>＋ ADD</button>
               </>
             ))}
         </div>

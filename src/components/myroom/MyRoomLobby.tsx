@@ -84,11 +84,9 @@ export default function MyRoomLobby() {
   };
 
   const actions = (
-    <div className="head-actions mr-toolbar-icons">
-      {user
-        ? <button className="mr-icon-btn" type="button" title="새 방 추가" onClick={() => setNewOpen(true)}>✎</button>
-        : <span className="mr-icon-btn mr-icon-btn-disabled" title="로그인하면 방을 만들 수 있어요">✎</span>}
-      <button className="mr-icon-btn" type="button" title="선택 삭제" onClick={e => { e.stopPropagation(); setMenu(m => !m); }}>⋮</button>
+    <div className="head-actions">
+      {!!user && <button className="btn btn-dark" type="button" onClick={() => setNewOpen(true)}>＋ ADD</button>}
+      <button className="btn btn-ghost" type="button" title="선택 삭제" onClick={e => { e.stopPropagation(); setMenu(m => !m); }}>⋮</button>
       <div className="mr-room-more-menu" ref={menuRef} style={{ display: menu ? 'flex' : 'none' }}>
         <button type="button" onClick={() => {
           setMenu(false);

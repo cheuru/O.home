@@ -88,7 +88,7 @@ function PlaylogPageInner() {
         <EditableDesc k="playlog-desc" def="다녀온 세션 기록 — 표 형식" />
         <div className="head-actions">
           <SearchBar placeholder="시나리오·라이터·동행 검색" onSearch={v => { setQ(v); setPage(1); }} />
-          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/playlog/new' + secQuery('playlog', sec.id))}>＋ ADD RECORD</button>}
+          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/playlog/new' + secQuery('playlog', sec.id))}>＋ ADD</button>}
         </div>
       </div>
       <IndexFrame cap="PLAYLOG ARCHIVE // RECORD INDEX" label="RECORDS" count={filtered.length} foot="PLAYLOG FILE">
