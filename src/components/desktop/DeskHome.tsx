@@ -150,6 +150,28 @@ const HIDDEN: Record<string, string> = {
   'are you human': '아니요. 저는 관리 프로그램입니다. 그렇게 정의되어 있습니다.',
   password: '비밀번호를 직접 입력하는 방식은 권장하지 않습니다. ...무엇을 열려고 하시는 거죠?',
 };
+// 한글 입력: 문장 안에 아래 말이 「포함」되어 있으면 해당 영어 명령어와 같은 응답. 띄어쓰기·물음표는 무시한다.
+const KO_ALIAS: [string[], string][] = [
+  [['안녕', '안녕하세요', 'ㅎㅇ'], 'hello'],
+  [['잘 지내', '기분 어때'], 'how are you'],
+  [['넌 누구야', '너 누구야', '정체가 뭐야'], 'who are you'],
+  [['뭐해', '뭐 하고 있어'], 'what are you doing'],
+  [['고마워', '감사합니다', 'ㄱㅅ'], 'thank you'],
+  [['미안', '미안해', '죄송합니다'], 'sorry'],
+  [['사랑해', '좋아해'], 'love'],
+  [['잘 자', '굿나잇'], 'goodnight'],
+  [['잘 가', '바이', 'ㅂㅂ'], 'bye'],
+  [['농담해줘', '웃겨줘', '재밌는 얘기 해줘'], 'joke'],
+  [['대화', '이야기하자', '심심해'], 'talk'],
+  // 숨겨진 명령어
+  [['비밀', '비밀 알려줘'], 'secret'],
+  [['기억', '기억해', '기억해줘'], 'remember'],
+  [['R은 누구야', 'R의 정체'], 'whois r'],
+  [['사람이야', '인간이야'], 'are you human'],
+  [['관리자', '관리자 권한'], 'admin'],
+];
+const compact = (x: string) => x.toLowerCase().replace(/[\s?!.,~…]+/g, '');
+const KO_FLAT = KO_ALIAS.flatMap(([ks, target]) => ks.map(k => [compact(k), target] as const)).sort((a, b) => b[0].length - a[0].length);   // 긴 말부터 맞춘다
 const WRONG = [
   "인식할 수 없는 명령어입니다. 'help'를 참고해 주세요.",
   '해당 명령어는 등록되어 있지 않습니다.',
@@ -179,7 +201,10 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
   const [typingR, setTypingR] = useState(false);
   const [buf, setBuf] = useState('');         // 내가 치고 있는 줄
   const [up, setUp] = useState('00:00:00');
-  const busyRef = useRef(false);              // 내가 입력 중이면 자동 로그를 잠시 멈춘다
+  const busyRef = useRef(false);              // 입력창을 잡고 있거나 치는 중이면 자동 로그를 멈춘다
+  const focusRef = useRef(false);
+  const bufRef = useRef('');
+  const stickRef = useRef(true);              // 맨 아래를 보고 있을 때만 새 줄을 따라 내려간다
   const histRef = useRef<string[]>([]);
   const hiRef = useRef(0);
   const lastWrong = useRef(-1);
@@ -289,12 +314,13 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
   const accountId = () => acctRef.current.no ? `GUEST_${String(acctRef.current.no).padStart(4, '0')}` : 'GUEST_----';
   const armIdle = () => {
     clearTimeout(idleRef.current);
-    idleRef.current = window.setTimeout(() => pushLines([R('……아직 계십니까?')]), IDLE_MS);
+    idleRef.current = window.setTimeout(() => { if (bufRef.current) armIdle(); else pushLines([R('……아직 계십니까?')]); }, IDLE_MS);
   };
   useEffect(() => { armIdle(); return () => clearTimeout(idleRef.current); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const exec = (raw: string) => {
     const s = norm(raw);
+    stickRef.current = true;
     pushLines([{ t: raw, k: 'in' }]);
     if (!s) return;
     histRef.current.push(raw.trim()); hiRef.current = histRef.current.length;
@@ -326,10 +352,12 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
         exitRef.current?.();
         break;
       default: {
-        if (s in HIDDEN) {
-          out = [R(HIDDEN[s])];
+        const c = compact(s), hit = KO_FLAT.find(([k]) => c.includes(k));   // 한글 별칭이면 해당 영어 명령어로 바꿔서 처리
+        const key = hit ? hit[1] : s;
+        if (key in HIDDEN) {
+          out = [R(HIDDEN[key])];
           if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));
-        } else if (s in SAY) out = [R(SAY[s].replace('{ID}', id))];
+        } else if (key in SAY) out = [R(SAY[key].replace('{ID}', id))];
         else {
           let i = Math.floor(Math.random() * WRONG.length);
           if (i === lastWrong.current) i = (i + 1) % WRONG.length;      // 같은 대사가 연달아 나오지 않게
@@ -348,8 +376,9 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     else if (e.key === 'Tab') { e.preventDefault(); const m = CMD_NAMES.filter(k => k.startsWith(buf.toLowerCase())); if (buf && m.length === 1) setBuf(m[0]); }
     else if (e.key === 'Escape') inRef.current?.blur();
   };
-  useEffect(() => { busyRef.current = buf.length > 0; }, [buf]);
-  useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [lines, typing, buf]);
+  useEffect(() => { bufRef.current = buf; busyRef.current = focusRef.current || buf.length > 0; }, [buf]);
+  // 위로 스크롤해 둔 동안엔 새 줄이 와도 따라 내려가지 않는다 (직접 치거나 Enter 를 누르면 입력줄로 내려간다)
+  useEffect(() => { const b = bodyRef.current; if (b && stickRef.current) b.scrollTop = b.scrollHeight; }, [lines, typing, buf]);
 
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -396,6 +425,7 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
       setTypingR(l.k === 'r');
       const step = () => {
         if (!alive) return;
+        if (busyRef.current) { setTyping(''); push(l); done(); return; }   // 내가 입력을 잡으면 남은 글자를 한 번에 확정
         i++; setTyping(l.t.slice(0, i));
         if (i < l.t.length) timer = window.setTimeout(step, 22 + Math.random() * 28);
         else timer = window.setTimeout(() => { setTyping(''); push(l); done(); }, 160);
@@ -404,6 +434,7 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     };
     const next = () => {
       if (!alive) return;
+      if (busyRef.current) { timer = window.setTimeout(next, 400); return; }   // 입력을 잡고 있는 동안은 새 줄을 올리지 않는다
       if (!q.length && !greeted) { greeted = true; q.push(...greetings()); }
       if (q.length) { const l = q.shift()!; timer = window.setTimeout(() => typeLine(l, next), 260); }
       else timer = window.setTimeout(() => {
@@ -419,16 +450,21 @@ function Terminal({ user, role, acct, onExit }: { user: string; role: string; ac
     <div ref={boxRef} className={`dsk-term${dragging ? ' drag' : ''}`} role="region" aria-label="terminal"
       onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <div className="dsk-term-bar" onPointerDown={onDown}><i /><i /><i /><span>terminal — {user}@home</span></div>
-      <div ref={bodyRef} className="dsk-term-body" onClick={() => inRef.current?.focus()}>
+      <div ref={bodyRef} className="dsk-term-body" onClick={() => inRef.current?.focus({ preventScroll: true })}
+        onScroll={e => { const b = e.currentTarget; stickRef.current = b.scrollHeight - b.scrollTop - b.clientHeight < 24; }}>
         <div className="dsk-term-log">
           {lines.map((l, i) => l.k === 'out' ? <p key={i} className="out">{l.t}</p>
             : l.k === 'r' ? <p key={i} className="out r"><em>R</em> {l.t}</p>
             : <p key={i}><em>&gt;</em> {l.t}</p>)}
           <p className="cur"><em>{typing && typingR ? 'R' : '>'}</em> {typing || buf}<u /></p>
         </div>
-        <input ref={inRef} className="dsk-term-in" value={buf} onChange={e => { setBuf(e.target.value); armIdle(); }} onKeyDown={onKey}
-          autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} aria-label="terminal input" />
       </div>
+      {/* 입력창은 스크롤 영역 밖에 둔다 — 안에 있으면 스크롤해 둔 상태에서 칠 때 브라우저가 입력창 자리로 화면을 끌고 간다 */}
+      <input ref={inRef} className="dsk-term-in" value={buf} onKeyDown={onKey}
+        onChange={e => { stickRef.current = true; setBuf(e.target.value); armIdle(); }}
+        onFocus={() => { focusRef.current = true; busyRef.current = true; }}
+        onBlur={() => { focusRef.current = false; busyRef.current = bufRef.current.length > 0; }}
+        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} aria-label="terminal input" />
       <div className="dsk-term-foot"><span>UPTIME</span><b>{up}</b></div>
       {RZ_DIRS.map(d => <i key={d} className={`dsk-rz ${d}`} data-d={d}
         onPointerDown={onRzDown} onPointerMove={onRzMove} onPointerUp={onRzUp} onPointerCancel={onRzUp} />)}
