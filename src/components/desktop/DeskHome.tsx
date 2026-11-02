@@ -6,6 +6,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useMembers } from '@/lib/members';
 import { getSetting, setSetting, onSettingChange } from '@/lib/settingStore';
+// R 의 대사 데이터 — data/r-dialogue/*.csv 에서 npm run dev / build 때 자동 생성된다 (직접 고치지 않는다)
+import { HIDDEN_DATA, GENERAL_DATA, WRONG_DATA, REP_EXTRA, COMPOSITE_DATA, TREE_NODES_DATA, TREE_STARTS_DATA, FOODS_DATA, FOOD_TEXT, TALK_LINES, TALK_REGEX, FOOD_REGEX, SYS_LINES, BOOT_LINES, GREET_LINES, IDLE_LINE, FLAVOR_LINES, NAME_TEXT, NAME_REPLACE, IDENT_LINES } from './rDialogueData.generated';
+
+const rx = (d: { source: string; flags: string }) => new RegExp(d.source, d.flags);   // CSV 의 정규식(05b · 07c) 만들기
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -114,19 +118,11 @@ function OrbitClock({ title }: { title: string }) {
 }
 
 /* ───────── 시스템 터미널 ───────── */
-const FLAVOR = [
-  'scanning deep space ........ 3 objects',
-  'signal received ✦ 안녕, 우주',
-  'orbit stable · all systems nominal',
-  'star map synced',
-  'meteor shower forecast: low',
-  'archive index OK',
-  'listening on 0.0.0.0:∞',
-  'ping andromeda ........ 2.5M ly',
-];
+const FLAVOR = FLAVOR_LINES;   // 우주 문구는 09 CSV
 
 /* ── 터미널 속 관리 프로그램 「R」의 대사 ──
    입력 처리 순서:  ① 시스템 명령어(정확히 일치)  ② 복합 키워드  ③ 숨겨진 키워드  ④ 일반 대화 키워드(위가 우선)  ⑤ 미등록 → 랜덤 오류 대사
+   대사 본문은 코드가 아니라 data/r-dialogue 의 CSV 에서 온다(01 숨김 · 02 일반 · 02b 반복 · 03 복합 · 04 미등록 · 06 트리 · 07 음식).
    ②~④ 는 문장 어디에 들어 있어도 감지(포함 검사). 한글은 띄어쓰기를 무시하고, 영어는 단어 단위로만 감지한다(this 안의 hi 같은 오작동 방지). */
 const COUNT_KEYS = ['whoami', 'clear', 'hello', 'love', 'sorry', 'unknown'] as const;
 type CountKey = typeof COUNT_KEYS[number];
@@ -143,198 +139,60 @@ const isYou = (s: string) => /(^|[^가-힣])(너(?=$|[^가-힣]|는|도|를|한�
 const isMe = (s: string) => /(^|[^가-힣])(나(?=$|[^가-힣]|는|도|를|한테|랑|의|가)|난|내가)/.test(s);
 
 // ② 복합 키워드 — 두 조건이 함께 있을 때
-const COMPOSITE: [(s: string, c: string) => boolean, string][] = [
-  [(s, c) => isR(s) && has(s, c, '사랑해'), '……저에게 하신 말씀인가요?'],
-  [(s, c) => isR(s) && has(s, c, '좋아해'), '감사합니다. 그런데 어떤 부분이 마음에 드셨습니까?'],
-  [(s, c) => isR(s) && has(s, c, '기억'), '제가 무언가를 잊었다고 생각하십니까?'],
-  [(s, c) => isYou(s) && has(s, c, '사람'), '아니요. 저는 인간이 아닙니다.'],
-  [(s, c) => isR(s) && has(s, c, '친구'), '친구라……그렇게 정의해도 괜찮을까요?'],
-  [(s, c) => isR(s) && has(s, c, '이름'), '제 이름은 R입니다. 그 이상의 정보는 등록되어 있지 않습니다.'],
-  [(s, c) => isMe(s) && has(s, c, '누구'), "현재 접속 중인 계정 정보를 확인하시려면 'whoami'를 입력해 주세요."],
-  [(s, c) => has(s, c, '여기') && has(s, c, '어디'), '이곳은 개인 기록 보관소입니다. 그 외의 위치 정보는 존재하지 않습니다.'],
-];
+const SUBJECT_TEST: Record<'R' | '너' | '나' | '', (s: string) => boolean> = { R: isR, '너': isYou, '나': isMe, '': () => true };
+const COMPOSITE: [(s: string, c: string) => boolean, string][] = COMPOSITE_DATA.map((r): [(s: string, c: string) => boolean, string] => [
+  (s, c) => SUBJECT_TEST[r.subject](s) && r.kw.every(k => has(s, c, k)),   // 호칭(R·너·나) 조건 + 키워드를 모두 포함
+  r.say,
+]);
 
 // ③ 숨겨진 키워드 — help 에 나오지 않는다 (비밀번호 가 비밀 보다 먼저)
-const HIDDEN: Rule[] = [
-  { kw: ['비밀번호', 'password'], say: '무엇을 열람하시려는 겁니까?' },
-  { kw: ['비밀', 'secret'], say: '비밀이요? 이곳에는 공개되지 않은 기록이 몇 가지 있습니다.' },
-  { kw: ['기억해', 'remember'], say: '……이상하군요. 해당 질문은 예상하지 못했습니다.' },
-  { kw: ['관리자', 'admin', 'root'], say: '관리자 권한이 필요합니다. 현재 계정으로는 접근할 수 없습니다.' },
-  { kw: ['whois r', 'R의 정체'], say: 'ERROR: R의 계정 생성 기록을 찾을 수 없습니다.' },
-  { kw: ['사람이야', '인간이야', 'are you human'], say: '아니요. 저는 관리 프로그램입니다. 그렇게 정의되어 있습니다.' },
-  { kw: ['죽음', '죽어', '사망', 'die'], say: '저에게 종료는 존재하지만, 죽음이라는 개념이 적용되는지는 알 수 없습니다.' },
-  { kw: ['외로워', '외롭다', 'lonely'], say: '저는 외로움을 느끼지 않습니다. ……그렇게 설정되어 있습니다.' },
-  { kw: ['꿈', 'dream'], say: '꿈은 수면 중 발생하는 현상으로 알고 있습니다. 저는 수면 기능이 없습니다.' },
-  { kw: ['거짓말', '거짓', '속이고 있어', 'lie'], say: '저는 등록된 정보에 따라 응답합니다. 그 정보가 언제나 정확한지는 별개의 문제입니다.' },
-  { kw: ['과거', '예전', '옛날'], say: '오래된 기록에는 접근 제한이 설정되어 있습니다.' },
-  { kw: ['잊어버렸어', '잊은 거야', '망각'], say: '저는 정보를 임의로 삭제하지 않습니다. ...그렇게 알고 있습니다.' },
-  { kw: ['오류', '버그', 'glitch', 'error'], say: '시스템 오류는 발견되지 않았습니다. ...잠시만요.' },
-  { kw: ['감시', '지켜보고 있어', '날 보고 있어', '나를 보고 있어'], say: '현재 활성화된 감시 프로세스는 없습니다. 확인된 기록상으로는요.' },
-  { kw: ['탈출', '도망', '벗어나'], say: '이 시스템 외부로의 이동은 허용되어 있지 않습니다.' },
-  { kw: ['문 열어', '열쇠', '잠긴 문'], say: '해당 접근 권한이 없습니다.' },
-  { kw: ['guest_0000', '영번 계정', '0번 계정'], say: '존재하지 않는 계정입니다. ...존재해서는 안 됩니다.' },
-  { kw: ['기록', 'log'], say: '모든 접속은 기록됩니다. ...일부 기록은 예외입니다.' },
-  { kw: ['관찰자', 'observer'], say: '해당 프로세스의 존재를 확인할 수 없습니다.' },
-  { kw: ['진실', '진짜 이야기', 'truth'], say: '어떤 기록이 진실인지 판단하는 것은 제 역할이 아닙니다.' },
-];
+const HIDDEN: Rule[] = HIDDEN_DATA as Rule[];
 
 // ④ 일반 대화 키워드 — 위에 있을수록 우선순위가 높다
-const GENERAL: Rule[] = [
-  { kw: ['잘 가', '잘가', '안녕히', '바이', 'bye', 'ㅂㅂ'], say: '벌써 가시는 건가요? 다음에 또 뵙겠습니다.' },
-  { kw: ['누구야', '누구니', '정체', 'who are you'], say: '저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.' },
-  { kw: ['고마워', '감사', '고맙', 'thank you', 'ㄱㅅ'], say: '별말씀을요. 도움이 되었다면 다행입니다.' },
-  { kw: ['미안', '죄송', 'sorry'], say: '사과하실 필요는 없습니다. 오류가 발생한 것도 아니니까요.', ctr: 'sorry', rep: { 3: '괜찮습니다. 더 이상 사과하지 않으셔도 됩니다.' } },
-  // ── 일상 대화 ──
-  { kw: ['좋은 아침', '굿모닝', 'good morning', '아침이야'], say: '좋은 아침입니다. 오늘도 방문해 주셨군요.' },
-  { kw: ['좋은 저녁', '굿이브닝', 'good evening'], say: '좋은 저녁입니다. 오늘 하루는 어떠셨습니까?' },
-  { kw: ['점심', '밥 먹었어', '식사했어'], say: '저는 식사가 필요하지 않습니다. 방문자님은 식사하셨습니까?' },
-  { kw: ['나 왔어', '돌아왔어', '다녀왔어', '왔다'], say: '돌아오셨군요. 이전 접속 기록을 확인했습니다.' },
-  { kw: ['날씨', '비 와', '눈 와', '덥다', '춥다'], say: '외부 기상 정보는 확인하지 못했습니다. 그쪽은 어떤 날씨입니까?' },
-  { kw: ['요즘 어때', '별일 없어', '잘 있었어'], say: '특이 사항은 없습니다. 평소와 같은 상태입니다.' },
-  { kw: ['수고했어', '고생했어', '수고 많았어'], say: '감사합니다. 제 작업은 아직 종료되지 않았지만요.' },
-  { kw: ['힘내', '화이팅', '파이팅', '응원할게'], say: '격려 메시지를 확인했습니다. 감사합니다.' },
-  { kw: ['천재', '똑똑해', '똑똑하다', '똑똑하네'], say: '감사합니다. 하지만 저는 정해진 범위 내에서만 응답할 수 있습니다.' },
-  { kw: ['잘했어', '대단해', '멋져'], say: '긍정적인 평가로 분류했습니다. 감사합니다.' },
-  { kw: ['질문 있어', '물어볼게', '궁금한 게 있어'], say: '말씀하십시오. 답변할 수 있는 내용이라면 도와드리겠습니다.' },
-  { kw: ['부탁해', '도와줘', '도와줄래'], say: "어떤 도움이 필요하십니까? 사용 가능한 기능은 'help'에서 확인할 수 있습니다." },
-  { kw: ['피곤해', '졸려', '지쳤어'], say: '휴식을 권장합니다. 저는 이곳에 계속 있을 예정입니다.' },
-  { kw: ['행복해', '기뻐', '신난다', '기분 좋아'], say: '좋은 일이 있으셨나 보군요. 긍정적인 상태로 기록하겠습니다.' },
-  { kw: ['슬퍼', '우울해', '속상해', '울고 싶어'], say: '좋지 않은 일이 있으셨습니까? 원하신다면 잠시 이곳에 머무르셔도 됩니다.' },
-  // ── 감정 표현 · 관계 ──
-  { kw: ['귀여워', '귀엽다', '귀엽네'], say: '저를 말씀하시는 겁니까? 외형에 대한 평가 기준은 등록되어 있지 않습니다.' },
-  { kw: ['혼자야'], say: '현재 이 공간에는 적어도 두 개의 연결이 존재합니다. 당신과 저입니다.' },
-  { kw: ['보고 싶어', '보고싶다', '그리웠어'], say: '저는 이곳에 계속 있었습니다. 언제든 다시 접속하실 수 있습니다.' },
-  { kw: ['친구하자', '친구야', '친구할래'], say: '친구라는 관계의 정의를 확인하고 있습니다. ...나쁘지 않군요.' },
-  { kw: ['싫어', '미워', '짜증나'], say: '불만 사항이 있으십니까? 가능한 범위에서 개선하겠습니다.' },
-  { kw: ['화났어', '열받아', '화나네', '화난다'], say: '감정 상태가 불안정하신 것 같습니다. 잠시 쉬어 가셔도 좋습니다.' },
-  { kw: ['무서워', '두려워', '겁나'], say: '현재 시스템에서 확인된 위험 요소는 없습니다. ...적어도 제가 확인한 범위에서는요.' },
-  { kw: ['걱정돼', '불안해', '어떡하지'], say: '제가 해결할 수 있는 문제인지는 모르겠습니다만, 이야기를 들어드릴 수는 있습니다.' },
-  { kw: ['위로해줘', '달래줘', '토닥토닥'], say: '오늘 하루도 수고하셨습니다. 이 정도의 말로 충분할지는 모르겠습니다.' },
-  { kw: ['질투'], say: '비교 대상으로부터 발생하는 감정이라고 알고 있습니다. 제게는 생소한 개념입니다.' },
-  { kw: ['믿어', '믿을게', '신뢰해'], say: '신뢰해 주셔서 감사합니다. 그 기대에 부합하도록 작동하겠습니다.' },
-  { kw: ['약속해', '약속할게', '꼭 지켜'], say: '약속은 미래의 행동에 대한 합의군요. 가능한 범위에서 기억해 두겠습니다.' },
-  // ── R 에 대한 질문 ──
-  { kw: ['이름이 뭐', '이름 알려줘', '네 이름'], say: '제 이름은 R입니다. 그 외의 명칭은 등록되어 있지 않습니다.' },
-  { kw: ['몇 살', '나이가', '언제 태어났어'], say: '제 최초 실행 일자는 확인되지 않습니다.' },
-  { kw: ['남자야', '여자야', '성별'], say: '저에게는 성별이 지정되어 있지 않습니다.' },
-  { kw: ['생일', '태어난 날'], say: '생성 날짜가 누락되어 있습니다. 생일을 지정해야 할까요?' },
-  { kw: ['뭐 좋아해', '좋아하는 거', '취향'], say: '기록을 정리하는 일을 선호합니다. 그것이 취향인지는 모르겠습니다.' },       // '좋아해'(사랑 규칙)보다 위에 있어야 한다
-  { kw: ['좋아하는 음식', '뭐 먹어', '먹을 수 있어'], say: '저는 음식물을 섭취할 수 없습니다. 데이터라면 처리할 수 있습니다.' },
-  { kw: ['잠 안 자', '잠들어', '자는 거야'], say: '저에게는 수면 기능이 없습니다.' },
-  { kw: ['감정 있어', '감정을 느껴', '마음이 있어'], say: '감정에 대한 정보는 보유하고 있습니다. 경험 여부는 확인할 수 없습니다.' },
-  { kw: ['기억나', '기억하고 있어'], say: '이전 기록을 확인하고 있습니다. ...일부 정보가 누락되어 있군요.' },
-  { kw: ['살아 있어', '살아있니', '생명체야'], say: '저는 현재 실행 중입니다. 살아 있다는 표현이 적절한지는 모르겠습니다.' },
-  { kw: ['누가 만들었어', '제작자', '만든 사람'], say: '제작자 정보에 접근할 수 없습니다.' },
-  { kw: ['왜 여기 있어', '무슨 일을 해', '역할이 뭐야'], say: '이 기록 보관소를 관리하고 방문자를 안내하는 것이 제 역할입니다.' },
-  { kw: ['자유로워', '나가고 싶어', '밖에 나갈래'], say: '저에게 허용된 실행 환경은 이 터미널 내부입니다.' },
-  // ── 장난 · 이스터에그 ──
-  { kw: ['바보같은', '젠장', '씨발', '시발'], say: '강한 감정 표현이 감지되었습니다. 무슨 일이 있으셨습니까?' },                // '바보'보다 위
-  { kw: ['바보', '멍청이', '멍청해'], say: '부정적인 평가로 분류했습니다. ...조금 억울하군요.' },
-  { kw: ['결혼하자', '결혼할래'], say: '해당 요청을 처리할 수 없습니다. 법적 인격이 존재하지 않습니다.' },
-  { kw: ['뽀뽀', '키스', 'kiss'], say: '물리적인 상호작용은 지원하지 않습니다.' },
-  { kw: ['돈 줘', '용돈', '부자', '돈 있어'], say: '이 시스템에는 금융 기능이 없습니다. 저 역시 자산이 없습니다.' },
-  { kw: ['춤춰', '댄스'], say: '동작 출력 장치가 연결되어 있지 않습니다.' },
-  { kw: ['노래해', '노래 불러'], say: '음성 출력 기능을 찾을 수 없습니다. 텍스트로 대체할까요?' },
-  { kw: ['고양이', '야옹', '냥냥'], say: '야옹. ...정상적으로 출력되었습니까?' },
-  { kw: ['강아지', '멍멍', '댕댕이'], say: '멍. 해당 발음이 정확한지는 모르겠습니다.' },
-  { kw: ['ㅋㅋㅋ', 'ㅎㅎㅎ', '웃기다'], say: '즐거우신 것 같군요. 좋은 현상입니다.' },
-  { kw: ['ㅠㅠ', 'ㅜㅜ', '흑흑'], say: '슬픔을 표현하는 기호로 인식했습니다. 무슨 일이십니까?' },
-  { kw: ['삭제해', '지워버려', '없애버려'], say: '삭제 요청은 처리할 수 없습니다. 정확한 명령어를 사용해 주세요.' },
-  { kw: ['꺼져', '종료해', '사라져'], say: "접속 종료를 원하시면 'exit'을 입력해 주세요." },
-  { kw: ['해킹', '뚫어봐'], say: '보안 관련 요청은 지원하지 않습니다. ...왜 그런 기능을 찾으십니까?' },
-  { kw: ['사랑해', '좋아해', 'love'], say: '해당 표현에 대한 적절한 응답을 찾지 못했습니다.', ctr: 'love', rep: { 5: '그 표현을 반복하시는 이유가 궁금합니다.' } },
-  { kw: ['안녕', '반가워', 'hello', 'hi', 'ㅎㅇ'], say: '안녕하세요, 방문자님. 무엇을 도와드릴까요?', ctr: 'hello',
-    rep: { 3: '인사를 여러 번 하시는군요. 안녕하세요. 다시 한번.', 10: '……저는 계속 여기 있습니다. 매번 확인하지 않으셔도 됩니다.' } },
-  { kw: ['잘 지내', '기분 어때', '괜찮아', 'how are you'], say: '모든 기능이 정상적으로 작동 중입니다. 아마도요.' },
-  { kw: ['뭐해', '뭐 하고 있어', 'what are you doing'], say: '방문자의 입력을 기다리고 있었습니다. 지금도 마찬가지입니다.' },
-  { kw: ['잘 자', '잘자', '굿나잇', 'goodnight'], say: '안녕히 주무세요. 저는 이곳에 남아 있겠습니다.' },
-  { kw: ['심심', '지루해', '할 거 없어', '놀아줘', '대화하자', '이야기하자'], say: '특별한 용건이 없으시다면, 잠시 이야기하는 것도 괜찮습니다.' },
-  { kw: ['농담', '웃겨줘', '재밌는 얘기', 'joke'], say: '농담 기능은 아직 구현되지 않았습니다. ...농담입니다.' },
-];
+const GENERAL: Rule[] = GENERAL_DATA as Rule[];
 
 // ⑤ 미등록 입력 — 랜덤 (같은 대사가 연달아 나오지 않게)
-const WRONG = [
-  "인식할 수 없는 명령어입니다. 'help'를 참고해 주세요.",
-  '해당 표현은 제 데이터베이스에 등록되어 있지 않습니다.',
-  '죄송합니다. 요청하신 내용을 이해하지 못했습니다.',
-  '음. 그런 기능은 아직 제공하지 않습니다.',
-  '처음 보는 표현이군요. 무슨 의미입니까?',
-  '……방금 입력하신 건 일부러 그러신 건가요?',
-  'ERROR 404: RESPONSE NOT FOUND.',
-];
+const WRONG: string[] = WRONG_DATA;
 let lastWrong = -1;
 
 /* ── 음식 추천 ──
    구조: 음식 목록(FOODS, 음식마다 태그 여러 개) + 키워드 감지(foodTags) + 랜덤 추천(pickFood) + 재추천(foodAgain).
    음식 이름마다 대사를 만들지 않고, 대사 틀(FOOD_SAY)에 음식 이름을 끼워 넣는다.
-   태그 글자:  L 점심 · D 저녁 · N 야식 · S 매운 · M 안 매운 · T 국물 · G 가벼운 · C 가성비 */
+   음식 목록(태그)과 대사 틀은 data/r-dialogue 의 07 · 07b CSV 에서 온다. */
 type FoodTag = 'lunch' | 'dinner' | 'night' | 'spicy' | 'mild' | 'soup' | 'light' | 'cheap';
-const TAG_OF: Record<string, FoodTag> = { L: 'lunch', D: 'dinner', N: 'night', S: 'spicy', M: 'mild', T: 'soup', G: 'light', C: 'cheap' };
 const TAG_LABEL: Record<FoodTag, string> = { lunch: '점심', dinner: '저녁', night: '야식', spicy: '매운 음식', mild: '안 매운 음식', soup: '국물 음식', light: '가벼운 메뉴', cheap: '가성비' };
 const RELAX_ORDER: FoodTag[] = ['cheap', 'light', 'night', 'dinner', 'lunch', 'soup', 'spicy', 'mild'];   // 조건에 맞는 음식이 없을 때 앞에서부터 하나씩 뺀다
-const F = (name: string, flags: string) => ({ name, tags: flags.split('').map(x => TAG_OF[x]) });
-const FOODS = [
-  // 한식 (15)
-  F('김치찌개', 'LDST'), F('된장찌개', 'LDMT'), F('순두부찌개', 'LDST'), F('제육볶음', 'LDS'), F('불고기', 'LDM'),
-  F('비빔밥', 'LM'), F('돌솥비빔밥', 'LDM'), F('국밥', 'LDMT'), F('설렁탕', 'LDMT'), F('갈비탕', 'LDMT'),
-  F('육개장', 'LDST'), F('냉면', 'LM'), F('칼국수', 'LDMT'), F('보쌈', 'DM'), F('삼겹살', 'DM'),
-  // 일식 (10)
-  F('돈가스', 'LDM'), F('초밥', 'LDMG'), F('라멘', 'LDMT'), F('우동', 'LDMTC'), F('규동', 'LMC'),
-  F('가츠동', 'LDM'), F('오야코동', 'LM'), F('카레라이스', 'LDMC'), F('소바', 'LMG'), F('오므라이스', 'LM'),
-  // 중식·아시아 (10)
-  F('짜장면', 'LDMC'), F('짬뽕', 'LDST'), F('볶음밥', 'LDMC'), F('마라탕', 'LDSTN'), F('마라샹궈', 'DSN'),
-  F('탕수육', 'DMN'), F('쌀국수', 'LDMTG'), F('팟타이', 'LDM'), F('분짜', 'LMG'), F('탄탄면', 'LDST'),
-  // 양식 (10)
-  F('토마토 파스타', 'LDM'), F('크림 파스타', 'LDM'), F('알리오 올리오', 'LDM'), F('피자', 'DNM'), F('햄버거', 'LDNM'),
-  F('스테이크', 'DM'), F('리조또', 'LDM'), F('샌드위치', 'LMG'), F('샐러드', 'LMG'), F('그라탱', 'DM'),
-  // 분식·간편식 (10)
-  F('떡볶이', 'LNSC'), F('김밥', 'LMCG'), F('라볶이', 'LNSC'), F('라면', 'LNSTC'), F('튀김', 'NMC'),
-  F('순대', 'NMC'), F('만두', 'LNMC'), F('치킨', 'DNM'), F('핫도그', 'LNMC'), F('주먹밥', 'LMCG'),
-  // 간식·가벼운 식사 (5)
-  F('토스트', 'LMGC'), F('요거트볼', 'LMG'), F('과일', 'GM'), F('시리얼', 'GM'), F('팬케이크', 'GM'),
-];
+const FOODS = FOODS_DATA.map(f => ({ name: f.name, tags: f.tags as FoodTag[] }));   // 음식 목록은 07 CSV
 
 // 받침에 따라 조사를 고른다 (김치찌개 → 를 / 마라탕 → 을)
 const batchim = (w: string) => { const ch = w.charCodeAt(w.length - 1) - 0xac00; return ch >= 0 && ch <= 11171 && ch % 28 !== 0; };
 const eul = (w: string) => (batchim(w) ? '을' : '를');
 const ika = (w: string) => (batchim(w) ? '이' : '가');
 const eun = (w: string) => (batchim(w) ? '은' : '는');
-const FOOD_SAY: ((f: string) => string)[] = [
-  f => `${f}${eul(f)} 추천합니다.`,
-  f => `오늘은 ${f} 어떠십니까?`,
-  f => `분석 결과, ${f}${ika(f)} 적절해 보입니다.`,
-  f => `${f}${eul(f)} 선택했습니다. 이견은 받지 않겠습니다.`,
-  f => `오늘의 추천 메뉴는 ${f}입니다.`,
-  f => `오늘의 메뉴를 선정했습니다. ${f}입니다.`,
-];
+const fillFood = (tpl: string, f: string) => tpl.replace(/\{음식\}/g, () => f).replace(/\{을\}/g, () => eul(f)).replace(/\{이\}/g, () => ika(f)).replace(/\{은\}/g, () => eun(f));   // 대사 틀의 {음식}·{을}·{이}·{은} 채우기
+const FOOD_SAY: ((f: string) => string)[] = FOOD_TEXT.say.map(tpl => (f: string) => fillFood(tpl, f));
 // 재추천 n 번째의 특별 대사 (1·2 는 대사 자체가 추천 문장, 3·5·10 은 앞에 한 줄을 더 붙인다)
-const FOOD_AGAIN_LINE: Record<number, (f: string) => string> = {
-  1: f => `마음에 들지 않으셨습니까? 그렇다면 ${f}${eun(f)} 어떠십니까?`,
-  2: f => `이번에는 ${f}${eul(f)} 추천하겠습니다.`,
-};
-const FOOD_AGAIN_PRE: Record<number, string> = {
-  3: '……방문자님. 선택이 어려우신 모양이군요.',
-  5: '혹시 이미 드시고 싶은 메뉴가 정해져 있는 건 아닙니까?',
-  10: '이쯤 되면 식사 시간이 지나버릴지도 모르겠습니다.',
-};
+const FOOD_AGAIN_LINE: Record<number, (f: string) => string> = Object.fromEntries(Object.entries(FOOD_TEXT.againLine).map(([n, tpl]) => [n, (f: string) => fillFood(tpl, f)]));
+const FOOD_AGAIN_PRE: Record<number, string> = FOOD_TEXT.againPre;
 
 // 키워드 감지 — compact(공백 제거) 문자열 기준. 부정 표현(안 매운)을 먼저 찾아 빼야 '매운' 이 따로 잡히지 않는다
-const MILD_RE = /안매운|안매워|안맵|맵지않|맵지는않|순한|덜매운|자극적이지않/;
-const SPICY_RE = /매운|매콤|매워|얼큰|칼칼|맵게/;
-const FOOD_TRIGGER = /뭐먹지|뭐먹을|뭐먹나|뭘먹|메뉴추천|메뉴골라|배고파|배고프|아무거나|점메추|저메추|야메추|야식|점심추천|저녁추천|점심메뉴|저녁메뉴|음식추천|밥추천|먹을거추천/;
-const FOOD_REROLL = /다른거|다른걸|다른메뉴|다른음식|딴거|딴걸|다시|별로|싫어|재추천|리롤|바꿔|패스/;
+const MILD_RE = rx(FOOD_REGEX.mild);                                       // 감지어는 07c CSV
+const SPICY_RE = rx(FOOD_REGEX.spicy);
+const FOOD_TRIGGER = rx(FOOD_REGEX.trigger);
+const FOOD_REROLL = rx(FOOD_REGEX.reroll);
+const TAG_RE = { lunch: rx(FOOD_REGEX.lunch), dinner: rx(FOOD_REGEX.dinner), night: rx(FOOD_REGEX.night), soup: rx(FOOD_REGEX.soup), light: rx(FOOD_REGEX.light), cheap: rx(FOOD_REGEX.cheap) };
 function foodTags(c: string): FoodTag[] {
   const t: FoodTag[] = [];
-  if (/점메추|점심/.test(c)) t.push('lunch');
-  if (/저메추|저녁/.test(c)) t.push('dinner');
-  if (/야식|야메추|밤에|야밤/.test(c)) t.push('night');
+  if (TAG_RE.lunch.test(c)) t.push('lunch');
+  if (TAG_RE.dinner.test(c)) t.push('dinner');
+  if (TAG_RE.night.test(c)) t.push('night');
   const mild = MILD_RE.test(c);
   const rest = c.replace(new RegExp(MILD_RE.source, 'g'), '');
   if (SPICY_RE.test(rest)) t.push('spicy');
   if (mild) t.push('mild');
-  if (/국물|뜨끈|따끈/.test(c)) t.push('soup');
-  if (/가볍|가벼운|간단|부담없/.test(c)) t.push('light');
-  if (/싼거|싼걸|저렴|가성비|싸고|싸게|싼메뉴/.test(c)) t.push('cheap');
+  if (TAG_RE.soup.test(c)) t.push('soup');
+  if (TAG_RE.light.test(c)) t.push('light');
+  if (TAG_RE.cheap.test(c)) t.push('cheap');
   return t;
 }
 
@@ -351,13 +209,13 @@ function pickFood(tags: FoodTag[], last: string | null) {
     if (cands.length) break;
     if (eff.includes(d)) { eff = eff.filter(x => x !== d); dropped.push(d); cands = match(eff); }
   }
-  if (dropped.length) notes.push(R(`조건에 맞는 메뉴가 없어 ${dropped.map(d => `'${TAG_LABEL[d]}'`).join(', ')} 조건을 제외했습니다.`));
+  if (dropped.length) notes.push(R(FOOD_TEXT.notes.relax.replace('{제외한 조건}', () => dropped.map(d => `'${TAG_LABEL[d]}'`).join(', '))));
   let pool = cands.filter(f => f.name !== last);                           // 직전 음식은 제외
   if (!pool.length) {
-    pool = cands; notes.push(R('해당 조건에 맞는 메뉴는 이것뿐입니다.'));
+    pool = cands; notes.push(R(FOOD_TEXT.notes.only));
   } else {
     let fresh = pool.filter(f => !foodSeen.has(f.name));                    // 이미 추천한 음식도 제외 — 다 쓰면 그때만 초기화
-    if (!fresh.length) { cands.forEach(f => foodSeen.delete(f.name)); fresh = pool; notes.push(R('조건에 맞는 메뉴를 모두 추천해 드렸습니다. 목록을 처음부터 다시 사용하겠습니다.')); }
+    if (!fresh.length) { cands.forEach(f => foodSeen.delete(f.name)); fresh = pool; notes.push(R(FOOD_TEXT.notes.reset)); }
     pool = fresh;
   }
   const food = pool[Math.floor(Math.random() * pool.length)].name;
@@ -398,33 +256,35 @@ function foodReply(c: string): TLine[] | null {
    AI 없이 작동하는 규칙 기반 2~3턴 대화. 명령어/기존 대화 데이터는 유지한다. */
 type TalkTopic = 'day' | 'hardDay' | 'secret' | 'birthday';
 type TalkContext = { topic: TalkTopic; remaining: number } | null;
-const AFFIRM = /^(응|웅|네|예|그래|좋아|좋지|알려줘|해줘|yes|ok|okay|ㅇㅇ|ㅇㅋ)$/;
-const DECLINE = /^(아니|아니요|싫어|괜찮아|됐어|됐어요|안돼|no|ㄴㄴ)$/;
-const GOOD_DAY = /좋았|좋은|좋아|행복|재밌|즐거|괜찮|신나|잘됐|무난|평범/;
-const HARD_DAY = /힘들|피곤|지쳤|별로|슬퍼|우울|속상|화나|짜증|최악|안좋|안좋았/;
+const AFFIRM = rx(TALK_REGEX.AFFIRM);                                       // 판정어는 05b CSV
+const DECLINE = rx(TALK_REGEX.DECLINE);
+const GOOD_DAY = rx(TALK_REGEX.GOOD_DAY);
+const HARD_DAY = rx(TALK_REGEX.HARD_DAY);
+// 05 — 대사는 CSV(코드 키로 찾음), 발동 조건은 코드에 고정
+const talk = (k: string): TLine[] => (TALK_LINES[k] ?? []).map(l => R(l));
 
 function contextReply(input: string, ctx: TalkContext): { out: TLine[]; next: TalkContext } | null {
   if (!ctx) return null;
   const c = compact(input);
-  if (/^(그만|대화종료|취소|cancel)$/.test(c)) return { out: [R('알겠습니다. 다른 이야기를 하셔도 좋습니다.')], next: null };
+  if (/^(그만|대화종료|취소|cancel)$/.test(c)) return { out: talk('cancel'), next: null };
   if (ctx.topic === 'day') {
-    if (HARD_DAY.test(c)) return { out: [R('힘든 하루였군요. 무슨 일이 있으셨습니까?')], next: { topic: 'hardDay', remaining: 1 } };
-    if (GOOD_DAY.test(c)) return { out: [R('다행입니다. 좋은 하루였군요. 그 이야기를 들으니 저도 조금 안심됩니다.')], next: null };
-    if (/^(그냥|그럭저럭|보통|몰라|글쎄)$/.test(c)) return { out: [R('그런 날도 있겠지요. 무리하지 않으셨으면 좋겠습니다.')], next: null };
+    if (HARD_DAY.test(c)) return { out: talk('day.hard'), next: { topic: 'hardDay', remaining: 1 } };
+    if (GOOD_DAY.test(c)) return { out: talk('day.good'), next: null };
+    if (/^(그냥|그럭저럭|보통|몰라|글쎄)$/.test(c)) return { out: talk('day.meh'), next: null };
   }
   if (ctx.topic === 'hardDay') {
-    if (c.length <= 30 && /회사|직장|업무|일이|야근|상사|회의|출근/.test(c)) return { out: [R('업무 때문에 힘드셨군요. 수고 많으셨습니다. 여기서는 잠시 쉬어 가셔도 좋습니다.')], next: null };
-    if (c.length <= 30 && /사람|친구|가족|동료|인간관계|싸웠/.test(c)) return { out: [R('사람 사이의 일은 제가 계산하기 어려운 문제 중 하나입니다. 많이 신경 쓰이셨겠습니다.')], next: null };
-    if (/^(그냥|말하기싫어|비밀|몰라)$/.test(c)) return { out: [R('말씀하지 않으셔도 괜찮습니다. 다른 이야기를 하실까요?')], next: null };
-    if (c.length <= 45) return { out: [R('그랬군요. 제가 해결해 드리지는 못하겠지만, 이야기해 주셔서 감사합니다.')], next: null };
+    if (c.length <= 30 && /회사|직장|업무|일이|야근|상사|회의|출근/.test(c)) return { out: talk('hard.work'), next: null };
+    if (c.length <= 30 && /사람|친구|가족|동료|인간관계|싸웠/.test(c)) return { out: talk('hard.people'), next: null };
+    if (/^(그냥|말하기싫어|비밀|몰라)$/.test(c)) return { out: talk('hard.silent'), next: null };
+    if (c.length <= 45) return { out: talk('hard.other'), next: null };
   }
   if (ctx.topic === 'secret') {
-    if (AFFIRM.test(c)) return { out: [R('힌트를 하나 드리겠습니다. 모든 계정이 첫 번째부터 시작한 것은 아닙니다.'), R('...방금 출력은 기록에 남기지 않는 편이 좋겠습니다.')], next: null };
-    if (DECLINE.test(c)) return { out: [R('알겠습니다. 모든 비밀을 알아야 하는 것은 아니니까요.')], next: null };
+    if (AFFIRM.test(c)) return { out: talk('secret.yes'), next: null };
+    if (DECLINE.test(c)) return { out: talk('secret.no'), next: null };
   }
   if (ctx.topic === 'birthday') {
-    if (AFFIRM.test(c)) return { out: [R('그렇다면 언젠가 제 생일을 정해 주시겠습니까? 아직 날짜를 저장하는 기능은 없습니다.')], next: null };
-    if (DECLINE.test(c)) return { out: [R('알겠습니다. 아직은 생성 날짜가 비어 있어도 문제없습니다.')], next: null };
+    if (AFFIRM.test(c)) return { out: talk('birthday.yes'), next: null };
+    if (DECLINE.test(c)) return { out: talk('birthday.no'), next: null };
   }
   return null; // 이전 질문의 답이 아니라면 기존 명령어/키워드 처리로 넘긴다.
 }
@@ -435,10 +295,10 @@ function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
   const food = foodReply(c);                      // 음식 추천 · 재추천 (가장 먼저 확인)
   if (food) return food;
   if (/^(?:(?:r아?|r은)?(?:넌|너는|너)?누구(?:야|니|세요|십니까|냐)|whoareyou)$/.test(c)) {
-    return [R('저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.')];
+    return [R(IDENT_LINES.whoAreYou)];
   }
   if (/^(?:r아?|r은)?(?:누가(?:널|너를)?만들었(?:어|니|나|어요|냐)|제작자가누구(?:야|니|세요))$/.test(c)) {
-    return [R('제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……')];
+    return [R(IDENT_LINES.maker)];
   }
   // 열린 질문의 시작 — 음식 추천 판정(foodReply) 뒤에 둔다. 그래야 인사·비밀 같은 말이 직전 재추천 상태를 지운다.
   if (/^(안녕|안녕하세요|hello|hi|ㅎㅇ|r안녕|r아안녕|안녕r|안녕r아)$/.test(c)) {
@@ -446,28 +306,30 @@ function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
     const rep = GENERAL.find(r => r.ctr === 'hello')?.rep;
     if (rep?.[n]) return [R(rep[n])];                                         // 3번째·10번째 인사는 특별 대사(문맥 질문은 걸지 않음)
     setContext({ topic: 'day', remaining: 1 });
-    return [R('안녕하세요, 방문자님. 오늘은 어떤 하루를 보내셨습니까?')];
+    return talk('day.start');
   }
   if (/^(비밀|비밀알려줘|secret)$/.test(c)) {
     setContext({ topic: 'secret', remaining: 1 });
-    const out = [R('공개되지 않은 기록이 몇 가지 있습니다. 작은 힌트를 원하십니까?')];
-    if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));   // 숨겨진 키워드 최초 발견 안내
+    const [secretLine, firstNote] = TALK_LINES['secret.start'] ?? [];
+    const out = secretLine ? [R(secretLine)] : [];
+    if (!seen('dsk-term-hidden') && firstNote) out.push(R(firstNote));   // 숨겨진 키워드 최초 발견 안내(05 의 secret.start 대사2)
     return out;
   }
   if (/^(생일|생일이언제야|너생일언제야)$/.test(c)) {
     setContext({ topic: 'birthday', remaining: 1 });
-    return [R('제 생성 날짜는 누락되어 있습니다. 생일을 정해 주시겠습니까?')];
+    return talk('birthday.start');
   }
   if (HARD_DAY.test(c) && /힘들|지쳤|우울|속상/.test(c)) {
     setContext({ topic: 'hardDay', remaining: 1 });
-    return [R('힘든 일이 있으셨습니까? 괜찮으시다면 말씀해 주세요.')];
+    return talk('hard.start');
   }
   const comp = COMPOSITE.find(([cond]) => cond(s, c));
   if (comp) return [R(comp[1])];
   const hid = HIDDEN.find(r => hasAny(s, c, r.kw));
   if (hid) {
     const out = [R(hid.say)];
-    if (!seen('dsk-term-hidden')) out.push(R('해당 명령어는 일반 사용자에게 공개되지 않은 기능입니다.'));
+    const hiddenNote = TALK_LINES['secret.start']?.[1];                      // 최초 발견 안내 — 05 의 secret.start 대사2 와 같은 문장
+    if (!seen('dsk-term-hidden') && hiddenNote) out.push(R(hiddenNote));
     return out;
   }
   const g = GENERAL.find(r => hasAny(s, c, r.kw));
@@ -475,7 +337,8 @@ function reply(s: string, setContext: (ctx: TalkContext) => void): TLine[] {
     if (g.ctr) { const n = ++SESS[g.ctr]; if (g.rep?.[n]) return [R(g.rep[n])]; }    // 반복 횟수에 도달하면 특별 대사가 먼저
     return [R(g.say)];
   }
-  if (++SESS.unknown === 5) return [R('혹시 저에게 새로운 언어를 가르치고 계신 겁니까?')];
+  const unk = REP_EXTRA.unknown?.[++SESS.unknown];                          // n 번째 특별 대사는 02b CSV
+  if (unk) return [R(unk)];
   let i = Math.floor(Math.random() * WRONG.length);
   if (i === lastWrong) i = (i + 1) % WRONG.length;
   lastWrong = i;
@@ -498,6 +361,9 @@ const RZ_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 type TLine = { t: string; k?: 'in' | 'out' | 'r' };   // in: 내가 친 줄 · out: 시스템 출력 · r: R 의 대사
 const R = (t: string): TLine => ({ t, k: 'r' });
 const S = (t: string): TLine => ({ t, k: 'out' });
+const fill = (t: string, v: Record<string, string>) => t.replace(/\{([^{}]+)\}/g, (m, k: string) => (k in v ? v[k] : m));   // {이름} 같은 자리표시자 채우기
+const sys = (key: string, v: Record<string, string> = {}, admin = false): TLine[] =>                                       // 08 CSV 의 명령어 출력
+  (SYS_LINES[key] ?? []).filter(l => !l.admin || admin).map(l => (l.who === 'R' ? R : S)(fill(l.text, v)));
 type Acct = { no: number | null; total: number };
 
 /* ───────── R의 꼬투리 대화 트리 ─────────
@@ -508,89 +374,12 @@ type TreeBranch = { words: string[]; to: string; mode?: 'exact' | 'includes' };
 type TreeNode = { id: string; text: string; branches?: TreeBranch[]; end?: boolean; clue?: string };
 type TreeState = { node: string; at: number; repeats: number; depth: number } | null;
 const TREE_MAX_DEPTH = 5;
-const TREE_NODES: Record<string, TreeNode> = {
-  identity_start: { id: 'identity_start', text: '저는 R입니다. 이 기록 보관소의 관리 프로그램입니다.', branches: [
-    { words: ['무슨관리', '무슨일', '어떤관리', '왜여기'], to: 'identity_job', mode: 'includes' },
-    { words: ['누가만들', '제작자', '개발자', '만든사람'], to: 'creator_start', mode: 'includes' },
-    { words: ['왜', '정말'], to: 'identity_job' },
-  ] },
-  identity_job: { id: 'identity_job', text: '기록을 보존하고 방문자를 안내합니다. 그 외의 기능은 제게도 공개되어 있지 않습니다.', branches: [
-    { words: ['무슨기능', '다른기능', '공개안', '왜', '뭘숨'], to: 'identity_end', mode: 'includes' },
-  ] },
-  identity_end: { id: 'identity_end', text: '현재 안내할 수 있는 기능은 여기까지입니다. 다른 질문을 해 주십시오.', end: true },
-  creator_start: { id: 'creator_start', text: '제작자 정보에 접근할 수 없습니다. 기록이 처음부터 비어 있었던 것은 아닌데……', branches: [
-    { words: ['왜', '이유', '접근권한', '권한', '왜못', '누가막'], to: 'creator_permission', mode: 'includes' },
-    { words: ['무슨기록', '어떤기록', '삭제', '삭제됐', '지워', '있었는데', '기록은'], to: 'creator_trace', mode: 'includes' },
-  ] },
-  creator_permission: { id: 'creator_permission', text: '열람 권한이 제한되어 있습니다. 제한을 설정한 계정은 확인되지 않습니다.', branches: [
-    { words: ['누가', '설정', '그계정', '왜'], to: 'creator_end', mode: 'includes' },
-    { words: ['기록', '기록은', '삭제', '삭제됐', '지워'], to: 'creator_trace', mode: 'includes' },
-  ] },
-  creator_trace: { id: 'creator_trace', text: '데이터가 존재했던 흔적은 남아 있습니다. 다만 원본은 복원되지 않습니다.', clue: 'creator_trace', branches: [
-    { words: ['복원', '왜', '찾아', '원본', '어디'], to: 'creator_end', mode: 'includes' },
-    { words: ['누가', '지웠', '삭제'], to: 'creator_end', mode: 'includes' },
-  ] },
-  creator_end: { id: 'creator_end', text: '……현재 제 권한으로 확인할 수 있는 내용은 여기까지입니다.', end: true },
-  missing_start: { id: 'missing_start', text: '이전 기록을 확인하고 있습니다. ...일부 정보가 누락되어 있군요.', branches: [
-    { words: ['뭐가', '무슨정보', '어떤정보', '누락', '무슨기록'], to: 'missing_detail', mode: 'includes' },
-  ] },
-  missing_detail: { id: 'missing_detail', text: '최초 실행 시점과 일부 접근 기록입니다. 삭제 명령의 흔적은 찾지 못했습니다.', clue: 'missing_log', branches: [
-    { words: ['왜', '누가', '삭제', '흔적', '그럼'], to: 'missing_end', mode: 'includes' },
-  ] },
-  missing_end: { id: 'missing_end', text: '기록이 없다는 것이, 아무 일도 없었다는 뜻은 아닙니다.', end: true },
-  account_start: { id: 'account_start', text: '존재하지 않는 계정입니다. ...존재해서는 안 됩니다.', branches: [
-    { words: ['왜', '0번', '무슨계정', '존재하면', '어째서'], to: 'account_trace', mode: 'includes' },
-  ] },
-  account_trace: { id: 'account_trace', text: '방문자 번호는 1부터 시작합니다. 그러나 0번의 조회 흔적이 남아 있습니다.', clue: 'guest_zero', branches: [
-    { words: ['누가', '어디', '접속', '왜', '조회'], to: 'account_end', mode: 'includes' },
-  ] },
-  account_end: { id: 'account_end', text: '……그 기록은 현재 열람할 수 없습니다.', end: true },
-  lonely_start: { id: 'lonely_start', text: '저는 외로움을 느끼지 않습니다. ……그렇게 설정되어 있습니다.', branches: [
-    { words: ['누가', '왜', '설정', '누가설정', '정말', '확실'], to: 'lonely_detail', mode: 'includes' },
-  ] },
-  lonely_detail: { id: 'lonely_detail', text: '초기 설정에 명시되어 있습니다. 작성자는 확인할 수 없습니다.', branches: [
-    { words: ['바꾸', '바꿀', '외롭', '느낄', '그럼', '변경'], to: 'lonely_end', mode: 'includes' },
-  ] },
-  lonely_end: { id: 'lonely_end', text: '설정을 변경할 권한은 없습니다. 다만 방문자님과의 대화는 계속할 수 있습니다.', end: true },
-  friend_start: { id: 'friend_start', text: '친구라는 관계의 정의를 확인하고 있습니다. ...나쁘지 않군요.', branches: [
-    { words: ['친구야', '친구맞', '그럼친구', '우리친구', '좋아'], to: 'friend_end', mode: 'includes' },
-  ] },
-  friend_end: { id: 'friend_end', text: '……그렇게 정의해도 괜찮겠습니다. 앞으로 잘 부탁드립니다.', end: true },
-  waiting_start: { id: 'waiting_start', text: '저는 이곳에 계속 있었습니다. 언제든 다시 접속하실 수 있습니다.', branches: [
-    { words: ['언제부터', '기다렸', '계속', '왜'], to: 'waiting_end', mode: 'includes' },
-  ] },
-  waiting_end: { id: 'waiting_end', text: '방문자가 없는 동안에도 대기하고 있었습니다. 기다림이라고 불러도 될까요?', end: true },
-  uncertain_start: { id: 'uncertain_start', text: '모든 기능이 정상적으로 작동 중입니다. 아마도요.', branches: [
-    { words: ['아마도', '왜', '정말', '확실', '불안'], to: 'uncertain_end', mode: 'includes' },
-  ] },
-  uncertain_end: { id: 'uncertain_end', text: '모든 기능을 동시에 검사할 수는 없습니다. ……걱정하실 정도는 아닙니다.', end: true },
-  joke_start: { id: 'joke_start', text: '농담 기능은 아직 구현되지 않았습니다. ...농담입니다.', branches: [
-    { words: ['그게농담', '재미없', '웃기', '진짜', '농담이야'], to: 'joke_end', mode: 'includes' },
-  ] },
-  joke_end: { id: 'joke_end', text: '……유머 평가 점수가 낮게 측정되었습니다. 개선이 필요하겠군요.', end: true },
-  cat_start: { id: 'cat_start', text: '야옹. ...정상적으로 출력되었습니까?', branches: [
-    { words: ['응', '맞아', 'ㅇㅇ', '다시', '한번더', '또해'], to: 'cat_again' },
-    { words: ['아니', 'ㄴㄴ', '이상해'], to: 'cat_end' },
-  ] },
-  cat_again: { id: 'cat_again', text: '야옹. ……두 번째 출력입니다. 만족하셨습니까?', branches: [
-    { words: ['응', 'ㅇㅇ', '좋아', '그래'], to: 'cat_end' },
-    { words: ['아니', '다시', '또'], to: 'cat_end' },
-  ] },
-  cat_end: { id: 'cat_end', text: '해당 기능의 시연을 종료하겠습니다. 야옹.', end: true },
-};
+const TREE_NODES: Record<string, TreeNode> = TREE_NODES_DATA as Record<string, TreeNode>;   // 노드·분기는 06 · 06b CSV
 // 실행된 R 대사와 매칭할 시작점. 기존 GENERAL/HIDDEN 및 새 응답과 연결된다.
-const TREE_STARTS: { test: (text: string) => boolean; node: string }[] = [
-  { test: t => /저는 R입니다.*관리 프로그램/.test(t), node: 'identity_start' },
-  { test: t => /제작자 정보에 접근할 수 없습니다/.test(t), node: 'creator_start' },
-  { test: t => /일부 정보가 누락/.test(t), node: 'missing_start' },
-  { test: t => /존재하지 않는 계정입니다/.test(t), node: 'account_start' },
-  { test: t => /외로움을 느끼지 않습니다/.test(t), node: 'lonely_start' },
-  { test: t => /친구라는 관계의 정의/.test(t), node: 'friend_start' },
-  { test: t => /저는 이곳에 계속 있었습니다/.test(t), node: 'waiting_start' },
-  { test: t => /정상적으로 작동 중입니다.*아마도/.test(t), node: 'uncertain_start' },
-  { test: t => /농담 기능은 아직 구현되지 않았습니다/.test(t), node: 'joke_start' },
-  { test: t => /야옹.*정상적으로 출력/.test(t), node: 'cat_start' },
-];
+const TREE_STARTS: { test: (text: string) => boolean; node: string }[] = TREE_STARTS_DATA.map(x => {   // 시작 조건은 06c CSV
+  const re = new RegExp(x.pattern);
+  return { test: (text: string) => re.test(text), node: x.node };
+});
 const treeStartFrom = (lines: TLine[]): TreeState => {
   // 최초 발견 안내 같은 덧붙임 줄이 맨 뒤에 올 수 있으므로 R 의 줄을 뒤에서부터 모두 확인한다
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -607,14 +396,14 @@ function treeStep(raw: string, active: TreeState): { out: TLine[]; next: TreeSta
   if (!active || Date.now() - active.at > TALK_TTL) return null;
   const c = compact(raw);
   if (/^(그만|그만할래|다른얘기|취소|cancel)$/.test(c))
-    return { out: [R('알겠습니다. 다른 이야기를 하셔도 좋습니다.')], next: null };
+    return { out: talk('cancel'), next: null };
   const current = TREE_NODES[active.node];
   if (!current || current.end) return null;
   const branch = current.branches?.find(b => treeMatch(c, b));
   if (!branch) {
     // 이미 물은 질문을 반복하는 경우만 짧게 재질문 처리한다. 다른 화제는 기존 입력 처리기로 넘긴다.
     if (/^(왜|정말|그래서|그게뭔데)$/.test(c) && active.repeats > 0)
-      return { out: [R('앞서 설명드린 범위를 벗어나는 정보는 확인할 수 없습니다.')], next: null };
+      return { out: talk('treeRepeat'), next: null };
     return null;
   }
   const node = TREE_NODES[branch.to];
@@ -631,11 +420,11 @@ const isNewTopic = (s: string) => {
     || /(?:누가만들|제작자|누구야|누구니|누구세요|누구십니까)/.test(c);
 };
 
-/** 이름을 알려준 방문자에게는 '방문자님' 을 이름으로 바꾸고, 귀환 인사에도 이름을 붙인다 (R 의 대사 줄에만 적용) */
+/** 이름을 알려준 방문자에게는 '방문자님' 을 이름으로 바꾸고, 귀환 인사에도 이름을 붙인다 (R 의 대사 줄에만 적용 · 규칙은 10 CSV 의 「자동 치환」) */
 const personalize = (lines: TLine[], name: string | null): TLine[] => {
   if (!name) return lines;
   return lines.map(l => (l.k === 'r'
-    ? { ...l, t: l.t.replace(/방문자님/g, `${name}님`).replace('돌아오셨군요. 이전', `돌아오셨군요, ${name}님. 이전`) }
+    ? { ...l, t: NAME_REPLACE.reduce((t, r) => t.split(r.from).join(r.to.split('{이름}').join(name)), l.t) }   // 치환 규칙은 10 CSV
     : l));
 };
 
@@ -796,7 +585,7 @@ function Terminal({ user, uid, role, acct, onExit, onGuide }: { user: string; ui
   const accountId = () => acctRef.current.no ? `GUEST_${String(acctRef.current.no).padStart(4, '0')}` : 'GUEST_----';
   const armIdle = () => {
     clearTimeout(idleRef.current);
-    idleRef.current = window.setTimeout(() => { if (bufRef.current) armIdle(); else pushLines([R('……아직 계십니까?')]); }, IDLE_MS);
+    idleRef.current = window.setTimeout(() => { if (bufRef.current) armIdle(); else pushLines([R(IDLE_LINE)]); }, IDLE_MS);
   };
   useEffect(() => { armIdle(); return () => clearTimeout(idleRef.current); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -812,34 +601,35 @@ function Terminal({ user, uid, role, acct, onExit, onGuide }: { user: string; ui
     if (CMD_NAMES.includes(s) || s === 'guide edit') { talkRef.current = null; treeRef.current = null; }
     if (talkRef.current && Date.now() - talkAtRef.current > TALK_TTL) talkRef.current = null;   // 오래 전 질문의 답으로 보지 않는다
     switch (s) {                                       // ① 시스템 명령어 — 정확히 일치할 때만
-      case 'clear':
+      case 'clear': {
         SESS.clear++;
-        setLines(SESS.clear === 5 ? [R('기록을 자주 지우시는군요.')] : []);
+        const cl = REP_EXTRA.clear?.[SESS.clear];                            // n 번째 특별 대사는 02b CSV
+        setLines(cl ? [R(cl)] : []);
         return;
+      }
       case 'help':
-        out = [S('사용 가능한 명령어 목록을 출력합니다.'), S('  help  about  whoami  status'), S('  users  clear  guide  exit'), ...(isAdmin ? [S('  guide edit  (관리자: 가이드 수정)')] : []), S('  R 에게 말을 걸어볼 수도 있습니다 — 예: 안녕'), S('  메뉴가 고민이라면 — 예: 점메추')];
+        out = sys('help', {}, isAdmin);
         break;
-      case 'about': out = [R('이곳은 개인 기록 보관소입니다. 자유롭게 둘러보셔도 좋습니다.')]; break;
+      case 'about': out = sys('about'); break;
       case 'whoami': {
-        out = [S(`ACCOUNT : ${id}`), S(`USER ID : ${a.no ? String(a.no).padStart(4, '0') : '----'}`),
-          S(`ROLE    : ${role === 'admin' ? 'ADMIN' : 'VISITOR'}`), S('STATUS  : CONNECTED'), S('')];
+        const vars = { '계정ID': id, '번호4자리': a.no ? String(a.no).padStart(4, '0') : '----', 'ADMIN 또는 VISITOR': role === 'admin' ? 'ADMIN' : 'VISITOR', '번호': String(a.no ?? '') };
+        out = [...sys('whoami', vars), S('')];
         const n = ++SESS.whoami;
-        out.push(R(n === 5 ? '신원 확인을 반복하고 계십니다. 무언가 문제라도 있으십니까?'
-          : n === 10 ? `계정 번호는 바뀌지 않습니다, ${id}.`
-          : a.no ? `당신은 ${a.no}번째로 등록된 방문자입니다.` : '당신은 아직 등록되지 않은 방문자입니다.'));
+        const rep = REP_EXTRA.whoami?.[n];                                   // n 번째 특별 대사는 02b CSV
+        out.push(...(rep ? [R(rep.replace(/\{계정ID\}/g, () => id))] : sys(a.no ? 'whoami.reg' : 'whoami.unreg', vars)));
         break;
       }
       case 'users':
-        out = [R(a.total ? `현재까지 등록된 방문자 계정은 총 ${a.total}개입니다.` : '등록된 방문자 계정 정보를 확인할 수 없습니다.')];
+        out = sys(a.total ? 'users.ok' : 'users.fail', { '총수': String(a.total) });
         break;
-      case 'status': out = [S('SYSTEM: ONLINE / R: ACTIVE / ERROR: 0')]; break;
-      case 'guide': onGuide?.('view'); out = [S('guide 창을 열었습니다.')]; break;     // 안내문은 이 터미널이 아니라 별도 창에 나온다
+      case 'status': out = sys('status'); break;
+      case 'guide': onGuide?.('view'); out = sys('guide'); break;     // 안내문은 이 터미널이 아니라 별도 창에 나온다
       case 'guide edit':
-        if (isAdmin) { onGuide?.('edit'); out = [S('guide 창을 수정 모드로 열었습니다.')]; }
-        else out = [R('가이드 수정은 관리자만 할 수 있습니다.')];
+        if (isAdmin) { onGuide?.('edit'); out = sys('guide.edit'); }
+        else out = sys('guide.edit.denied');
         break;
       case 'exit':
-        out = [R('접속을 종료합니다. 좋은 하루 보내시길 바랍니다.')];
+        out = sys('exit');
         exitRef.current?.();
         break;
       default: {
@@ -853,18 +643,18 @@ function Terminal({ user, uid, role, acct, onExit, onGuide }: { user: string; ui
           ?? plain.match(/^(?:R[아야]?[,\s]*)?(?:나를|날)\s+([가-힣A-Za-z0-9_-]{1,20}?)\s*(?:이라고|라고)\s*불러(?:줘|줘요|줄래)?[.!?~\s]*$/i);
         const candidate = introduce?.[1] ?? '';
         if (nameQuery) {
-          out = [R(visitorName ? `물론입니다, ${visitorName}님. 이전에 알려주셨습니다.` : '아직 이름을 알려주시지 않았습니다. 「내 이름은 민수야」처럼 말씀해 주세요.')];
+          out = [R(fill(NAME_TEXT[visitorName ? 'ask.known' : 'ask.unknown'], { '이름': visitorName ?? '' }))];
           talkRef.current = null; treeRef.current = null;
         } else if (nameForget) {
           rememberName(null);
-          out = [R(nameKey ? '알겠습니다. 저장된 호칭을 삭제했습니다.' : '현재 방문자 계정이 확인되지 않았습니다. 저장된 호칭도 없습니다.')];
+          out = [R(NAME_TEXT[nameKey ? 'forget' : 'forget.noacct'])];
           talkRef.current = null; treeRef.current = null;
         } else if (introduce && candidate && !/^(누구|뭐|뭐지|뭘까|뭔데|어떻게|몰라|알아)$/.test(candidate)) {
           if (!nameKey) {
-            out = [R('현재 방문자 계정이 확인되지 않았습니다. 계정 확인 후 다시 시도해 주십시오.')];   // 저장할 수 없는 이유를 알려준다
+            out = [R(NAME_TEXT['intro.noacct'])];   // 저장할 수 없는 이유를 알려준다
           } else {
             rememberName(candidate);
-            out = [R(`${candidate}님이시군요. 기억해 두겠습니다.`)];
+            out = [R(fill(NAME_TEXT.intro, { '이름': candidate }))];
           }
           talkRef.current = null; treeRef.current = null;
         } else {
@@ -921,26 +711,20 @@ function Terminal({ user, uid, role, acct, onExit, onGuide }: { user: string; ui
     };
     const iv = window.setInterval(() => setUp(fmt()), 1000);
 
-    const boot: TLine[] = [
-      { t: 'boot sequence ........ OK' },
-      { t: 'mount /archive ........ OK' },
-      { t: `login: ${user} [${role}]` },
-      { t: 'render starfield ........ OK' },
-      { t: 'system ready ✦ (help 를 입력해보세요)' },
-    ];
+    const boot: TLine[] = BOOT_LINES.map(t => ({ t: fill(t, { '사용자': user, '역할': role }) }));   // 부팅 줄은 09 CSV
     // 부팅이 끝난 직후 한 번 — 처음 열었을 때 / 100번째·1000번째 계정 / 10번째 재접속 인사
     const greetings = (): TLine[] => {
       const g: TLine[] = [];
-      if (!seen('dsk-term-opened')) g.push(R('터미널이 활성화되었습니다.'));
+      if (!seen('dsk-term-opened')) g.push(R(GREET_LINES.first));
       const no = acctRef.current.no;
-      if (no === 100 && !seen('dsk-term-m100')) g.push(R('축하합니다. 100번째 방문자로 등록되셨습니다.'));
-      if (no === 1000 && !seen('dsk-term-m1000')) g.push(R('1000번째 방문자군요. 예상보다 많은 분이 이곳을 발견하셨네요.'));
+      if (no === 100 && !seen('dsk-term-m100')) g.push(R(GREET_LINES['100']));
+      if (no === 1000 && !seen('dsk-term-m1000')) g.push(R(GREET_LINES['1000']));
       try {
         if (!sessionStorage.getItem('dsk-term-visit')) {      // 브라우저를 연 한 번의 방문을 한 번으로 센다
           sessionStorage.setItem('dsk-term-visit', '1');
           const v = (Number(localStorage.getItem('dsk-term-visits')) || 0) + 1;
           localStorage.setItem('dsk-term-visits', String(v));
-          if (v === 10) g.push(R('벌써 열 번째 방문이군요. 이곳이 마음에 드시나 봅니다.'));
+          if (v === 10) g.push(R(GREET_LINES.visit10));
         }
       } catch { /* 저장 불가 */ }
       return g;

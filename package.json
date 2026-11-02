@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/build-r-dialogue.mjs && next dev",
+    "build": "node scripts/build-r-dialogue.mjs && next build",
+    "r-dialogue": "node scripts/build-r-dialogue.mjs",
     "start": "next start",
     "pack": "node scripts/pack.mjs"
   },
