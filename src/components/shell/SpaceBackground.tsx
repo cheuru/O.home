@@ -73,7 +73,7 @@ export function SpaceBackground() {
     const skinOn = () => root.hasAttribute('data-skin-bg') || root.hasAttribute('data-bg-img');
 
     // ---- 성운: 한 번만 그려 두고 매 프레임 통째로 옮긴다
-    // 성운 채도 배율 — 1이면 원래의 진한 남색·보라, 낮출수록 회색빛 (#1d1a32 쪽)
+    // 성운 채도 배율 — 1이면 원래의 진한 남색·보라, 낮출수록 회색빛 (#1b1830 쪽)
     const NEB_SAT = 0.5;
     function buildNebula() {
       const c = document.createElement('canvas');
@@ -272,9 +272,9 @@ export function SpaceBackground() {
 
     function paintSky() {
       const bg = ctx!.createLinearGradient(0, 0, 0, H);
-      bg.addColorStop(0, '#141122');
-      bg.addColorStop(0.55, '#19172c');
-      bg.addColorStop(1, '#1d1a32');
+      bg.addColorStop(0, '#151325');
+      bg.addColorStop(0.55, '#12101e');
+      bg.addColorStop(1, '#141122');
       ctx!.fillStyle = bg;
       ctx!.fillRect(0, 0, W, H);
     }
