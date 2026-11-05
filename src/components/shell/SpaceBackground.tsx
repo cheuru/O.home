@@ -73,8 +73,6 @@ export function SpaceBackground() {
     const skinOn = () => root.hasAttribute('data-skin-bg') || root.hasAttribute('data-bg-img');
 
     // ---- 성운: 한 번만 그려 두고 매 프레임 통째로 옮긴다
-    // 성운 채도 배율 — 1이면 원래의 진한 남색·보라, 낮출수록 회색빛 (#1b1830 쪽)
-    const NEB_SAT = 0.5;
     function buildNebula() {
       const c = document.createElement('canvas');
       const pad = 160;
@@ -95,9 +93,9 @@ export function SpaceBackground() {
       for (const [fx, fy, fr, ho, sat, lig, al] of blobs) {
         const x = pad + fx * W, y = pad + fy * H, r = fr * base;
         const gr = g.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, `hsla(${ho},${sat * NEB_SAT}%,${lig}%,${al * 0.8})`);
-        gr.addColorStop(0.45, `hsla(${ho},${sat * NEB_SAT}%,${lig}%,${al * 0.28})`);
-        gr.addColorStop(1, `hsla(${ho},${sat * NEB_SAT}%,${lig}%,0)`);
+        gr.addColorStop(0, `hsla(${ho},${sat}%,${lig}%,${al * 0.8})`);
+        gr.addColorStop(0.45, `hsla(${ho},${sat}%,${lig}%,${al * 0.28})`);
+        gr.addColorStop(1, `hsla(${ho},${sat}%,${lig}%,0)`);
         g.fillStyle = gr;
         g.fillRect(0, 0, W + pad * 2, H + pad * 2);
       }
@@ -272,9 +270,9 @@ export function SpaceBackground() {
 
     function paintSky() {
       const bg = ctx!.createLinearGradient(0, 0, 0, H);
-      bg.addColorStop(0, '#151325');
-      bg.addColorStop(0.55, '#12101e');
-      bg.addColorStop(1, '#141122');
+      bg.addColorStop(0, '#03041a');
+      bg.addColorStop(0.55, '#0a0b2e');
+      bg.addColorStop(1, '#160f3d');
       ctx!.fillStyle = bg;
       ctx!.fillRect(0, 0, W, H);
     }
