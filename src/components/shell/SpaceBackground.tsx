@@ -272,7 +272,7 @@ export function SpaceBackground() {
       const bg = ctx!.createLinearGradient(0, 0, 0, H);
       bg.addColorStop(0, '#03041a');
       bg.addColorStop(0.55, '#0a0b2e');
-      bg.addColorStop(1, '#160f3d');
+      bg.addColorStop(1, '#1e1c2a');
       ctx!.fillStyle = bg;
       ctx!.fillRect(0, 0, W, H);
     }

@@ -72,7 +72,7 @@ body::before{
 html[data-skin-bg] .space-bg,html[data-bg-img] .space-bg{display:none}
 /* 첫 페인트 전부터 어두운 우주색 바탕 — 캔버스가 뜨기 전·창(iframe) 로딩·페이지 전환 중에 테마(핑크) 그라데이션이
    먼저 비치던 깜빡임 방지 (layout 의 head 스크립트가 data-space 를 먼저 단다) */
-html[data-space]:not([data-skin-bg]):not([data-bg-img]){background:linear-gradient(180deg,#03041a,#0a0b2e 55%,#160f3d) fixed}
+html[data-space]:not([data-skin-bg]):not([data-bg-img]){background:linear-gradient(180deg,#03041a,#0a0b2e 55%,#1e1c2a) fixed}
 /* body 배경은 비운다 — 불투명하면 z-index:-1 캔버스 위로 올라와 별을 덮는다 */
 html[data-space]:not([data-skin-bg]):not([data-bg-img]) body{background:transparent!important}
 html[data-space]:not([data-skin-bg]):not([data-bg-img]) body::before{display:none}
