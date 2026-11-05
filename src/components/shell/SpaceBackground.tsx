@@ -74,7 +74,7 @@ export function SpaceBackground() {
 
     // ---- 성운: 한 번만 그려 두고 매 프레임 통째로 옮긴다
     // 성운 채도 배율 — 1이면 원래의 진한 남색·보라, 낮출수록 회색빛 (#1e1c2a 쪽)
-    const NEB_SAT = 0.4;
+    const NEB_SAT = 0.6;
     function buildNebula() {
       const c = document.createElement('canvas');
       const pad = 160;
