@@ -1,0 +1,22 @@
+﻿명령어,화자,출력 줄,비고({}는 자동으로 채워지는 값),코드 키
+help,SYSTEM,사용 가능한 명령어 목록을 출력합니다.,,help
+help,SYSTEM,  help  about  whoami  status,,help
+help,SYSTEM,  users  clear  guide  exit,,help
+help,SYSTEM,  guide edit  (관리자: 가이드 수정),관리자 계정에게만 표시,help:admin
+help,SYSTEM,  R 에게 말을 걸어볼 수도 있습니다 — 예: 안녕,,help
+help,SYSTEM,  메뉴가 고민이라면 — 예: 점메추,,help
+about,R,이곳은 개인 기록 보관소입니다. 자유롭게 둘러보셔도 좋습니다.,,about
+whoami,SYSTEM,ACCOUNT : {계정ID},예: GUEST_0042 (번호 없으면 GUEST_----),whoami
+whoami,SYSTEM,USER ID : {번호4자리},번호 없으면 ----,whoami
+whoami,SYSTEM,ROLE    : {ADMIN 또는 VISITOR},,whoami
+whoami,SYSTEM,STATUS  : CONNECTED,,whoami
+whoami,R,당신은 {번호}번째로 등록된 방문자입니다.,5번째·10번째 입력은 02b 파일의 특별 대사,whoami.reg
+whoami,R,당신은 아직 등록되지 않은 방문자입니다.,계정 번호가 없을 때,whoami.unreg
+users,R,현재까지 등록된 방문자 계정은 총 {총수}개입니다.,,users.ok
+users,R,등록된 방문자 계정 정보를 확인할 수 없습니다.,총수를 못 가져올 때,users.fail
+status,SYSTEM,SYSTEM: ONLINE / R: ACTIVE / ERROR: 0,,status
+guide,SYSTEM,guide 창을 열었습니다.,,guide
+guide edit,SYSTEM,guide 창을 수정 모드로 열었습니다.,관리자만,guide.edit
+guide edit,R,가이드 수정은 관리자만 할 수 있습니다.,관리자가 아닐 때,guide.edit.denied
+exit,R,접속을 종료합니다. 좋은 하루 보내시길 바랍니다.,10초 뒤 터미널이 사라지고 15초 뒤 다시 나타남,exit
+clear,-,(화면을 비움),5번째 입력 때의 대사는 02b 파일,참고

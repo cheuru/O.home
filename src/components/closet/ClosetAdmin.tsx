@@ -7,6 +7,7 @@ import { putBlob, useUploading, useBlobUrl } from '@/lib/blobStore';
 import { newId } from '@/lib/postStore';
 import { KInput, KSelect, KStep, KTextarea, KLabel, LiveInput } from '@/components/ui/Kit';
 import { ItemLines } from './ItemLines';
+import { cropCenterWidth } from './closetImage';
 import { ColorField } from '@/components/ui/ColorField';
 import { FileDrop } from '@/components/ui/FileDrop';
 import { useConfirmDelete } from '@/components/ui/Modal';
@@ -20,8 +21,9 @@ const nameOf = (f: File) => f.name.replace(/\.[^.]+$/, '');
 const isImg = (f: File) => /^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 
 /** 그림 한 장 고르기 — 올리면 주소로 바꿔 돌려준다 */
-function PickImage({ value, onChange, label, size = 64, fallback }: {
+function PickImage({ value, onChange, label, size = 64, fallback, crop = true }: {
   value: string; onChange: (url: string) => void; label?: string; size?: number; fallback?: string;
+  crop?: boolean;   // 가운데 기준 가로 500px로 자르기 (캐릭터·옷 그림). 목록 썸네일처럼 겹치지 않는 그림은 끈다
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const toast = useToast();
@@ -30,7 +32,7 @@ function PickImage({ value, onChange, label, size = 64, fallback }: {
   const pick = async (f?: File) => {
     if (!f) return;
     if (!isImg(f)) { toast('이미지 파일만 올릴 수 있어요'); return; }
-    try { onChange(await putBlob(f)); } catch (e) { toast(`업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
+    try { onChange(await putBlob(crop ? await cropCenterWidth(f) : f)); } catch (e) { toast(`업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
   };
   return (
     <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -92,7 +94,11 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
     if (!imgs.length) { toast('이미지 파일만 올릴 수 있어요'); return; }
     const made: ClosetItem[] = [];
     for (const f of imgs) {
-      try { made.push({ id: newId(), src: await putBlob(f), type: newType, desc: nameOf(f), zi: 0 }); }
+      try {
+        // 배경(bg)은 캐릭터 위에 겹치는 그림이 아니므로 자르지 않는다
+        const file = newType === 'bg' ? f : await cropCenterWidth(f);
+        made.push({ id: newId(), src: await putBlob(file), type: newType, desc: nameOf(f), zi: 0 });
+      }
       catch (e) { toast(`「${f.name}」 업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
     }
     if (made.length) { edit(x => ({ ...x, items: [...x.items, ...made] })); toast(`${made.length}개 올렸어요 — 저장을 눌러야 반영돼요`); }
@@ -185,7 +191,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
             {shown.map(it => (
               <div key={it.id} style={{ display: 'flex', gap: 10, padding: 10, border: '1.5px solid var(--line)', borderRadius: 10, alignItems: 'flex-start' }}>
-                <PickImage value={it.src} onChange={u => setItem(it.id, { src: u })} />
+                <PickImage value={it.src} crop={it.type !== 'bg'} onChange={u => setItem(it.id, { src: u })} />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                   <LiveInput value={it.desc} onValue={v => setItem(it.id, { desc: v })} className="k-input" placeholder="이름" />
                   <KSelect options={typeOptions} value={it.type} onChange={v => setItem(it.id, { type: v })} minWidth={120} />
@@ -231,7 +237,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
         <div className="panel">
           {row(<>{text('옷장 이름 (제목·목록에 표시)', 'gameTitle', 260)}{text('저장 파일명 기본값', 'saveName', 220)}</>)}
           {row(<>
-            <PickImage value={d.thumb || d.char1Bodies[0]} size={84} label="목록 썸네일" fallback={d.char1Bodies[0]}
+            <PickImage value={d.thumb || d.char1Bodies[0]} size={84} label="목록 썸네일" fallback={d.char1Bodies[0]} crop={false}
               onChange={u => setDesign({ thumb: u === d.char1Bodies[0] ? '' : u })} />
             <span style={{ fontSize: 11.5, color: 'var(--sub)', maxWidth: 360, lineHeight: 1.7 }}>
               옷장 목록에 보일 그림이에요. 바꾸지 않으면 두 캐릭터의 기본 그림이 나란히 보여요.

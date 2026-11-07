@@ -1,0 +1,19 @@
+﻿종류,화자,출력 줄,발동 조건,코드 키
+부팅 줄,SYSTEM,boot sequence ........ OK,,boot
+부팅 줄,SYSTEM,mount /archive ........ OK,,boot
+부팅 줄,SYSTEM,login: {사용자} [{역할}],,boot
+부팅 줄,SYSTEM,render starfield ........ OK,,boot
+부팅 줄,SYSTEM,system ready ✦ (help 를 입력해보세요),,boot
+부팅 직후 R 인사,R,터미널이 활성화되었습니다.,이 브라우저에서 처음 열었을 때 1회,greet.first
+부팅 직후 R 인사,R,축하합니다. 100번째 방문자로 등록되셨습니다.,계정 번호가 100번일 때 1회,greet.100
+부팅 직후 R 인사,R,1000번째 방문자군요. 예상보다 많은 분이 이곳을 발견하셨네요.,계정 번호가 1000번일 때 1회,greet.1000
+부팅 직후 R 인사,R,벌써 열 번째 방문이군요. 이곳이 마음에 드시나 봅니다.,10번째 방문 때 1회,greet.visit10
+대기 중,R,……아직 계십니까?,5분 동안 입력이 없을 때,idle
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,scanning deep space ........ 3 objects,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,"signal received ✦ 안녕, 우주",,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,orbit stable · all systems nominal,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,star map synced,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,meteor shower forecast: low,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,archive index OK,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,listening on 0.0.0.0:∞,,flavor
+"우주 문구(부팅 뒤 4.5~8초 간격으로 한 줄씩, 한 번만)",SYSTEM,ping andromeda ........ 2.5M ly,,flavor

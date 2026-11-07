@@ -1,0 +1,11 @@
+﻿R 대사에 이 패턴이 나오면(정규식),시작 노드ID,주제
+저는 R입니다.*관리 프로그램,identity_start,정체(R은 누구)
+제작자 정보에 접근할 수 없습니다,creator_start,제작자
+일부 정보가 누락,missing_start,누락된 기록
+존재하지 않는 계정입니다,account_start,0번 계정
+외로움을 느끼지 않습니다,lonely_start,외로움
+친구라는 관계의 정의,friend_start,친구
+저는 이곳에 계속 있었습니다,waiting_start,기다림
+정상적으로 작동 중입니다.*아마도,uncertain_start,상태 불안
+농담 기능은 아직 구현되지 않았습니다,joke_start,농담
+야옹.*정상적으로 출력,cat_start,고양이
