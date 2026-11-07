@@ -1,11 +1,11 @@
 'use client';
 // 페어의 옷장 — /closet 은 방 목록, /closet?room=<id> 는 그 방의 옷장
 // (원본: 우초맨 제작 dressup 일반 버전을 React로 이식)
-import React, { Suspense, useCallback, useState } from 'react';
+import React, { Suspense, useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { ClosetBook, ClosetItem, ClosetLook, ClosetRoom, newRoom, useClosetBook, useResolvedCloset } from '@/lib/closetStore';
+import { ClosetBook, ClosetItem, ClosetLook, ClosetRoom, newRoom, pruneDefaults, roomWithItems, useClosetBook, useResolvedCloset } from '@/lib/closetStore';
 import { newId } from '@/lib/postStore';
 import { ClosetStage } from '@/components/closet/ClosetStage';
 import { ClosetLobby } from '@/components/closet/ClosetLobby';
@@ -15,13 +15,15 @@ import { PageTitle } from '@/components/ui/PageText';
 function Room({ room, book, save, isAdmin, loaded }: {
   room: ClosetRoom; book: ClosetBook; save: (b: ClosetBook) => void; isAdmin: boolean; loaded: boolean;
 }) {
-  const shown = useResolvedCloset(room);
-  const patch = useCallback((fn: (r: ClosetRoom) => ClosetRoom) => save({ rooms: book.rooms.map(r => r.id === room.id ? fn(r) : r) }), [book, room.id, save]);
-  const editItem = (id: string, p: Partial<ClosetItem>) => patch(r => ({ ...r, items: r.items.map(i => i.id === id ? { ...i, ...p } : i) }));
-  const delItem = (id: string) => patch(r => ({
-    ...r, items: r.items.filter(i => i.id !== id),
-    design: { ...r.design, char1Default: r.design.char1Default.filter(x => x !== id), char2Default: r.design.char2Default.filter(x => x !== id) },
-  }));
+  const shown = useResolvedCloset(useMemo(() => roomWithItems(room, book.items), [room, book.items]));   // 아이템은 모든 방이 같이 쓴다
+  // 방 안의 것(코디 등)만 고칠 때
+  const patch = useCallback((fn: (r: ClosetRoom) => ClosetRoom) => save({ ...book, rooms: book.rooms.map(r => r.id === room.id ? fn(r) : r) }), [book, room.id, save]);
+  // 아이템은 공통 창고에서 고친다 — 지우면 모든 방의 기본 코디에서도 빠진다
+  const editItem = (id: string, p: Partial<ClosetItem>) => save({ ...book, items: book.items.map(i => i.id === id ? { ...i, ...p } : i) });
+  const delItem = (id: string) => {
+    const items = book.items.filter(i => i.id !== id);
+    save({ rooms: pruneDefaults(book.rooms, items), items });
+  };
   const saveLook = (l: ClosetLook) => patch(r => ({ ...r, looks: [...r.looks, l] }));
   const delLook = (id: string) => patch(r => ({ ...r, looks: r.looks.filter(l => l.id !== id) }));
   return (
@@ -54,8 +56,8 @@ function ClosetPageInner() {
       </div>}
       count={book.rooms.length}>
       <ClosetLobby book={book} isAdmin={isAdmin} asking={asking} onAsk={() => setAsking(true)} onAskClose={() => setAsking(false)}
-        onCreate={name => save({ rooms: [...book.rooms, newRoom(newId(), name)] })}
-        onDelete={id => save({ rooms: book.rooms.filter(r => r.id !== id) })} />
+        onCreate={name => save({ ...book, rooms: [...book.rooms, newRoom(newId(), name)] })}
+        onDelete={id => save({ ...book, rooms: book.rooms.filter(r => r.id !== id) })} />
     </ClosetShell>
   );
 }

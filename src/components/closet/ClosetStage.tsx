@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { ClosetData, ClosetItem } from '@/lib/closetStore';
-import { tabInfo } from '@/lib/closetStore';
+import { cropImgStyle, cropOf, tabInfo } from '@/lib/closetStore';
 import type { ClosetLook } from '@/lib/closetStore';
 import { Lookbook } from './Lookbook';
 import { ItemLines } from './ItemLines';
@@ -13,6 +13,7 @@ import { KInput, KSelect, KStep } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 import { CLOSET_CSS } from './closetCss';
 import { FloatPanel } from './FloatPanel';
+import { loadImg } from './closetImg';
 import { Cid, CharView, STACK_TYPES, emptyView, makeEngine, EngineApi } from './closetEngine';
 
 const SFX_SRC = { blop: '/closet/sfx/blop.mp3', magic: '/closet/sfx/magic.mp3', whoosh: '/closet/sfx/whoosh.mp3', pic: '/closet/sfx/pic.mp3' };
@@ -23,25 +24,6 @@ function blushStyle(spec: string): React.CSSProperties {
   const p = String(spec || '').split(',').map(s => s.trim());
   const n = d.map((v, i) => (p[i] !== undefined && p[i] !== '' && !isNaN(Number(p[i])) ? Math.round(Number(p[i])) : v));
   return { left: n[0], top: n[1], width: n[2], height: n[3] };
-}
-
-/** 같은 출처가 아닌 이미지는 서버 중계(/api/font)를 거쳐야 캔버스가 잠기지 않는다 */
-const viaProxy = (src: string) => {
-  if (/^(data:|blob:|\/(?!\/))/.test(src)) return src;
-  try { if (new URL(src, location.href).origin === location.origin) return src; } catch { return src; }
-  return `/api/font?u=${encodeURIComponent(src)}`;
-};
-
-function loadImg(src: string): Promise<HTMLImageElement | null> {
-  return new Promise(res => {
-    const a = new Image();
-    a.onload = () => res(a);
-    a.onerror = () => {
-      const b = new Image(); b.crossOrigin = 'anonymous';
-      b.onload = () => res(b); b.onerror = () => res(null); b.src = src;
-    };
-    a.src = viaProxy(src);
-  });
 }
 
 /** 제목 — 한 글자씩 찍히고 마지막에 살짝 흔들린다 */
@@ -196,6 +178,7 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const ctx = cv.getContext('2d')!;
     const v = views[cid];
+    const crop = cropOf(cid === 1 ? d.char1Crop : d.char2Crop);
     const bodies = cid === 1 ? d.char1Bodies : d.char2Bodies;
     const layers: { src: string; zi: number; bg?: boolean; desc: string; img?: HTMLImageElement | null }[] = [];
     if (v.bg) layers.push({ src: v.bg, zi: -999, bg: true, desc: '배경' });
@@ -209,6 +192,9 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
         const sc = Math.max(w / l.img.naturalWidth, h / l.img.naturalHeight);
         const sw = l.img.naturalWidth * sc, sh = l.img.naturalHeight * sc;
         ctx.drawImage(l.img, (w - sw) / 2, (h - sh) / 2, sw, sh);
+      } else if (crop) {
+        const nw = l.img.naturalWidth, nh = l.img.naturalHeight;
+        ctx.drawImage(l.img, crop[0] * nw, crop[1] * nh, crop[2] * nw, crop[3] * nh, 0, 0, w, h);
       } else ctx.drawImage(l.img, 0, 0, w, h);
     });
     return cv;
@@ -274,6 +260,8 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     const v = views[cid];
     const w = cid === 1 ? d.char1Width : d.char2Width, h = cid === 1 ? d.char1Height : d.char2Height;
     const bodies = cid === 1 ? d.char1Bodies : d.char2Bodies;
+    const crop = cropOf(cid === 1 ? d.char1Crop : d.char2Crop);
+    const cs = cropImgStyle(crop);
     return (
       <div className="char-col" key={cid}>
         <div className="char-name-label">{names[cid - 1]}</div>
@@ -294,12 +282,12 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
             <div className="dark-cloud" style={{ left: '40%', top: '10.8%', width: '36.7%', height: '5.8%', animationDelay: '.5s' }} />
           </>}</div>
           <div className={`blush-overlay${v.blush ? ' active-blush' : ''}`} style={blushStyle(cid === 1 ? d.blush1 : d.blush2)} />
-          <div className={`char-visuals ${v.cls.join(' ')}`}>
+          <div className={`char-visuals${crop ? ' cropped' : ''} ${v.cls.join(' ')}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={bodies[v.face - 1]} className="base-layer" alt="" draggable={false} />
+            <img src={bodies[v.face - 1]} className="base-layer" alt="" draggable={false} style={cs} />
             {v.worn.map(x => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={x.uid} src={x.src} alt="" draggable={false} className={`dropped-item worn-${x.type} ${x.anim}`} style={{ zIndex: x.zi }} />
+              <img key={x.uid} src={x.src} alt="" draggable={false} className={`dropped-item worn-${x.type} ${x.anim}`} style={{ zIndex: x.zi, ...cs }} />
             ))}
           </div>
         </div>
@@ -436,11 +424,21 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
       )}
 
       {tip && <div className="item-tooltip" style={{ top: tip.y - 40, left: tip.x > window.innerWidth / 2 ? tip.x - 12 : tip.x + 12, transform: tip.x > window.innerWidth / 2 ? 'translateX(-100%)' : undefined }}>{tip.text}</div>}
-      {ghost && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={ghost.src} alt="" className="cl-ghost"
-          style={{ width: d.char1Width, height: d.char1Height, left: ghost.x - d.char1Width / 2, top: ghost.y - d.char1Width / 2 }} />
-      )}
+      {ghost && (() => {
+        const gc = cropOf(d.char1Crop);
+        const gs = { width: d.char1Width, height: d.char1Height, left: ghost.x - d.char1Width / 2, top: ghost.y - d.char1Width / 2 };
+        return gc
+          ? (
+            <div className="cl-ghost" style={{ ...gs, overflow: 'hidden' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ghost.src} alt="" style={{ position: 'absolute', ...cropImgStyle(gc) }} />
+            </div>
+          )
+          : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={ghost.src} alt="" className="cl-ghost" style={gs} />
+          );
+      })()}
 
       {del.element}
       <Modal open={lookAsk} small title="코디 저장" desc="지금 입고 있는 두 캐릭터의 코디(배경 포함)를 룩북에 저장해요"

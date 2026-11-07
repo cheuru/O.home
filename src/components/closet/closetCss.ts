@@ -20,6 +20,7 @@ export const CLOSET_CSS = String.raw`
 .cl-root .char-btn-row{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;}
 .cl-root .character-stage{position:relative;z-index:5;cursor:pointer;}
 .cl-root .char-visuals{width:100%;height:100%;position:relative;}
+.cl-root .char-visuals.cropped{overflow:hidden;}
 .cl-root .base-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;}
 .cl-root .dropped-item{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
 .cl-root .speech-bubble{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;border:2px solid #333;border-radius:15px;padding:8px 15px;font-size:16px;font-family:var(--mf);color:#333;z-index:100;opacity:0;pointer-events:none;box-shadow:2px 2px 5px rgba(0,0,0,.1);white-space:nowrap;text-align:center;transition:opacity 0.4s ease;}

@@ -2,7 +2,8 @@
 // 페어의 옷장 — 관리자 화면 (아이템 · 대사 · 디자인 · 백업)
 // 고친 내용은 「저장」을 눌러야 방문자 화면에 반영된다 — 서버 쓰기를 글자마다 하지 않기 위해서다.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ClosetData, ClosetItem, DG_FIELDS, defaultCloset, normalizeCloset, tabInfo } from '@/lib/closetStore';
+import { ClosetData, ClosetItem, DG_FIELDS, cropOf, defaultCloset, normalizeCloset, tabInfo } from '@/lib/closetStore';
+import { loadImgRef, opaqueBox } from './closetImg';
 import { putBlob, useUploading, useBlobUrl } from '@/lib/blobStore';
 import { newId } from '@/lib/postStore';
 import { KInput, KSelect, KStep, KTextarea, KLabel, LiveInput } from '@/components/ui/Kit';
@@ -68,6 +69,8 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
   const [tabFilter, setTabFilter] = useState('all');
   const [newType, setNewType] = useState('top');
   const [urlText, setUrlText] = useState('');
+  const [trimBusy, setTrimBusy] = useState<0 | 1 | 2>(0);      // 자동 트리밍 중인 캐릭터
+  const [trimItems, setTrimItems] = useState(true);            // 옷 그림도 범위에 넣을지
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 다른 곳에서 값이 바뀌어 들어와도, 고치는 중이 아닐 때만 맞춘다
@@ -120,6 +123,43 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
     setDesign({ [key]: d[key].map((v, i) => i === n ? url : v) } as Partial<ClosetData['design']>);
   };
 
+  /* ── 자동 트리밍 ──
+     캐릭터 그림(표정 5장)과 옷 그림에서 「그림이 있는 부분」의 범위를 합쳐서, 그 영역만 화면에 보이게 한다.
+     그림 파일은 그대로 두니 옷 그림을 다시 만들 필요가 없다. 높이는 지금 값을 지키고 너비를 비율에 맞춰 정한다. */
+  const autoTrim = async (cid: 1 | 2) => {
+    setTrimBusy(cid);
+    try {
+      const bodies = cid === 1 ? d.char1Bodies : d.char2Bodies;
+      const refs = [...bodies, ...(trimItems ? draft.items.filter(i => i.type !== 'bg').map(i => i.src) : [])];
+      let x0 = 1, y0 = 1, x1 = 0, y1 = 0, ok = 0, fail = 0, nw = 0, nh = 0;
+      let next = 0;
+      const worker = async () => {
+        while (next < refs.length) {
+          const ref = refs[next++];
+          const img = await loadImgRef(ref);
+          if (!img) { fail++; continue; }
+          try {
+            const b = opaqueBox(img);
+            if (!nw) { nw = img.naturalWidth; nh = img.naturalHeight; }
+            if (b) { x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1); ok++; }
+          } catch { fail++; }
+        }
+      };
+      await Promise.all(Array.from({ length: 6 }, worker));
+      if (!ok || x1 <= x0 || y1 <= y0) { toast('그림을 읽지 못했어요 — 이미지가 올라가 있는지 확인해 주세요'); return; }
+      const padX = 0.015, padY = 0.012;                          // 가장자리에 살짝 여유
+      const cx = Math.max(0, x0 - padX), cy = Math.max(0, y0 - padY);
+      const cw = Math.min(1, x1 + padX) - cx, ch = Math.min(1, y1 + padY) - cy;
+      const crop = [cx, cy, cw, ch].map(v => Math.round(v * 10000) / 10000);
+      const hKey = cid === 1 ? 'char1Height' : 'char2Height', wKey = cid === 1 ? 'char1Width' : 'char2Width';
+      const height = d[hKey];
+      const width = Math.max(50, Math.round(height * (cw * nw) / (ch * nh)));
+      setDesign({ [cid === 1 ? 'char1Crop' : 'char2Crop']: crop, [wKey]: width } as Partial<ClosetData['design']>);
+      toast(`${cid === 1 ? d.char1Name : d.char2Name} — 가로 ${Math.round(cw * 100)}% · 세로 ${Math.round(ch * 100)}%만 보이게 맞췄어요 (칸 ${width}×${height}). 저장을 눌러야 반영돼요${fail ? ` · 읽지 못한 그림 ${fail}장` : ''}`);
+    } finally { setTrimBusy(0); }
+  };
+  const clearTrim = (cid: 1 | 2) => { setDesign({ [cid === 1 ? 'char1Crop' : 'char2Crop']: [] } as Partial<ClosetData['design']>); toast('트리밍을 풀었어요 — 칸 크기는 그대로예요'); };
+
   /* ── 백업 ── */
   const exportJson = () => {
     const a = document.createElement('a');
@@ -164,6 +204,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
             <div style={{ flex: 1, minWidth: 240 }}><FileDrop accept="image/*" multiple label="옷 그림(PNG) 끌어다 놓기 — 여러 장 가능" onFiles={f => void addFiles(f)} /></div>
           </>)}
           <p style={{ fontSize: 12, color: 'var(--sub)', margin: '0 0 6px' }}>
+            <b>여기 올린 아이템은 모든 옷장에서 같이 써요.</b> (캐릭터·대사·디자인만 옷장마다 따로예요)<br />
             이름 끝에 사이즈 표시(예: 루즈삭스<b>A</b>)를 붙이면 더블클릭 때 해당 캐릭터에게 입혀져요. 사이즈 표시는 「디자인」에서 바꿀 수 있어요.
           </p>
           <details style={{ marginBottom: 14 }}>
@@ -192,7 +233,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
                   <ItemLines item={it} names={[d.char1Name, d.char2Name]} onPatch={p => setItem(it.id, p)} />
                   <span title={ZI_HINT}><KStep value={it.zi} min={-99} max={99} onChange={v => setItem(it.id, { zi: v })} /></span>
                   <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', padding: '4px 10px', fontSize: 12 }}
-                    onClick={() => del.ask('이 아이템을 삭제할까요?', () => edit(x => ({
+                    onClick={() => del.ask('이 아이템을 삭제할까요? 모든 옷장에서 사라져요.', () => edit(x => ({
                       ...x, items: x.items.filter(i => i.id !== it.id),
                       design: { ...x.design, char1Default: x.design.char1Default.filter(i => i !== it.id), char2Default: x.design.char2Default.filter(i => i !== it.id) },
                     })))}>삭제</button>
@@ -241,6 +282,33 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
           {row(<>{color('보조 색 (현재 거의 안 씀)', 'ribbonColor')}{color('강조 색', 'pointColor')}{color('제목 글자 색', 'titleColor')}</>)}
           {row(<>{text('본문 글꼴 (비우면 사이트 글꼴)', 'mainFont', 240)}{text('제목 글꼴', 'titleFont', 240)}</>)}
           {row(<>{num('캐릭터 1 너비', 'char1Width')}{num('캐릭터 1 높이', 'char1Height')}{num('캐릭터 2 너비', 'char2Width')}{num('캐릭터 2 높이', 'char2Height')}</>)}
+          <div style={{ margin: '4px 0 18px', padding: '12px 14px', border: '1.5px dashed var(--line)', borderRadius: 10 }}>
+            <KLabel>자동 트리밍 — 그림의 빈 여백을 잘라 칸을 알맞게 맞춰요</KLabel>
+            <p style={{ fontSize: 12, color: 'var(--sub)', margin: '2px 0 10px', lineHeight: 1.7 }}>
+              캐릭터·옷 그림은 <b>원본 캔버스 그대로(예: 1000×1000)</b> 두세요. 그림이 실제로 차지하는 부분만 찾아서 화면에 그 영역만 보여 주니,
+              옷 그림을 줄이거나 다시 만들 필요가 없어요. 높이는 지금 값을 지키고 너비를 비율에 맞춰 정해요. 홍조 위치는 칸 기준이라 한 번 확인해 주세요.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginBottom: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={trimItems} onChange={e => setTrimItems(e.target.checked)} />
+              옷 그림도 범위에 넣기 (모자·망토처럼 몸 밖으로 나가는 옷이 잘리지 않아요 · 아이템이 많으면 조금 걸려요)
+            </label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {([1, 2] as const).map(cid => {
+                const on = !!cropOf(cid === 1 ? d.char1Crop : d.char2Crop);
+                return (
+                  <span key={cid} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <button className="btn btn-dark" disabled={trimBusy !== 0} onClick={() => void autoTrim(cid)}>
+                      {trimBusy === cid ? '찾는 중…' : `${cid === 1 ? d.char1Name : d.char2Name} 자동 트리밍`}
+                    </button>
+                    {on && <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => clearTrim(cid)}>해제</button>}
+                  </span>
+                );
+              })}
+              <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>
+                {cropOf(d.char1Crop) || cropOf(d.char2Crop) ? '트리밍 적용 중' : '아직 자르지 않았어요'}
+              </span>
+            </div>
+          </div>
           {row(<>{text('홍조 1 위치 (왼쪽,위,너비,높이)', 'blush1', 260)}{text('홍조 2 위치', 'blush2', 260)}</>)}
 
           <KLabel>캐릭터 그림 — 표정 5장 (기본 · 말하는 · 웃는 · 방치/부끄러움 · 레어)</KLabel>
@@ -290,14 +358,14 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
       {sec === 'backup' && (
         <div className="panel">
           <p style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--sub)', margin: '0 0 14px' }}>
-            옷장 설정(아이템 목록·대사·디자인)을 파일로 받거나 불러옵니다. 그림 파일 자체는 이 사이트의 이미지 저장소에 있고,
+            옷장 설정(대사·디자인, 그리고 모든 옷장이 같이 쓰는 아이템 목록)을 파일로 받거나 불러옵니다. 아이템 목록을 불러오면 다른 옷장의 아이템도 함께 바뀌니 주의하세요. 그림 파일 자체는 이 사이트의 이미지 저장소에 있고,
             사이트 전체 백업(환경설정 &gt; 데이터 백업)에도 함께 담겨요. 이 파일에는 그림 주소만 들어 있어요.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-ghost" onClick={exportJson}>설정 내려받기 (.json)</button>
             <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>설정 불러오기</button>
-            <button className="btn btn-accent" onClick={() => del.ask('옷장을 처음 상태로 되돌릴까요?', () => edit(() => defaultCloset()),
-              '올린 아이템 목록·대사·디자인이 기본값으로 바뀝니다(저장을 눌러야 반영). 먼저 설정을 내려받아 두세요.', 'RESET')}>처음 상태로</button>
+            <button className="btn btn-accent" onClick={() => del.ask('옷장을 처음 상태로 되돌릴까요?', () => edit(x => ({ ...defaultCloset(), items: x.items, looks: x.looks })),
+              '이 옷장의 대사·디자인이 기본값으로 바뀝니다(저장을 눌러야 반영). 아이템은 모든 옷장이 같이 쓰는 거라 그대로 둡니다. 먼저 설정을 내려받아 두세요.', 'RESET')}>처음 상태로</button>
             <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
               onChange={e => { void importJson(e.target.files?.[0]); e.target.value = ''; }} />
           </div>

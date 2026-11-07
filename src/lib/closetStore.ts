@@ -4,6 +4,7 @@
 // 설정은 「읽기 공개 · 쓰기 관리자」라 방문자는 보기만, 관리자만 고칠 수 있다.
 // 이미지는 다른 글과 같은 저장소(putBlob)에 올리고 주소만 저장한다 → 백업·이미지 정리가 그대로 따라온다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { getBlob } from './blobStore';
 import { getSetting, onSettingChange, setSetting } from './settingStore';
 
@@ -41,6 +42,7 @@ export interface ClosetDesign {
   char1Bodies: string[]; char2Bodies: string[];   // 표정 5장 — 기본·말하는·웃는·방치/부끄러움·레어
   char1Width: number; char1Height: number;
   char2Width: number; char2Height: number;
+  char1Crop: number[]; char2Crop: number[];   // 보여 줄 영역 [왼쪽,위,너비,높이] — 원본 캔버스 대비 0~1 비율. 비면 전체(자르지 않음)
   blush1: string; blush2: string;            // 홍조 위치 "왼쪽,위,너비,높이"
   tabList: string;                           // 줄마다 "탭키|이름"
   tabRemap: string;                          // 줄마다 "원래타입>보여줄탭"
@@ -130,6 +132,7 @@ export function defaultCloset(): ClosetData {
       char1Name: '캐릭터A', char2Name: '캐릭터B', char1Label: 'A', char2Label: 'B',
       char1Bodies: bodies(1), char2Bodies: bodies(2),
       char1Width: 300, char1Height: 600, char2Width: 300, char2Height: 600,
+      char1Crop: [], char2Crop: [],
       blush1: '100,92,100,56', blush2: '100,92,100,56',
       tabList: DEFAULT_TAB_LIST, tabRemap: 'acc2>acc\nhair>acc', startTab: 'auto',
       char1Default: ['base-wear0', 'base-ace1'], char2Default: ['base-wear1', 'base-ace2'],
@@ -163,6 +166,7 @@ export function normalizeCloset(raw: unknown): ClosetData {
   if (design.pointColor === '#97c3d1') design.pointColor = '';
   if (design.titleColor === '#555555') design.titleColor = '';
   if (design.tabList === OLD_TAB_LIST || design.tabList === PREV_TAB_LIST) design.tabList = DEFAULT_TAB_LIST;
+  design.char1Crop = cropOf(design.char1Crop) ?? []; design.char2Crop = cropOf(design.char2Crop) ?? [];
   // 표정 5장 — 비었거나 모자라면 기본 그림으로
   design.char1Bodies = [0, 1, 2, 3, 4].map(n => design.char1Bodies?.[n] || d.design.char1Bodies[n]);
   design.char2Bodies = [0, 1, 2, 3, 4].map(n => design.char2Bodies?.[n] || d.design.char2Bodies[n]);
@@ -184,6 +188,21 @@ export function normalizeCloset(raw: unknown): ClosetData {
     looks,
   };
 }
+
+/* ── 자동 트리밍(보여 줄 영역) ──
+   옷·캐릭터 그림은 원본 캔버스 그대로 두고, 화면에는 그중 한 영역만 보여 준다.
+   그래서 캐릭터 칸 크기(예: 500×1000)를 바꿔도 옷 그림을 다시 만들 필요가 없다. */
+export type Crop = [number, number, number, number] | null;
+export function cropOf(v: unknown): Crop {
+  if (!Array.isArray(v) || v.length !== 4) return null;
+  const [x, y, w, h] = v.map(Number);
+  if (![x, y, w, h].every(Number.isFinite) || x < 0 || y < 0 || w < 0.02 || h < 0.02 || x + w > 1.0001 || y + h > 1.0001) return null;
+  return [x, y, w, h];
+}
+/** 레이어 그림(<img>)을 자른 영역만 칸에 맞게 보이도록 하는 스타일 — 칸 쪽은 overflow:hidden 이어야 한다 */
+export const cropImgStyle = (c: Crop): CSSProperties | undefined => c
+  ? { left: `${-c[0] / c[2] * 100}%`, top: `${-c[1] / c[3] * 100}%`, width: `${100 / c[2]}%`, height: `${100 / c[3]}%`, maxWidth: 'none', objectFit: 'fill' }
+  : undefined;
 
 /** 줄 단위 설정 읽기 — 빈 줄과 # 주석은 건너뛴다 */
 export const lines = (v: string) =>
@@ -211,38 +230,63 @@ export function tabInfo(d: ClosetDesign): TabInfo {
 }
 
 /* ── 방(여러 옷장) ──
-   옷장 하나가 방 하나. 모든 방을 설정 한 칸(ohome.closet.v1)에 담아 사이트 백업에 그대로 따라오게 한다.
-   방이 생기기 전 단일 옷장 형태({ items, design … })로 저장된 값은 첫 번째 방(main)으로 이어받는다. */
+   옷장 하나가 방 하나(캐릭터·대사·디자인·코디). 모든 방을 설정 한 칸(ohome.closet.v1)에 담아 사이트 백업에 그대로 따라오게 한다.
+   아이템(옷 그림)은 방이 아니라 book.items 한 곳에 모아 두고 모든 방이 같이 쓴다 — 방 안의 items 는 화면에 그릴 때만 채운다.
+   예전 형태는 이어받는다: 방마다 items 가 있던 값은 합쳐서 공통으로, 방이 생기기 전 단일 옷장({ items, design … })은 첫 번째 방(main)으로. */
 export interface ClosetRoom extends ClosetData { id: string; created: number }
-export interface ClosetBook { rooms: ClosetRoom[] }
+export interface ClosetBook { rooms: ClosetRoom[]; items: ClosetItem[] }
 
 export function newRoom(id: string, name: string): ClosetRoom {
   const d = defaultCloset();
   d.design.gameTitle = name; d.design.saveName = name;
-  return { ...d, id, created: Date.now() };
+  return { ...d, items: [], id, created: Date.now() };   // 아이템은 공통 창고에서 가져온다
+}
+
+/** 방 + 공통 아이템 → 화면·관리자가 쓰는 옷장 한 벌 */
+export const roomWithItems = (room: ClosetRoom, items: ClosetItem[]): ClosetRoom => ({ ...room, items });
+
+/** 공통 아이템이 바뀐 뒤, 어느 방의 기본 코디에도 남아 있지 않게 없는 아이템 id를 걷어 낸다 */
+export function pruneDefaults(rooms: ClosetRoom[], items: ClosetItem[]): ClosetRoom[] {
+  const ids = new Set(items.map(i => i.id));
+  return rooms.map(r => {
+    const a = r.design.char1Default.filter(x => ids.has(x));
+    const b = r.design.char2Default.filter(x => ids.has(x));
+    if (a.length === r.design.char1Default.length && b.length === r.design.char2Default.length) return r;
+    return { ...r, design: { ...r.design, char1Default: a, char2Default: b } };
+  });
 }
 
 export function normalizeBook(raw: unknown): ClosetBook {
-  if (!raw || typeof raw !== 'object') return { rooms: [] };
+  if (!raw || typeof raw !== 'object') return { rooms: [], items: [] };
   const r = raw as { rooms?: unknown; items?: unknown };
   if (Array.isArray(r.rooms)) {
-    return {
-      rooms: r.rooms
-        .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
-        .map((x, n) => ({
-          ...normalizeCloset(x),
-          id: typeof x.id === 'string' && x.id ? x.id : `room-${n}`,
-          created: Number(x.created) || 0,
-        })),
-    };
+    const rooms = r.rooms
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+      .map((x, n) => ({
+        ...normalizeCloset(x),
+        id: typeof x.id === 'string' && x.id ? x.id : `room-${n}`,
+        created: Number(x.created) || 0,
+      }));
+    let items: ClosetItem[];
+    if (Array.isArray(r.items)) {
+      items = normalizeCloset({ items: r.items }).items;                   // 공통 아이템이 이미 있는 새 형태
+    } else {
+      // 방마다 아이템을 따로 갖던 예전 형태 → 같은 id는 하나로 합쳐 공통으로 (처음 나온 것을 남긴다)
+      const seen = new Set<string>(); items = [];
+      for (const rm of rooms) for (const it of rm.items) if (!seen.has(it.id)) { seen.add(it.id); items.push(it); }
+    }
+    return { rooms: rooms.map(rm => ({ ...rm, items: [] })), items };
   }
-  if (Array.isArray(r.items)) return { rooms: [{ ...normalizeCloset(raw), id: 'main', created: 0 }] };   // 예전 단일 옷장
-  return { rooms: [] };
+  if (Array.isArray(r.items)) {                                            // 예전 단일 옷장
+    const one = normalizeCloset(raw);
+    return { rooms: [{ ...one, items: [], id: 'main', created: 0 }], items: one.items };
+  }
+  return { rooms: [], items: [] };
 }
 
 /** 방 목록 — 읽기는 누구나, 저장은 관리자 (서버 규칙이 막는다) */
 export function useClosetBook(): [ClosetBook, (next: ClosetBook) => void, boolean] {
-  const [book, setBook] = useState<ClosetBook>({ rooms: [] });
+  const [book, setBook] = useState<ClosetBook>({ rooms: [], items: [] });
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const load = () => setBook(normalizeBook(getSetting<unknown>(CLOSET_KEY, null)));
