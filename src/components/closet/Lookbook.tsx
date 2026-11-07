@@ -3,11 +3,13 @@
 // 미리보기는 저장된 아이템 id로 그때그때 겹쳐 그린다(이미지를 따로 저장하지 않는다).
 import React from 'react';
 import type { ClosetData, ClosetLook, LookEntry } from '@/lib/closetStore';
+import { cropImgStyle, cropOf } from '@/lib/closetStore';
 
 function Mini({ data, entries, bg, cid }: { data: ClosetData; entries: LookEntry[]; bg?: string; cid: 1 | 2 }) {
   const d = data.design;
   const w = cid === 1 ? d.char1Width : d.char2Width, h = cid === 1 ? d.char1Height : d.char2Height;
   const body = (cid === 1 ? d.char1Bodies : d.char2Bodies)[0];
+  const cs = cropImgStyle(cropOf(cid === 1 ? d.char1Crop : d.char2Crop));
   const s = 118 / h;                                   // 카드 안 높이를 118px로 맞춘다
   const layers = entries
     .map(e => ({ it: data.items.find(i => i.id === e.i), z: e.z }))
@@ -19,10 +21,10 @@ function Mini({ data, entries, bg, cid }: { data: ClosetData; entries: LookEntry
       <div style={{ width: w, height: h, transform: `scale(${s})`, transformOrigin: 'top left', position: 'relative',
         ...(bgSrc ? { backgroundImage: `url('${bgSrc}')`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={body} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 10 }} />
+        <img src={body} alt="" draggable={false} style={cs ? { position: 'absolute', zIndex: 10, ...cs } : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 10 }} />
         {layers.map((x, n) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={n} src={x.it.src} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: x.z }} />
+          <img key={n} src={x.it.src} alt="" draggable={false} style={cs ? { position: 'absolute', zIndex: x.z, ...cs } : { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: x.z }} />
         ))}
       </div>
     </div>
