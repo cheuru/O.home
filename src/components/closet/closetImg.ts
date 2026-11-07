@@ -51,3 +51,22 @@ export function opaqueBox(img: HTMLImageElement): { x0: number; y0: number; x1: 
   if (x1 < 0) return null;
   return { x0: x0 / w, y0: y0 / h, x1: (x1 + 1) / w, y1: (y1 + 1) / h };
 }
+
+/** 올릴 그림의 가로가 width보다 크면 가운데를 기준으로 양옆을 잘라 낸다 (줄이는 게 아니라 자르는 것 — 높이·그림 크기는 그대로).
+ *  이미 width 이하이거나 gif/svg면 그대로 돌려준다. */
+export async function cropCenterWidth(file: Blob & { name?: string }, width: number): Promise<Blob> {
+  if (!width || width < 1 || /gif|svg/i.test(`${file.type} ${file.name ?? ''}`)) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement | null>(res => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url;
+    });
+    if (!img || img.naturalWidth <= width) return file;
+    const nh = img.naturalHeight, sx = Math.round((img.naturalWidth - width) / 2);
+    const cv = document.createElement('canvas'); cv.width = Math.round(width); cv.height = nh;
+    cv.getContext('2d')!.drawImage(img, sx, 0, cv.width, nh, 0, 0, cv.width, nh);
+    const out = await new Promise<Blob | null>(r => cv.toBlob(r, 'image/png'));
+    return out ?? file;
+  } catch { return file; }
+  finally { URL.revokeObjectURL(url); }
+}

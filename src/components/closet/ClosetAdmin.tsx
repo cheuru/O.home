@@ -3,7 +3,7 @@
 // 고친 내용은 「저장」을 눌러야 방문자 화면에 반영된다 — 서버 쓰기를 글자마다 하지 않기 위해서다.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ClosetData, ClosetItem, DG_FIELDS, cropOf, defaultCloset, normalizeCloset, tabInfo } from '@/lib/closetStore';
-import { loadImgRef, opaqueBox } from './closetImg';
+import { cropCenterWidth, loadImgRef, opaqueBox } from './closetImg';
 import { putBlob, useUploading, useBlobUrl } from '@/lib/blobStore';
 import { newId } from '@/lib/postStore';
 import { KInput, KSelect, KStep, KTextarea, KLabel, LiveInput } from '@/components/ui/Kit';
@@ -21,8 +21,9 @@ const nameOf = (f: File) => f.name.replace(/\.[^.]+$/, '');
 const isImg = (f: File) => /^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 
 /** 그림 한 장 고르기 — 올리면 주소로 바꿔 돌려준다 */
-function PickImage({ value, onChange, label, size = 64, fallback }: {
+function PickImage({ value, onChange, label, size = 64, fallback, cropW = 0 }: {
   value: string; onChange: (url: string) => void; label?: string; size?: number; fallback?: string;
+  cropW?: number;   // 0이 아니면 올릴 때 가운데 기준으로 가로를 이 크기로 자른다
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const toast = useToast();
@@ -31,7 +32,7 @@ function PickImage({ value, onChange, label, size = 64, fallback }: {
   const pick = async (f?: File) => {
     if (!f) return;
     if (!isImg(f)) { toast('이미지 파일만 올릴 수 있어요'); return; }
-    try { onChange(await putBlob(f)); } catch (e) { toast(`업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
+    try { onChange(await putBlob(await cropCenterWidth(f, cropW))); } catch (e) { toast(`업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
   };
   return (
     <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -69,6 +70,20 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
   const [tabFilter, setTabFilter] = useState('all');
   const [newType, setNewType] = useState('top');
   const [urlText, setUrlText] = useState('');
+  // 올릴 때 자동 자르기 — 가운데 기준으로 가로만 자른다. 이 브라우저에 기억해 둔다(관리자 편의 설정).
+  const [upOn, setUpOn] = useState(true);
+  const [upW, setUpW] = useState(500);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem('ohome.closet.upcrop') || 'null');
+      if (v && typeof v === 'object') { setUpOn(v.on !== false); if (Number.isFinite(Number(v.w)) && Number(v.w) >= 50) setUpW(Number(v.w)); }
+    } catch { /* 저장소를 못 읽어도 기본값으로 */ }
+  }, []);
+  const setUp = (on: boolean, w: number) => {
+    setUpOn(on); setUpW(w);
+    try { localStorage.setItem('ohome.closet.upcrop', JSON.stringify({ on, w })); } catch { /* 무시 */ }
+  };
+  const cw = upOn ? upW : 0;
   const [trimBusy, setTrimBusy] = useState<0 | 1 | 2>(0);      // 자동 트리밍 중인 캐릭터
   const [trimItems, setTrimItems] = useState(true);            // 옷 그림도 범위에 넣을지
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,7 +110,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
     if (!imgs.length) { toast('이미지 파일만 올릴 수 있어요'); return; }
     const made: ClosetItem[] = [];
     for (const f of imgs) {
-      try { made.push({ id: newId(), src: await putBlob(f), type: newType, desc: nameOf(f), zi: 0 }); }
+      try { made.push({ id: newId(), src: await putBlob(newType === 'bg' ? f : await cropCenterWidth(f, cw)), type: newType, desc: nameOf(f), zi: 0 }); }
       catch (e) { toast(`「${f.name}」 업로드 실패 — ${e instanceof Error ? e.message : ''}`); }
     }
     if (made.length) { edit(x => ({ ...x, items: [...x.items, ...made] })); toast(`${made.length}개 올렸어요 — 저장을 눌러야 반영돼요`); }
@@ -196,6 +211,13 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
         {dirty && <span style={{ fontSize: 12, color: 'var(--accent)' }}>저장하지 않은 변경이 있어요</span>}
         <button className="btn btn-dark" disabled={!dirty} onClick={save}>SAVE</button>
       </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '-6px 0 16px', fontSize: 12.5, color: 'var(--sub)' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={upOn} onChange={e => setUp(e.target.checked, upW)} />
+          그림 올릴 때 가운데 기준으로 가로를 잘라서 올리기
+        </label>
+        {upOn && <><KStep value={upW} min={50} max={2000} step={10} onChange={v => setUp(true, v)} /><span>px (세로·그림 크기는 그대로, 양옆만 잘려요. 배경 아이템은 자르지 않아요)</span></>}
+      </div>
 
       {sec === 'items' && (
         <div className="panel">
@@ -226,7 +248,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
             {shown.map(it => (
               <div key={it.id} style={{ display: 'flex', gap: 10, padding: 10, border: '1.5px solid var(--line)', borderRadius: 10, alignItems: 'flex-start' }}>
-                <PickImage value={it.src} onChange={u => setItem(it.id, { src: u })} />
+                <PickImage value={it.src} cropW={it.type === 'bg' ? 0 : cw} onChange={u => setItem(it.id, { src: u })} />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                   <LiveInput value={it.desc} onValue={v => setItem(it.id, { desc: v })} className="k-input" placeholder="이름" />
                   <KSelect options={typeOptions} value={it.type} onChange={v => setItem(it.id, { type: v })} minWidth={120} />
@@ -316,7 +338,7 @@ export function ClosetAdmin({ data, onSave }: { data: ClosetData; onSave: (d: Cl
             <div key={cid} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14, alignItems: 'flex-start' }}>
               {(cid === 1 ? d.char1Bodies : d.char2Bodies).map((u, n) => (
                 <PickImage key={n} value={u} size={84} label={`${cid === 1 ? d.char1Name : d.char2Name} ${n + 1}`}
-                  fallback={(cid === 1 ? dfl.char1Bodies : dfl.char2Bodies)[n]} onChange={url => setBody(cid, n, url)} />
+                  fallback={(cid === 1 ? dfl.char1Bodies : dfl.char2Bodies)[n]} cropW={cw} onChange={url => setBody(cid, n, url)} />
               ))}
             </div>
           ))}
