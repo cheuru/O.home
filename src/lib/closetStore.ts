@@ -46,6 +46,7 @@ export interface ClosetDesign {
   tabRemap: string;                          // 줄마다 "원래타입>보여줄탭"
   startTab: string;                          // auto 면 아이템이 든 첫 탭
   char1Default: string[]; char2Default: string[];   // 기본 코디 — 아이템 id
+  char1DefaultZ?: Record<string, number>; char2DefaultZ?: Record<string, number>;   // 기본 코디의 앞뒤 순서(아이템 id → z). 없으면 아이템 자체 값
   thumb: string;                             // 방 목록에 보일 그림 — 비우면 두 캐릭터 그림
 }
 

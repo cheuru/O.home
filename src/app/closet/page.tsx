@@ -26,7 +26,8 @@ function Room({ room, book, save, isAdmin, loaded }: {
   const delLook = (id: string) => patch(r => ({ ...r, looks: r.looks.filter(l => l.id !== id) }));
   return (
     <ClosetStage key={room.id} data={shown} ready={loaded} isAdmin={isAdmin} roomId={room.id} onEditItem={editItem} onDeleteItem={delItem}
-      onSaveLook={isAdmin ? saveLook : undefined} onDeleteLook={isAdmin ? delLook : undefined} />
+      onSaveLook={isAdmin ? saveLook : undefined}
+      onSaveDefault={isAdmin ? (p => patch(r => ({ ...r, design: { ...r.design, ...p } }))) : undefined} onDeleteLook={isAdmin ? delLook : undefined} />
   );
 }
 

@@ -271,8 +271,9 @@ export function makeEngine(A: { current: EngineApi }) {
     return (ids || []).map(id => A.current.data.items.find(i => i.id === id)).filter((i): i is ClosetItem => !!i);
   };
   function wearDefault(c: C, flyIn = false) {
+    const zmap = c.cid === 1 ? A.current.data.design.char1DefaultZ : A.current.data.design.char2DefaultZ;
     outfitOf(c).forEach(it => {
-      c.worn.push({ uid: ++seq, src: it.src, type: it.type, desc: it.desc, zi: it.zi || 20, anim: flyIn ? (it.type === 'hair' ? 'anim-fly-in-down' : 'anim-fly-in-up') : '' });
+      c.worn.push({ uid: ++seq, src: it.src, type: it.type, desc: it.desc, zi: zmap?.[it.id] ?? (it.zi || 20), anim: flyIn ? (it.type === 'hair' ? 'anim-fly-in-down' : 'anim-fly-in-up') : '' });
     });
     pushWorn(c);
     if (flyIn) window.setTimeout(() => { c.worn = c.worn.map(w => ({ ...w, anim: '' })); pushWorn(c); }, 600);

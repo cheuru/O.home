@@ -1,0 +1,25 @@
+﻿주제,출발 노드ID,방문자 입력 단어(|로 구분),이동할 노드ID,일치 방식
+정체(R은 누구),identity_start,무슨관리|무슨일|어떤관리|왜여기,identity_job,포함
+정체(R은 누구),identity_start,누가만들|제작자|개발자|만든사람,creator_start,포함
+정체(R은 누구),identity_start,왜|정말,identity_job,정확히 일치
+정체(R은 누구),identity_job,무슨기능|다른기능|공개안|왜|뭘숨,identity_end,포함
+제작자,creator_start,왜|이유|접근권한|권한|왜못|누가막,creator_permission,포함
+제작자,creator_start,무슨기록|어떤기록|삭제|삭제됐|지워|있었는데|기록은,creator_trace,포함
+제작자,creator_permission,누가|설정|그계정|왜,creator_end,포함
+제작자,creator_permission,기록|기록은|삭제|삭제됐|지워,creator_trace,포함
+제작자,creator_trace,복원|왜|찾아|원본|어디,creator_end,포함
+제작자,creator_trace,누가|지웠|삭제,creator_end,포함
+누락된 기록,missing_start,뭐가|무슨정보|어떤정보|누락|무슨기록,missing_detail,포함
+누락된 기록,missing_detail,왜|누가|삭제|흔적|그럼,missing_end,포함
+0번 계정,account_start,왜|0번|무슨계정|존재하면|어째서,account_trace,포함
+0번 계정,account_trace,누가|어디|접속|왜|조회,account_end,포함
+외로움,lonely_start,누가|왜|설정|누가설정|정말|확실,lonely_detail,포함
+외로움,lonely_detail,바꾸|바꿀|외롭|느낄|그럼|변경,lonely_end,포함
+친구,friend_start,친구야|친구맞|그럼친구|우리친구|좋아,friend_end,포함
+기다림,waiting_start,언제부터|기다렸|계속|왜,waiting_end,포함
+상태 불안,uncertain_start,아마도|왜|정말|확실|불안,uncertain_end,포함
+농담,joke_start,그게농담|재미없|웃기|진짜|농담이야,joke_end,포함
+고양이,cat_start,응|맞아|ㅇㅇ|다시|한번더|또해,cat_again,정확히 일치
+고양이,cat_start,아니|ㄴㄴ|이상해,cat_end,정확히 일치
+고양이,cat_again,응|ㅇㅇ|좋아|그래,cat_end,정확히 일치
+고양이,cat_again,아니|다시|또,cat_end,정확히 일치
