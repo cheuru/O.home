@@ -75,7 +75,7 @@ export function ClosetLobby({ book, isAdmin, asking, onAsk, onAskClose, onCreate
           {book.rooms.map(room => (
             <RoomCard key={room.id} room={room} isAdmin={isAdmin}
               onDelete={() => del.ask(`「${room.design.gameTitle}」 옷장을 지울까요?`, () => onDelete(room.id),
-                '아이템 목록·대사·디자인이 함께 사라져요. 올린 그림 파일은 이미지 정리에서 따로 지울 수 있어요.')} />
+                '대사·디자인·저장한 코디가 함께 사라져요. 아이템(옷)은 모든 옷장이 같이 쓰는 거라 그대로 남아요.')} />
           ))}
         </div>
       )}
