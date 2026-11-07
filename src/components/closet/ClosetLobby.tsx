@@ -12,7 +12,8 @@ const CSS = `
 .cl-room{position:relative;display:block;text-decoration:none;color:var(--ink);background:var(--panel);border-radius:var(--radius);box-shadow:var(--sh-sm);overflow:hidden;transition:transform .2s,box-shadow .2s;}
 .cl-room:hover{transform:translateY(-3px);box-shadow:var(--sh-md);}
 .cl-room-thumb{display:flex;align-items:flex-end;justify-content:center;height:230px;background:color-mix(in srgb,var(--panel) 60%,var(--line));overflow:hidden;}
-.cl-room-thumb img{height:118%;width:50%;object-fit:cover;object-position:top center;}
+.cl-room-thumb .cl-th-char{position:relative;height:118%;width:50%;}
+.cl-room-thumb .cl-th-char img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:top center;}
 .cl-room-thumb img.solo{width:100%;height:100%;object-fit:cover;object-position:center;}
 .cl-room-name{padding:12px 14px 14px;font-size:14px;letter-spacing:.04em;font-family:var(--sans);}
 .cl-room-del{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(30,33,38,.7);color:#fff;font-size:13px;cursor:pointer;opacity:0;transition:opacity .2s;}
@@ -22,9 +23,24 @@ const CSS = `
 .cl-empty p{margin:0 0 18px;color:var(--sub);font-size:13.5px;line-height:1.8;}
 `;
 
+/** 캐릭터 한 명 — 맨몸 그림(z 10) 위에 기본 코디를 옷장 안과 같은 겹침 순서로 올린다 */
+function ThumbChar({ body, worn }: { body: string; worn: { id: string; src: string; zi: number }[] }) {
+  return (
+    <div className="cl-th-char">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={body} alt="" draggable={false} style={{ zIndex: 10 }} />
+      {worn.map(w => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={w.id} src={w.src} alt="" draggable={false} style={{ zIndex: w.zi || 20 }} />
+      ))}
+    </div>
+  );
+}
+
 function RoomCard({ room, isAdmin, onDelete }: { room: ClosetRoom; isAdmin: boolean; onDelete: () => void }) {
   const r = useResolvedCloset(room);                      // 서버 연결 전에 올린 그림도 보이게
   const d = r.design;
+  const wornOf = (ids: string[]) => (ids || []).map(id => r.items.find(i => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i && i.type !== 'bg');
   return (
     <div className="cl-room-wrap">
       <Link href={`/closet?room=${encodeURIComponent(room.id)}`} className="cl-room">
@@ -33,10 +49,9 @@ function RoomCard({ room, isAdmin, onDelete }: { room: ClosetRoom; isAdmin: bool
             // eslint-disable-next-line @next/next/no-img-element
             ? <img className="solo" src={d.thumb} alt="" draggable={false} />
             : <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={d.char1Bodies[0]} alt="" draggable={false} />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={d.char2Bodies[0]} alt="" draggable={false} />
+              {/* 목록 썸네일은 옷장에 들어갔을 때 처음 입고 있는 기본 코디 그대로 — 맨몸 그림 위에 겹친다 */}
+              <ThumbChar body={d.char1Bodies[0]} worn={wornOf(d.char1Default)} />
+              <ThumbChar body={d.char2Bodies[0]} worn={wornOf(d.char2Default)} />
             </>}
         </div>
         <div className="cl-room-name">{d.gameTitle || '이름 없는 옷장'}</div>
@@ -75,7 +90,7 @@ export function ClosetLobby({ book, isAdmin, asking, onAsk, onAskClose, onCreate
           {book.rooms.map(room => (
             <RoomCard key={room.id} room={room} isAdmin={isAdmin}
               onDelete={() => del.ask(`「${room.design.gameTitle}」 옷장을 지울까요?`, () => onDelete(room.id),
-                '대사·디자인·저장한 코디가 함께 사라져요. 아이템(옷)은 모든 옷장이 같이 쓰는 거라 그대로 남아요.')} />
+                '아이템 목록·대사·디자인이 함께 사라져요. 올린 그림 파일은 이미지 정리에서 따로 지울 수 있어요.')} />
           ))}
         </div>
       )}
