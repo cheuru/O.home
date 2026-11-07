@@ -64,11 +64,12 @@ function TypedTitle({ text }: { text: string }) {
   );
 }
 
-export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDeleteItem, onSaveLook, onDeleteLook }: {
+export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDeleteItem, onSaveLook, onDeleteLook, onSaveDefault }: {
   data: ClosetData; ready: boolean; isAdmin: boolean; roomId: string;
   onEditItem?: (id: string, p: Partial<ClosetItem>) => void;
   onDeleteItem?: (id: string) => void;
   onSaveLook?: (l: ClosetLook) => void;
+  onSaveDefault?: (p: Partial<ClosetData['design']>) => void;   // 관리자 — 지금 입은 옷을 기본 코디로
   onDeleteLook?: (id: string) => void;
 }) {
   const toast = useToast();
@@ -273,6 +274,20 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     setLookAsk(false);
     ([1, 2] as Cid[]).forEach((cid, n) => { const t = E.say(cid, 'look_save'); if (t) window.setTimeout(() => E.bubble(cid, t, 3), 400 + n * 300); });
   };
+  /** 지금 두 캐릭터가 입고 있는 옷(앞뒤 순서 포함)을 이 옷장의 기본 코디로 — 다음에 들어오면 이 모습으로 시작한다 */
+  const saveDefault = () => {
+    const pack = (cid: Cid) => {
+      const ids: string[] = []; const z: Record<string, number> = {};
+      E.wornOf(cid).forEach(w => {
+        const it = data.items.find(i => i.src === w.src);
+        if (it && !ids.includes(it.id)) { ids.push(it.id); z[it.id] = w.zi; }
+      });
+      return { ids, z };
+    };
+    const a = pack(1), b = pack(2);
+    onSaveDefault?.({ char1Default: a.ids, char1DefaultZ: a.z, char2Default: b.ids, char2DefaultZ: b.z });
+    toast('지금 코디를 기본 코디로 저장했어요');
+  };
   const loadLook = (lk: ClosetLook) => {
     sfx('magic');
     ([1, 2] as Cid[]).forEach(cid => {
@@ -430,6 +445,12 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
         <Lookbook data={data} canEdit={isAdmin && !!onSaveLook}
           onLoad={loadLook} onAsk={() => { setLookName(''); setLookAsk(true); }}
           onDelete={l => del.ask(`「${l.name}」 코디를 지울까요?`, () => onDeleteLook?.(l.id))} />
+
+        {isAdmin && onSaveDefault && (
+          <div style={{ textAlign: 'center', margin: '18px auto 0' }}>
+            <button type="button" className="btn_custom" onClick={saveDefault}>지금 코디를 기본 코디로 저장</button>
+          </div>
+        )}
 
         <div className="cl-credit">
           원본 제작 <a href="https://uchoman.ivyro.net/" target="_blank" rel="noreferrer">우초맨</a> · 효과음 <a href="https://sellbuymusic.com/md/spjqcbb-efbfbct" target="_blank" rel="noreferrer">셀바이뮤직</a>

@@ -40,7 +40,9 @@ function ThumbChar({ body, worn }: { body: string; worn: { id: string; src: stri
 function RoomCard({ room, isAdmin, onDelete }: { room: ClosetRoom; isAdmin: boolean; onDelete: () => void }) {
   const r = useResolvedCloset(room);                      // 서버 연결 전에 올린 그림도 보이게
   const d = r.design;
-  const wornOf = (ids: string[]) => (ids || []).map(id => r.items.find(i => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i && i.type !== 'bg');
+  const wornOf = (ids: string[], z?: Record<string, number>) => (ids || [])
+    .map(id => r.items.find(i => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i && i.type !== 'bg')
+    .map(i => ({ id: i.id, src: i.src, zi: z?.[i.id] ?? i.zi }));
   return (
     <div className="cl-room-wrap">
       <Link href={`/closet?room=${encodeURIComponent(room.id)}`} className="cl-room">
@@ -50,8 +52,8 @@ function RoomCard({ room, isAdmin, onDelete }: { room: ClosetRoom; isAdmin: bool
             ? <img className="solo" src={d.thumb} alt="" draggable={false} />
             : <>
               {/* 목록 썸네일은 옷장에 들어갔을 때 처음 입고 있는 기본 코디 그대로 — 맨몸 그림 위에 겹친다 */}
-              <ThumbChar body={d.char1Bodies[0]} worn={wornOf(d.char1Default)} />
-              <ThumbChar body={d.char2Bodies[0]} worn={wornOf(d.char2Default)} />
+              <ThumbChar body={d.char1Bodies[0]} worn={wornOf(d.char1Default, d.char1DefaultZ)} />
+              <ThumbChar body={d.char2Bodies[0]} worn={wornOf(d.char2Default, d.char2DefaultZ)} />
             </>}
         </div>
         <div className="cl-room-name">{d.gameTitle || '이름 없는 옷장'}</div>
