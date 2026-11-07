@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { ClosetData, ClosetItem } from '@/lib/closetStore';
-import { cropImgStyle, cropOf, tabInfo } from '@/lib/closetStore';
+import { tabInfo } from '@/lib/closetStore';
 import type { ClosetLook } from '@/lib/closetStore';
 import { Lookbook } from './Lookbook';
 import { ItemLines } from './ItemLines';
@@ -13,7 +13,6 @@ import { KInput, KSelect, KStep } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 import { CLOSET_CSS } from './closetCss';
 import { FloatPanel } from './FloatPanel';
-import { loadImg } from './closetImg';
 import { Cid, CharView, STACK_TYPES, emptyView, makeEngine, EngineApi } from './closetEngine';
 
 const SFX_SRC = { blop: '/closet/sfx/blop.mp3', magic: '/closet/sfx/magic.mp3', whoosh: '/closet/sfx/whoosh.mp3', pic: '/closet/sfx/pic.mp3' };
@@ -24,6 +23,25 @@ function blushStyle(spec: string): React.CSSProperties {
   const p = String(spec || '').split(',').map(s => s.trim());
   const n = d.map((v, i) => (p[i] !== undefined && p[i] !== '' && !isNaN(Number(p[i])) ? Math.round(Number(p[i])) : v));
   return { left: n[0], top: n[1], width: n[2], height: n[3] };
+}
+
+/** 같은 출처가 아닌 이미지는 서버 중계(/api/font)를 거쳐야 캔버스가 잠기지 않는다 */
+const viaProxy = (src: string) => {
+  if (/^(data:|blob:|\/(?!\/))/.test(src)) return src;
+  try { if (new URL(src, location.href).origin === location.origin) return src; } catch { return src; }
+  return `/api/font?u=${encodeURIComponent(src)}`;
+};
+
+function loadImg(src: string): Promise<HTMLImageElement | null> {
+  return new Promise(res => {
+    const a = new Image();
+    a.onload = () => res(a);
+    a.onerror = () => {
+      const b = new Image(); b.crossOrigin = 'anonymous';
+      b.onload = () => res(b); b.onerror = () => res(null); b.src = src;
+    };
+    a.src = viaProxy(src);
+  });
 }
 
 /** 제목 — 한 글자씩 찍히고 마지막에 살짝 흔들린다 */
@@ -86,11 +104,32 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
   api.current.askBg = src => setBgPending(src);
   const E = useMemo(() => makeEngine(api), []);
 
+  /* ── 처음 들어올 때 그림이 하나씩 늦게 떠서 캐릭터 크기가 변해 보이던 것을 막는다 ──
+     표정 그림·기본 코디를 전부 받아 디코딩한 뒤에 화면을 보여 주고 인사(init)를 시작한다.
+     (그림이 안 받아져도 영원히 가리지 않도록 3초가 지나면 그대로 보여 준다) */
+  const [imgsReady, setImgsReady] = useState(false);
+  const preloadKey = useMemo(() => {
+    const byId = new Map(data.items.map(i => [i.id, i.src]));
+    const worn = [...d.char1Default, ...d.char2Default].map(id => byId.get(id) ?? '');
+    return [...d.char1Bodies, ...d.char2Bodies, ...worn].filter(Boolean).join('\n');
+  }, [data.items, d.char1Bodies, d.char2Bodies, d.char1Default, d.char2Default]);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || imgsReady) return;
+    let alive = true;
+    const all = Promise.all(Array.from(new Set(preloadKey.split('\n').filter(Boolean))).map(async src => {
+      const img = await loadImg(src);
+      try { await img?.decode(); } catch { /* 디코딩이 안 돼도 이미 받아졌으면 충분하다 */ }
+    }));
+    const cap = new Promise<void>(res => window.setTimeout(res, 3000));
+    void Promise.race([all, cap]).then(() => { if (alive) setImgsReady(true); });
+    return () => { alive = false; };
+  }, [ready, imgsReady, preloadKey]);
+
+  useEffect(() => {
+    if (!ready || !imgsReady) return;
     E.init(1); E.init(2);
     return () => E.dispose();
-  }, [ready, E]);
+  }, [ready, imgsReady, E]);
 
   /* ── 탭·아이템 ── */
   const startTab = useMemo(() => {
@@ -178,7 +217,6 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const ctx = cv.getContext('2d')!;
     const v = views[cid];
-    const crop = cropOf(cid === 1 ? d.char1Crop : d.char2Crop);
     const bodies = cid === 1 ? d.char1Bodies : d.char2Bodies;
     const layers: { src: string; zi: number; bg?: boolean; desc: string; img?: HTMLImageElement | null }[] = [];
     if (v.bg) layers.push({ src: v.bg, zi: -999, bg: true, desc: '배경' });
@@ -192,9 +230,6 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
         const sc = Math.max(w / l.img.naturalWidth, h / l.img.naturalHeight);
         const sw = l.img.naturalWidth * sc, sh = l.img.naturalHeight * sc;
         ctx.drawImage(l.img, (w - sw) / 2, (h - sh) / 2, sw, sh);
-      } else if (crop) {
-        const nw = l.img.naturalWidth, nh = l.img.naturalHeight;
-        ctx.drawImage(l.img, crop[0] * nw, crop[1] * nh, crop[2] * nw, crop[3] * nh, 0, 0, w, h);
       } else ctx.drawImage(l.img, 0, 0, w, h);
     });
     return cv;
@@ -260,8 +295,6 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
     const v = views[cid];
     const w = cid === 1 ? d.char1Width : d.char2Width, h = cid === 1 ? d.char1Height : d.char2Height;
     const bodies = cid === 1 ? d.char1Bodies : d.char2Bodies;
-    const crop = cropOf(cid === 1 ? d.char1Crop : d.char2Crop);
-    const cs = cropImgStyle(crop);
     return (
       <div className="char-col" key={cid}>
         <div className="char-name-label">{names[cid - 1]}</div>
@@ -282,12 +315,12 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
             <div className="dark-cloud" style={{ left: '40%', top: '10.8%', width: '36.7%', height: '5.8%', animationDelay: '.5s' }} />
           </>}</div>
           <div className={`blush-overlay${v.blush ? ' active-blush' : ''}`} style={blushStyle(cid === 1 ? d.blush1 : d.blush2)} />
-          <div className={`char-visuals${crop ? ' cropped' : ''} ${v.cls.join(' ')}`}>
+          <div className={`char-visuals ${v.cls.join(' ')}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={bodies[v.face - 1]} className="base-layer" alt="" draggable={false} style={cs} />
+            <img src={bodies[v.face - 1]} className="base-layer" alt="" draggable={false} />
             {v.worn.map(x => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={x.uid} src={x.src} alt="" draggable={false} className={`dropped-item worn-${x.type} ${x.anim}`} style={{ zIndex: x.zi, ...cs }} />
+              <img key={x.uid} src={x.src} alt="" draggable={false} className={`dropped-item worn-${x.type} ${x.anim}`} style={{ zIndex: x.zi }} />
             ))}
           </div>
         </div>
@@ -325,7 +358,7 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
         </div>
 
         <div className="cl-main">
-          <div className="dual-stage">{charCol(1)}{charCol(2)}</div>
+          <div className="dual-stage" style={{ opacity: imgsReady ? 1 : 0, transition: 'opacity .25s' }}>{charCol(1)}{charCol(2)}</div>
 
           <FloatPanel storageKey="ohome.closet.ward.v1" title="옷장">
             <div className="wardrobe-top-bar">
@@ -424,21 +457,11 @@ export function ClosetStage({ data, ready, isAdmin, roomId, onEditItem, onDelete
       )}
 
       {tip && <div className="item-tooltip" style={{ top: tip.y - 40, left: tip.x > window.innerWidth / 2 ? tip.x - 12 : tip.x + 12, transform: tip.x > window.innerWidth / 2 ? 'translateX(-100%)' : undefined }}>{tip.text}</div>}
-      {ghost && (() => {
-        const gc = cropOf(d.char1Crop);
-        const gs = { width: d.char1Width, height: d.char1Height, left: ghost.x - d.char1Width / 2, top: ghost.y - d.char1Width / 2 };
-        return gc
-          ? (
-            <div className="cl-ghost" style={{ ...gs, overflow: 'hidden' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={ghost.src} alt="" style={{ position: 'absolute', ...cropImgStyle(gc) }} />
-            </div>
-          )
-          : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={ghost.src} alt="" className="cl-ghost" style={gs} />
-          );
-      })()}
+      {ghost && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={ghost.src} alt="" className="cl-ghost"
+          style={{ width: d.char1Width, height: d.char1Height, left: ghost.x - d.char1Width / 2, top: ghost.y - d.char1Width / 2 }} />
+      )}
 
       {del.element}
       <Modal open={lookAsk} small title="코디 저장" desc="지금 입고 있는 두 캐릭터의 코디(배경 포함)를 룩북에 저장해요"
